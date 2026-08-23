@@ -1,0 +1,55 @@
+# qa/baseline-x11/MANIFEST — pre-refactor X11 baseline (plan task 7, B7/N7)
+
+date:            2026-08-23
+tree state:      PRE-refactor (unmodified sources; only makefile touched by task 1)
+binary:          ./XAsteroids (make BACKEND=X11, links libXm from ~/.local/xast-env)
+seed:            UNSET — srand(time(NULL)) as-is (XAST_SEED lands in task 8); title/help
+                 screens are static-init-only and seed-independent, so captures are
+                 deterministic without pinning.
+
+## Captures
+files:           title.png, help.png
+geometry:        client area 720x706 @ +285+164 on a 1280x1024x24 root
+border:          5px window border (stage.H:186) STRIPPED — xwd includes it; GLFW
+                 windows have no border, so uncropped captures could never match (m9/N7).
+                 Crop applied: -crop 720x706+5+5 after xwd.
+depth:           24bpp
+
+## Capture command (per screen)
+qa/capture-x11.sh <OUT_DIR>
+  -> DISPLAY=:99 xwd -id <win> -silent | convert xwd:- -crop ${W}x${H}+${BW}+${BW} +repage png:<out>
+
+## Display normalization (D17.2)
+Captured under a private Xvfb :99 (-screen 0 1280x1024x24, font path
+~/.local/xast-env/fonts). Baselines are Xvfb-local; re-capture per display when
+running X11-local. xpra/run_scaled is a DIFFERENT display surface and must not be
+diffed against these files.
+
+## Font pre-flight (O5-N2)
+All five stage.H:134-138 families verified via xlsfonts before any capture:
+white_shadow-48; schumacher-clean-bold clB6x10; ibm-ergonomic-bold ErgoB15;
+urw-courier-bold courB30 (iso8859-9); adobe-helvetica-bold helvB10.
+NOTE: xlsfonts enumerates a server's font path, so the gate runs against :99
+after Xvfb start, strictly before game launch/capture.
+
+## Key injection
+No xdotool/xte in env; qa/capture-x11.sh compiles a tiny Xlib+XTest helper at
+runtime (XQueryTree find-by-WM_NAME "Asteroids", XGetGeometry, XSetInputFocus,
+XTestFakeKeyEvent for 'h'). help.png IS captured (not deferred to task 9).
+
+## Initial-state note
+The game's initial screen IS the help screen: PlayingField ctor calls
+GenHelpScreen() (playingField.H:142). title.png and help.png are therefore
+pixel-identical BY CONSTRUCTION pre-refactor (verified: compare AE = 0 between
+them too). They are kept as separate artifacts because post-migration states may
+diverge (e.g. harness-driven transitions).
+
+## Determinism proof (acceptance)
+Two end-to-end runs of qa/capture-x11.sh (qa/baseline-x11 vs /tmp scratch):
+  compare -metric AE title.png title2.png -> 0 (0)
+  compare -metric AE help.png  help2.png  -> 0 (0)
+
+## Deferred to task 9
+game-over/hi-score screen + full-session per-frame baselines (need seed +
+scripted events; hi-score baseline captured at task 9 against
+qa/fixtures/hiScore.data BEFORE task 10 touches score.H — O5-M1).
