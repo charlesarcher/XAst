@@ -8,7 +8,10 @@
 #include<string.h>
 #include<signal.h>
 #include<time.h>
+#ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#endif
+#include"../utilities/rendering/x11types.H"
 #include"options/button.H"
 #include"score.H"
 #include"shipYard.H"

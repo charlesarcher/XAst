@@ -15,8 +15,11 @@
 #include<iomanip>
 #include<string.h>
 #include<sys/time.h>
+#ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #include<X11/Xutil.h>
+#endif
+#include"../utilities/rendering/x11types.H"
 #include"../utilities/vector2d.H"
 #include"../utilities/box.H"
 #include"../utilities/linkedArray.H"
@@ -66,7 +69,13 @@ class PlayingField
 
   private:
 
+#ifdef X11_BACKEND
     Boolean RunGame(Options& options);
+#else
+    class RenderingEngine;
+    class OptionsMenu;
+    Boolean RunGame(RenderingEngine& engine, OptionsMenu& menu);
+#endif
     void DrawGame();
     void NewRocksAndEnemy();
     Vector2d CalcGravityAcceleration(const MovableObject* const, const MovableObject* const);
@@ -297,6 +306,7 @@ inline timeval PlayingField::ResumePlay(Intersector& intersector)
   return time;
  }
 
+#ifdef X11_BACKEND
 inline PlayingField::Boolean PlayingField::RunGame(Options& options)
  {XRaiseWindow(stage.display,stage.window);
   nonPermeableList.Reset();
@@ -454,9 +464,12 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
                                     if (event.type==ButtonRelease)
                                      {if (((XButtonReleasedEvent*)&event)->button==Button1)
                                        {if (button.PointerOnButton(*(XButtonEvent*)&event))
-                                         {options.RealizeWindow();
-                                          button.ReleaseButton();
-                                         }
+                                          {
+#ifdef X11_BACKEND
+                                           options.RealizeWindow();
+#endif
+                                           button.ReleaseButton();
+                                          }
                                         pointerButtonReleased=on;
                                         if (pointerInWindow)
                                           break;
@@ -534,6 +547,7 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   stage.DrawPlayingField();
   return off;
   }
+#endif
 
 inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
  {XSizeHints* sizeHints=XAllocSizeHints();
@@ -560,9 +574,11 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
   XSelectInput(stage.display,stage.window,EnterWindowMask|LeaveWindowMask
                                           |StructureNotifyMask|ExposureMask
                                           |KeyPressMask|KeyReleaseMask
-                                          |ButtonPressMask|ButtonReleaseMask
-                                          |Button1MotionMask);
+                                           |ButtonPressMask|ButtonReleaseMask
+                                           |Button1MotionMask);
+#ifdef X11_BACKEND
   Options options(argc,argv);
+#endif
   XMapRaised(stage.display,stage.window);
   XEvent event;
   int localHighScore=0;
@@ -586,10 +602,12 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
                              {char keyText[2];
                               if (XLookupString((XKeyEvent*)&event,keyText,2,NULL,NULL)==1)
                                 switch(keyText[0])
-                                 {case 's': level=l;
-                                            Boolean earlyExit;
-                                            earlyExit=RunGame(options);
-                                            if (localHighScore<score.CurrentScore())
+                                  {case 's': level=l;
+                                             Boolean earlyExit;
+#ifdef X11_BACKEND
+                                             earlyExit=RunGame(options);
+#endif
+                                             if (localHighScore<score.CurrentScore())
                                               localHighScore=score.CurrentScore();
                                             if (earlyExit)
                                               return localHighScore;
@@ -611,11 +629,14 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
                              }
                             break;
       case ButtonRelease:   if (((XButtonReleasedEvent*)&event)->button==Button1)
-                             {if (buttonActivated &&
-                                  button.PointerOnButton(*(XButtonEvent*)&event))
-                               {options.RealizeWindow();
-                                button.ReleaseButton();
-                               }
+                              {if (buttonActivated &&
+                                   button.PointerOnButton(*(XButtonEvent*)&event))
+                                {
+#ifdef X11_BACKEND
+                                 options.RealizeWindow();
+#endif
+                                 button.ReleaseButton();
+                                }
                               buttonActivated=off;
                               pointerButtonReleased=on;
                              }

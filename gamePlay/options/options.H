@@ -5,6 +5,7 @@
 #include<iomanip>
 #include<strstream>
 #include<fstream>
+#ifdef X11_BACKEND
 #include<X11/Intrinsic.h>
 #include<X11/StringDefs.h>
 #include<X11/Shell.h>
@@ -21,6 +22,8 @@
 #include<Xm/TextF.h>
 #include<Xm/FileSB.h>
 #include<Xm/MessageB.h>
+#endif
+#include"../../utilities/rendering/x11types.H"
 
 #include"../../bitmaps/ROCKScoringIcon.xbm"
 #include"../../bitmaps/ROckScoringIcon.xbm"
