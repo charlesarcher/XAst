@@ -5,7 +5,10 @@ class MovableObject;
 #ifndef _MOVABLEOBJECT_H
 #define _MOVABLEOBJECT_H
 
+#ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#endif
+#include"../utilities/rendering/x11types.H"
 #include<stdlib.h>
 #include<iostream>
 #include<math.h>

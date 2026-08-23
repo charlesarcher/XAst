@@ -1,7 +1,10 @@
 class Rock;
 #include<stdlib.h>
 #include<math.h>
+#ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#endif
+#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/pixmaps/rotated/rotatorDisplayData.H"
 #include"../../utilities/pixmaps/rotated/rotator.H"

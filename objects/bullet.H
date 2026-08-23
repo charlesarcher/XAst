@@ -8,7 +8,10 @@
 #include"../utilities/pixmaps/rotated/rotator.H"
 #include"../utilities/frames/frameList.H"
 #include"../utilities/frames/frameTimer.H"
+#ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#endif
+#include"../utilities/rendering/x11types.H"
 #include"movableObject.H"
 #include"../utilities/intersection2d.H"
 
