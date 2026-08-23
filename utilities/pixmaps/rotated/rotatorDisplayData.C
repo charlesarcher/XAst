@@ -1,8 +1,11 @@
 #include<iostream>
 #include<math.h>
 #include"rotatorDisplayData.H"
+#ifdef X11_BACKEND
 #include<X11/Xutil.h>
 #include<X11/Intrinsic.h>
+#endif
+#include"../../rendering/x11types.H"
 
 using namespace std;
 

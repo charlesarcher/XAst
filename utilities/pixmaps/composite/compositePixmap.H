@@ -1,7 +1,10 @@
 #ifndef _COMPOSITEPIXMAP_H
 #define _COMPOSITEPIXMAP_H
 
+#ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#endif
+#include"../../rendering/x11types.H"
 
 class CompositePixmap
  {public:

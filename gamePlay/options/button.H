@@ -1,8 +1,11 @@
 #ifndef _BUTTON_H
 #define _BUTTON_H
 
+#ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #include<X11/Intrinsic.h>
+#endif
+#include"../../utilities/rendering/x11types.H"
 
 class Button
  {typedef int Boolean;
