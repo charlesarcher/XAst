@@ -53,3 +53,54 @@ Two end-to-end runs of qa/capture-x11.sh (qa/baseline-x11 vs /tmp scratch):
 game-over/hi-score screen + full-session per-frame baselines (need seed +
 scripted events; hi-score baseline captured at task 9 against
 qa/fixtures/hiScore.data BEFORE task 10 touches score.H — O5-M1).
+
+---
+
+# Task 9 finalization (D17.3/B7) — deterministic headless harness
+
+date:            2026-08-23
+tree state:      PRE-refactor (PRE-task-10; no game source touched by the harness)
+binary:          ./XAsteroids (unchanged from the task-7 build recipe)
+driver:          ./obj/harness (`make harness`; test/harness/harness.C) — Xvfb :99
+                 1280x1024x24, window find by WM_NAME "Asteroids" (XQueryTree walk,
+                 capture-x11.sh's approach), XTest injection, client-area captures
+                 via XGetImage (geometry w/h exclude the 5px border, so src (0,0) is
+                 the client origin — equivalent to the xwd -crop WxH+5+5 above).
+seed:            12345 (XAST_SEED), handshake: quiescence (change-counted boundaries;
+                 see test/harness/script-format.md — wall-clock pacing was tried and
+                 rejected empirically: mid-play captures diverge within seconds).
+hiscore fixture: test/harness/fixtures/hiScore.nul.data — NUL-format encoding of
+                 qa/fixtures/hiScore.data (same 10 name/score pairs). The committed
+                 whitespace fixture is UNPARSABLE by the pre-task-10 reader: score.H's
+                 custom operator>>(ifstream&, char*) consumes names up to a NUL byte,
+                 so against it numScores=1, the name mangles, and score[0] stays
+                 UNINITIALIZED — rendered as per-run garbage digits (nondeterministic
+                 by construction; probe-verified). The plan's O5-M1 premise "the
+                 committed fixture renders identically before/after task 10" does not
+                 hold on this tree for THAT file format; the .nul.data encoding is the
+                 faithful bridge. RISK/NOTE for task 10: its acceptance (b) expects
+                 numScores=10 from qa/fixtures/hiScore.data — that requires the reader
+                 side to handle whitespace-delimited names too, or the fixture to be
+                 re-encoded; flagged in learnings.
+
+## Artifacts (this task)
+top level:       game_start.png, hiscore.png (+ .mask.png placeholders) — from
+                 test/harness/scripts/gameover.script (idle ship -> seeded deaths ->
+                 hi-score screen; freeze empirically between boundaries ~1100-1200,
+                 capture pinned at 1800).
+session/:        help, start, gp1..gp10, hiscore (+ .mask.png placeholders, +
+                 manifest.txt + determinism-run*.log evidence) — from
+                 test/harness/scripts/session.script (title/help -> scripted play:
+                 rotate/thrust/fire/hyperspace -> deaths -> hi-score -> 'q' clean exit).
+masks:           ALL-WHITE placeholders = compare everything (IM7 -read-mask: white
+                 compared, black ignored). No-op on X11-vs-X11 gates; refined only when
+                 cross-backend text-region tolerance is needed (F2).
+
+## Determinism proof (acceptance — archived in session/)
+run A (baseline capture):        session/determinism-runA-baseline-capture.log
+run B (--ref run A):             session/determinism-runB-vs-baseline.log
+                                 -> 13/13 checkpoints AE=0.000000, exit 0
+gameover two runs:               session/determinism-gameover-run{1,2-vs-run1}.log
+                                 -> 2/2 checkpoints AE=0.000000, exit 0
+A third masked verification run (exercising -read-mask plumbing) also passed
+13/13 AE=0.

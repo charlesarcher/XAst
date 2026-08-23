@@ -1,0 +1,25 @@
+# gameover.script — deterministic path to the game-over/hi-score screen.
+#
+# Derived EMPIRICALLY on this pre-task-10 tree (seed 12345): with an idle ship
+# (no input after 's'), seeded rocks + enemy saucers destroy all 3 ships; the
+# last life is lost between boundaries ~1100-1200 and the hi-score screen is
+# byte-stable from boundary ~1200 on (compare -metric AE = 0 across
+# g1200..g1800 probes). The capture at 1800 sits well past the freeze; once
+# the tree is static, later captures are pixel-identical by construction.
+#
+# Requires: --hiscore test/harness/fixtures/hiScore.nul.data — the NUL-format
+# encoding of qa/fixtures/hiScore.data. The committed fixture is whitespace-
+# delimited, which the PRE-task-10 reader cannot parse: score.H's custom
+# operator>>(ifstream&, char*) consumes names up to a NUL byte, so against the
+# whitespace fixture it yields numScores=1, a mangled name, and an
+# UNINITIALIZED score[0] rendered as per-run garbage digits (non-deterministic
+# by construction). See qa/baseline-x11/MANIFEST.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/gameover.script \
+#                 --out <dir> --hiscore test/harness/fixtures/hiScore.nul.data
+
+1 keydown s
+4 keyup s
+60  capture game_start
+1800 capture hiscore

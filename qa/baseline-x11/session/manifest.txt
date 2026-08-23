@@ -1,0 +1,29 @@
+# harness manifest (task 9, D17.3)
+seed: 12345
+handshake: quiescence
+display: :99
+xvfb_geometry: 1280x1024x24
+script: test/harness/scripts/session.script
+binary: /home/archerc/code/XAst/XAsteroids
+binary_size_mtime: 375712 1787524547
+hiscore_fixture: test/harness/fixtures/hiScore.nul.data
+game_cwd: /tmp/xast-harness.qmG79K
+client_geometry: 720x706 border=5 depth=24 at +285+164
+sync_params: poll_ms=10 stability=3 tick_gap_ms=30
+run_ms: 67828
+game_exit_rc: 0
+checkpoints: 13
+  cp help boundary=1 t=272028258ms 720x706 qa/baseline-x11/session/help.png
+  cp start boundary=40 t=272030608ms 720x706 qa/baseline-x11/session/start.png
+  cp gp1 boundary=120 t=272035615ms 720x706 qa/baseline-x11/session/gp1.png
+  cp gp2 boundary=200 t=272040617ms 720x706 qa/baseline-x11/session/gp2.png
+  cp gp3 boundary=240 t=272043130ms 720x706 qa/baseline-x11/session/gp3.png
+  cp gp4 boundary=340 t=272049392ms 720x706 qa/baseline-x11/session/gp4.png
+  cp gp5 boundary=400 t=272053137ms 720x706 qa/baseline-x11/session/gp5.png
+  cp gp6 boundary=600 t=272060724ms 720x706 qa/baseline-x11/session/gp6.png
+  cp gp7 boundary=800 t=272067003ms 720x706 qa/baseline-x11/session/gp7.png
+  cp gp8 boundary=1000 t=272073290ms 720x706 qa/baseline-x11/session/gp8.png
+  cp gp9 boundary=1200 t=272079576ms 720x706 qa/baseline-x11/session/gp9.png
+  cp gp10 boundary=1400 t=272085866ms 720x706 qa/baseline-x11/session/gp10.png
+  cp hiscore boundary=1700 t=272095275ms 720x706 qa/baseline-x11/session/hiscore.png
+result: CAPTURED-ONLY (no --ref)

@@ -1,0 +1,81 @@
+# session.script — full seeded session (Q13 reference): help -> play -> deaths
+# -> hi-score -> quit. Seed 12345, NUL-format fixture hi-score file.
+#
+# Boundary semantics under the quiescence handshake: during play a boundary
+# ticks per VISIBLE frame completion (distinct rendered state, settled), so
+# targets are effectively frame indices; on static screens (help/hi-score) an
+# idle escape ticks them on a timer instead. See script-format.md.
+#
+# Authoring rules:
+#   - key-down/key-up pairs are separated by >=3 boundaries so the press and
+#     release never land in the same frame's event drain (the game drains ALL
+#     queued events once per frame; a same-drain press+release pair cancels,
+#     e.g. 'p' would fire nothing).
+#   - inputs are injected only at boundaries (never mid-frame), so each event
+#     lands in the quiet tail of the 62.5ms frame period.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/session.script \
+#                 --out <dir> --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture help          # initial screen IS the help screen pre-refactor
+
+3    keydown s             # start game
+6    keyup s
+40   capture start
+
+# --- engagement 1: rotate left, thrust, two shots
+50   keydown e
+54   keyup e
+60   keydown o
+74   keyup o
+80   keydown p
+84   keyup p
+95   keydown p
+99   keyup p
+120  capture gp1
+
+# --- engagement 2: rotate right, thrust, shot
+130  keydown r
+134  keyup r
+140  keydown o
+154  keyup o
+160  keydown p
+164  keyup p
+200  capture gp2
+
+# --- engagement 3: hyperspace (seeded random re-entry)
+210  keydown space
+214  keyup space
+240  capture gp3
+
+# --- engagement 4: fire volley while thrusting
+250  keydown o
+268  keyup o
+270  keydown p
+274  keyup p
+290  keydown p
+294  keyup p
+310  keydown p
+314  keyup p
+340  capture gp4
+
+# --- engagement 5: long thrust + rotate
+350  keydown e
+356  keyup e
+360  keydown o
+390  keyup o
+400  capture gp5
+
+# --- coast: idle ship dies to seeded rocks/saucers (last life by ~b1150,
+#     cf. gameover.script derivation); periodic checkpoints
+600  capture gp6
+800  capture gp7
+1000 capture gp8
+1200 capture gp9
+1400 capture gp10
+1700 capture hiscore        # game-over/hi-score screen (byte-stable >= b1200)
+
+1720 keydown q              # quit from the hi-score screen -> clean exit
+1724 keyup q
+exit

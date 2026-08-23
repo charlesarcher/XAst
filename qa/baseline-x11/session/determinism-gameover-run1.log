@@ -1,0 +1,20 @@
+[harness] pre-flight OK: Xvfb/xdpyinfo/xlsfonts/xwd/convert/compare + fonts dir /home/archerc/.local/xast-env/fonts
+[harness] Xvfb :99 up (1280x1024x24, fp=/home/archerc/.local/xast-env/fonts)
+[harness] font pre-flight OK: all 5 stage.H:134-138 families resolve
+[harness] work dir: /tmp/xast-harness.AWLjUi
+[harness] staged test/harness/fixtures/hiScore.nul.data as /tmp/xast-harness.AWLjUi/hiScore.data (score.H cwd candidate picks it up)
+[harness] game pid 718874 (DISPLAY=:99 XAST_SEED=12345, cwd=/tmp/xast-harness.AWLjUi)
+[harness] settling 8s for static init
+[harness] window 0x4194310 "Asteroids" client 720x706 border=5 depth=24 at +285+164
+[harness] script loaded: test/harness/scripts/gameover.script (4 lines)
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured game_start.png (720x706) @boundary 60
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured hiscore.png (720x706) @boundary 1800
+[harness] quiescence run done: 1800 boundaries in 91.332378s, checkpoints 2
+[harness] manifest: /tmp/opencode/go1/manifest.txt
+[cleanup] killed XAsteroids pid 718874
+[cleanup] killed Xvfb pid 718838
+RESULT: captured 2 checkpoints (no --ref)
