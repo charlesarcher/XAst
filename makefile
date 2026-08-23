@@ -3,17 +3,36 @@
 BACKEND?=X11
 
 CXX=g++
+CC=gcc
 CXXFLAGS=-I/usr/include/X11 -O3 -Wall -Wextra -Wno-unused-parameter -std=c++17
 LDFLAGS=-L/usr/lib/X11
 X11_BACKEND=-DX11_BACKEND
 OBJDIR=obj/$(BACKEND)
 
+# Vendor trees (task 30, O5-N2 offline-first): plain -I paths, no submodule
+# machinery. GL AND VK object legs only — the X11 leg must never see them
+# (its compile line stays byte-identical to the pre-vendor baseline).
+# No extra defines: dear_imgui v1.92.9b and glad 4.5-core compile with these
+# includes alone (flags kept minimal per task 30; nothing added beyond -I).
+VENDOR_INCS=-Ivendor/glad/include -Ivendor/stb -Ivendor/dear_imgui -Ivendor/glfw
+
 ifeq ($(BACKEND),X11)
 BACKEND_CXXFLAGS=$(X11_BACKEND)
+endif
+# GL/VK legs: today's game objects are still the X11-flavored sources (the
+# backend split lands at tasks 31+), so they keep -DX11_BACKEND to compile;
+# vendor -I paths ride along on these legs ONLY. The XBM decode self-test
+# overrides below to drop the macro — building WITHOUT -DX11_BACKEND there is
+# its whole reason to exist on the GPU legs.
+ifneq ($(filter $(BACKEND),GL VK),)
+BACKEND_CXXFLAGS=$(X11_BACKEND) $(VENDOR_INCS)
 endif
 
 # Objects feeding the X11 link always carry the X11 macro, whatever BACKEND says.
 obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o: BACKEND_CXXFLAGS=$(X11_BACKEND)
+
+# The decode unit must stay macro-free on every leg that builds it.
+$(OBJDIR)/xbmDecodeSelfTest.o: BACKEND_CXXFLAGS=$(VENDOR_INCS)
 
 all: XAsteroids AutoRepeatOn
 
@@ -26,8 +45,24 @@ ifneq ($(filter $(BACKEND),GL VK),)
 GLVK_OBJECTS=$(OBJDIR)/xbmDecodeSelfTest.o
 endif
 
+# Vendor TUs (task 30). dear_imgui core units compile into BOTH GPU legs —
+# the menu adapter consumes only RenderingEngine types (D9), so no per-backend
+# ImGui code exists outside glBackend/vkBackend. glad.c is the OpenGL loader:
+# GL leg ONLY (Vulkan vendors its own loader/headers in Phase 4, task 37).
+# Compiled as C with gcc (PINNED.md verification record used gcc; g++ would
+# force .c through the C++ front end).
+DEAR_IMGUI_UNITS=imgui imgui_draw imgui_tables imgui_widgets imgui_demo
+IMGUI_OBJECTS=
+GL_OBJECTS=
+ifneq ($(filter $(BACKEND),GL VK),)
+IMGUI_OBJECTS=$(addprefix $(OBJDIR)/,$(addsuffix .o,$(DEAR_IMGUI_UNITS)))
+endif
+ifeq ($(BACKEND),GL)
+GL_OBJECTS=$(OBJDIR)/glad.o
+endif
+
 .PHONY: objects
-objects: $(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o $(OBJDIR)/XAsteroids.o $(GLVK_OBJECTS)
+objects: $(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o $(OBJDIR)/XAsteroids.o $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS)
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
@@ -39,6 +74,15 @@ $(OBJDIR)/compositePixmap.o: utilities/pixmaps/composite/compositePixmap.C utili
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 $(OBJDIR)/xbmDecodeSelfTest.o: utilities/pixmaps/xbmDecodeSelfTest.C utilities/pixmaps/xbmDecode.H $(wildcard bitmaps/*.xbm) | $(OBJDIR)
+	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
+
+# Vendor TUs, task 30. glad.c: C, gcc, GL leg only. dear_imgui core units:
+# C++17 via global CXXFLAGS. Static pattern rule (a plain `imgui%.o` implicit
+# rule cannot build imgui.o — GNU make stems are never empty).
+$(OBJDIR)/glad.o: vendor/glad/src/glad.c vendor/glad/include/glad/glad.h vendor/glad/include/GL/glad.h vendor/glad/include/KHR/khrplatform.h | $(OBJDIR)
+	${CC} ${VENDOR_INCS} -O3 -c $< -o $@
+
+$(IMGUI_OBJECTS): $(OBJDIR)/%.o: vendor/dear_imgui/%.cpp vendor/dear_imgui/imgui.h vendor/dear_imgui/imconfig.h vendor/dear_imgui/imgui_internal.h $(wildcard vendor/dear_imgui/imstb_*.h) | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 # Host utility: build + run the XBM decode self-test (pure std-C++, no backend).
