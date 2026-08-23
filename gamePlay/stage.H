@@ -215,8 +215,8 @@ inline Stage::Stage()
   sigaction(SIGQUIT,&action,NULL);
   sigaction(SIGABRT,&action,NULL);
   sigaction(SIGTERM,&action,NULL);
-  time_t t=time(NULL);
-  srand(t);
+  const char* seedEnv=getenv("XAST_SEED");
+  srand(seedEnv ? (time_t)strtoul(seedEnv,0,10) : (time_t)time(NULL));
  }
 
 inline Stage::~Stage()
