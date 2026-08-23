@@ -10,8 +10,9 @@
 #define _PLAYINGFIELD_H
 
 #include<stdlib.h>
+#include<stdio.h>
 #include<iostream>
-#include<strstream>
+#include<sstream>
 #include<iomanip>
 #include<string.h>
 #include<sys/time.h>
@@ -529,12 +530,11 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
       yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+stage->hiScoreInfo->ascent,
       yPos=yPosSave;
   char str[23];
-  ostrstream strout(str,sizeof(str)/sizeof(char));
   for(int i=0;i<score->NumScores();++i)
-   {strout<<score->TopTenName(i)<<setw(12-strlen(score->TopTenName(i)))<<" "
-          <<setw(10)<<score->TopTenScore(i);
-    str[22]='\0';
-    strout.seekp(0);
+   {const int nameWidth=12-(int)strlen(score->TopTenName(i));
+    snprintf(str,sizeof(str),"%s%*s%10d",
+             score->TopTenName(i),nameWidth>0?nameWidth:1,"",
+             score->TopTenScore(i));
     XDrawString(stage->display,pixmap,gc,xPos,yPos,str,strlen(str));
     yPos+=fontHeight;
    }

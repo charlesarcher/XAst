@@ -1,9 +1,10 @@
 #include<stdlib.h>
+#include<stdio.h>
 #include<string.h>
 #include<math.h>
 #include<iostream>
 #include<iomanip>
-#include<strstream>
+#include<sstream>
 #include<fstream>
 #ifdef X11_BACKEND
 #include<X11/Intrinsic.h>
@@ -3112,8 +3113,9 @@ void Options::VerifyIntTextField(Widget widget,XtPointer clientData,XtPointer)
   ((Options*)clientData)->intExitValue=atoi(intStr);
   XtFree(intStr);
   char intStr2[11];
-  ostrstream strout(intStr2,sizeof(intStr2)/sizeof(char));
-  strout<<((Options*)clientData)->intExitValue<<'\0';
+  std::ostringstream strout;
+  strout<<((Options*)clientData)->intExitValue;
+  snprintf(intStr2,sizeof(intStr2),"%s",strout.str().c_str());
   XmTextFieldSetString(widget,intStr2);
   XmTextFieldSetInsertionPosition(widget,strlen(intStr2));
   ((Options*)clientData)->valueChanged=((Options*)clientData)->intEnterValue!=
@@ -3125,8 +3127,9 @@ void Options::VerifyFloatTextField(Widget widget,XtPointer clientData,XtPointer)
   ((Options*)clientData)->floatExitValue=atof(doubleStr);
   XtFree(doubleStr);
   char doubleStr2[25];
-  ostrstream strout(doubleStr2,sizeof(doubleStr2)/sizeof(char));
-  strout<<setprecision(17)<<((Options*)clientData)->floatExitValue<<'\0';
+  std::ostringstream strout;
+  strout<<std::setprecision(17)<<((Options*)clientData)->floatExitValue;
+  snprintf(doubleStr2,sizeof(doubleStr2),"%s",strout.str().c_str());
   XmTextFieldSetString(widget,doubleStr2);
   XmTextFieldSetInsertionPosition(widget,strlen(doubleStr2));
   ((Options*)clientData)->valueChanged=((Options*)clientData)->floatEnterValue!=
@@ -3859,14 +3862,16 @@ inline void Options::SetScore(Widget widget, const int score)
  }
 
 inline const char* const Options::MakeString(const int n)
- {ostrstream strout(str,sizeof(str)/sizeof(char));
-  strout<<n<<'\0';
+ {std::ostringstream strout;
+  strout<<n;
+  snprintf(str,sizeof(str),"%s",strout.str().c_str());
   return str;
  }
 
 inline const char* const Options::MakeString(const double d)
- {ostrstream strout(str,sizeof(str)/sizeof(char));
-  strout<<setprecision(17)<<d<<'\0';
+ {std::ostringstream strout;
+  strout<<std::setprecision(17)<<d;
+  snprintf(str,sizeof(str),"%s",strout.str().c_str());
   return str;
  }
 

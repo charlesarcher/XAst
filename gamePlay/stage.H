@@ -2,8 +2,9 @@
 #define _STAGE_H
 
 #include<stdlib.h>
+#include<stdio.h>
 #include<iostream>
-#include<strstream>
+#include<sstream>
 #include<iomanip>
 #include<string.h>
 #include<signal.h>
@@ -239,21 +240,19 @@ inline Stage::~Stage()
  }
 
 inline Stage& Stage::DrawScore()
- {char str[10];
-  ostrstream strout(str,sizeof(str)/sizeof(char));
+ {char str[12];
   if (score->CurrentScore()>=score->TopTenScore(0))
-   {strout<<setw(sizeof(str)/sizeof(char))<<score->CurrentName();
+   {snprintf(str,sizeof(str),"%10.10s",score->CurrentName());
     XDrawImageString(display,window,hiScoreGC,
-                     hiScoreUserX,hiScoreUserY,str,sizeof(str)/sizeof(char));
-    strout.seekp(0);
-    strout<<setw(sizeof(str)/sizeof(char))<<score->CurrentScore();
+                     hiScoreUserX,hiScoreUserY,str,10);
+    snprintf(str,sizeof(str),"%10d",score->CurrentScore());
     XDrawImageString(display,window,hiScoreGC,
-                     hiScoreX,hiScoreY,str,sizeof(str)/sizeof(char));
+                     hiScoreX,hiScoreY,str,10);
    }
   else
-    strout<<setw(sizeof(str)/sizeof(char))<<score->CurrentScore();
+    snprintf(str,sizeof(str),"%10d",score->CurrentScore());
   XDrawImageString(display,window,scoreGC,
-                   scoreX,scoreY,str,sizeof(str)/sizeof(char));
+                   scoreX,scoreY,str,10);
   return *this;
  }
 
@@ -282,15 +281,13 @@ inline Stage& Stage::DrawPlayingField()
 inline Stage& Stage::Refresh()
  {XDrawString(display,window,titleGC,
               titleX,titleY,"Asteroids",strlen("Asteroids"));
-  char str[10];
-  ostrstream strout(str,sizeof(str)/sizeof(char));
-  strout<<setw(sizeof(str)/sizeof(char))<<score->TopTenName(0);
+  char str[12];
+  snprintf(str,sizeof(str),"%10.10s",score->TopTenName(0));
   XDrawImageString(display,window,hiScoreGC,
-                   hiScoreUserX,hiScoreUserY,str,sizeof(str)/sizeof(char));
-  strout.seekp(0);
-  strout<<setw(sizeof(str)/sizeof(char))<<score->TopTenScore(0);
+                   hiScoreUserX,hiScoreUserY,str,10);
+  snprintf(str,sizeof(str),"%10d",score->TopTenScore(0));
   XDrawImageString(display,window,hiScoreGC,
-                   hiScoreX,hiScoreY,str,sizeof(str)/sizeof(char));
+                   hiScoreX,hiScoreY,str,10);
   button->DrawButton();
   DrawScore().DrawShipYard().DrawPlayingField();
   return *this;
