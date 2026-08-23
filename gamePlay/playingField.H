@@ -102,31 +102,31 @@ class PlayingField
 
  };
 
-extern PlayingField playingField;
+extern PlayingField* playingField;
 
-int PlayingField::uSecondsPerFrame=62500,
+inline int PlayingField::uSecondsPerFrame=62500,
     PlayingField::initialShips=3,
     PlayingField::extraShipScore=10000;
 
-double PlayingField::maxLinearVelocity=28,
+inline double PlayingField::maxLinearVelocity=28,
        PlayingField::universalGravitationalConst=0;
 
-PlayingField::Boolean PlayingField::enemiesExist=PlayingField::on,
+inline PlayingField::Boolean PlayingField::enemiesExist=PlayingField::on,
                       PlayingField::relativisticMass=PlayingField::off;
 
-const Box PlayingField::playArea(640,512,Vector2d(320+2*ROCK::scale,256+2*ROCK::scale));
+inline const Box PlayingField::playArea(640,512,Vector2d(320+2*ROCK::scale,256+2*ROCK::scale));
 
 inline PlayingField::PlayingField(): lastHitFromAlly(off),
                                      lastHitScore(0),
-                                     fontHeight(stage.hiScoreInfo->ascent+stage.hiScoreInfo->descent+4),
+                                     fontHeight(stage->hiScoreInfo->ascent+stage->hiScoreInfo->descent+4),
                                      framesSinceLastBullet(0),
                                      framesThisLevel(0),
                                      nextShipScore(extraShipScore),
                                      framesSinceEnemy(0),
                                      speedAdjust(uSecondsPerFrame/125E3),
                                      level(0),
-                                     WM_PROTOCOLS(XInternAtom(stage.display,"WM_PROTOCOLS",FALSE)),
-                                     WM_DELETE_WINDOW(XInternAtom(stage.display,"WM_DELETE_WINDOW",FALSE)),
+                                     WM_PROTOCOLS(XInternAtom(stage->display,"WM_PROTOCOLS",FALSE)),
+                                     WM_DELETE_WINDOW(XInternAtom(stage->display,"WM_DELETE_WINDOW",FALSE)),
                                      nonPermeableList(28),
                                      selfPermeableList(128),
                                      permeableList(28),
@@ -134,43 +134,43 @@ inline PlayingField::PlayingField(): lastHitFromAlly(off),
                                      leftRotPending(off),
                                      rightRotPending(off),
                                      firing(off)
- {int screen=DefaultScreen(stage.display),
-      blackPixel=BlackPixel(stage.display,screen);
-  pixmap=XCreatePixmap(stage.display,stage.window,
+ {int screen=DefaultScreen(stage->display),
+      blackPixel=BlackPixel(stage->display,screen);
+  pixmap=XCreatePixmap(stage->display,stage->window,
 		                   playArea.Width()+4*ROCK::scale,playArea.Height()+4*ROCK::scale,
-                       DefaultDepth(stage.display,screen));
-  gc=XCreateGC(stage.display,pixmap,0,NULL);
-  XSetGraphicsExposures(stage.display,gc,FALSE);
-  XSetFunction(stage.display,gc,GXor);
-  XSetFont(stage.display,gc,stage.hiScoreInfo->fid);
-  XSetForeground(stage.display,gc,WhitePixel(stage.display,screen));
-  XSetBackground(stage.display,gc,blackPixel);
-  backgroundGC=XCreateGC(stage.display,pixmap,0,NULL);
-  XSetGraphicsExposures(stage.display,backgroundGC,FALSE);
-  XSetForeground(stage.display,backgroundGC,blackPixel);
+                       DefaultDepth(stage->display,screen));
+  gc=XCreateGC(stage->display,pixmap,0,NULL);
+  XSetGraphicsExposures(stage->display,gc,FALSE);
+  XSetFunction(stage->display,gc,GXor);
+  XSetFont(stage->display,gc,stage->hiScoreInfo->fid);
+  XSetForeground(stage->display,gc,WhitePixel(stage->display,screen));
+  XSetBackground(stage->display,gc,blackPixel);
+  backgroundGC=XCreateGC(stage->display,pixmap,0,NULL);
+  XSetGraphicsExposures(stage->display,backgroundGC,FALSE);
+  XSetForeground(stage->display,backgroundGC,blackPixel);
   GenHelpScreen();
  }
 
 inline PlayingField::~PlayingField()
  {
-   XFreeGC(stage.display,backgroundGC);
-   XFreeGC(stage.display,gc);
-   XFreePixmap(stage.display,pixmap);
+   XFreeGC(stage->display,backgroundGC);
+   XFreeGC(stage->display,gc);
+   XFreePixmap(stage->display,pixmap);
  }
 
 inline PlayingField& PlayingField::AddShip()
- {if (!shipGroup.hyper.hyperspacing)
-    intersector.AddNonPermeable(shipGroup.ship,0);
+ {if (!shipGroup->hyper.hyperspacing)
+    intersector.AddNonPermeable(shipGroup->ship,0);
   return *this;
  }
 
 inline PlayingField& PlayingField::RemoveShip()
  {leftRotPending=rightRotPending=firing=off;
-  intersector.RemoveNonPermeable(shipGroup.ship);
-  if (shipGroup.thrust->thrusting)
-   {intersector.RemovePermeable(shipGroup.thrust);
-    shipGroup.ship->ObjectLiner().Acceleration()=Vector2d();
-    shipGroup.thrust->thrusting=Thrust::off;
+  intersector.RemoveNonPermeable(shipGroup->ship);
+  if (shipGroup->thrust->thrusting)
+   {intersector.RemovePermeable(shipGroup->thrust);
+    shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
+    shipGroup->thrust->thrusting=Thrust::off;
    }
   return *this;
  }
@@ -182,18 +182,18 @@ inline void PlayingField::NewRocksAndEnemy()
   ++framesSinceEnemy;
   if (selfPermeableList.GetNumItems())
    {int framesThisLevelDenominator=14400*(8-level+selfPermeableList.GetNumItems());
-    if (enemiesExist&&enemyGroup.enemyInactive&&
+    if (enemiesExist&&enemyGroup->enemyInactive&&
 	      gary_rand::rand_16()<(RAND_MAX_16*framesThisLevel
                               /(framesThisLevelDenominator<=0 ? 1 : framesThisLevelDenominator)
                               +framesSinceEnemy/1024+framesSinceLastBullet)*speedAdjust)
-      enemyGroup.NewEnemy(level);
+      enemyGroup->NewEnemy(level);
    }
   else
    {int nonRockItems=nonPermeableList.GetNumItems()+permeableList.GetNumItems();
-    if (!shipGroup.ship->dead&&(nonRockItems==1||
-                               shipGroup.thrust->thrusting&&nonRockItems==2)||
+    if (!shipGroup->ship->dead&&(nonRockItems==1||
+                               shipGroup->thrust->thrusting&&nonRockItems==2)||
         !nonRockItems)
-      {rockGroup.NewROCKs();
+      {rockGroup->NewROCKs();
        level++;
        framesThisLevel=0;
       }
@@ -201,14 +201,14 @@ inline void PlayingField::NewRocksAndEnemy()
  }
 
 inline void PlayingField::DrawGame()
- {stage.DrawScore();
-  if (score.CurrentScore()>=nextShipScore)
-   {shipYard.AddShip();
-    stage.DrawShipYard();
+ {stage->DrawScore();
+  if (score->CurrentScore()>=nextShipScore)
+   {shipYard->AddShip();
+    stage->DrawShipYard();
     nextShipScore+=extraShipScore;
    }
-  stage.DrawPlayingField();
-  XFillRectangle(stage.display,pixmap,backgroundGC,
+  stage->DrawPlayingField();
+  XFillRectangle(stage->display,pixmap,backgroundGC,
                  playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
                  playArea.Width(),playArea.Height());
  }
@@ -258,10 +258,10 @@ inline void PlayingField::SetGravityAcceleration()
                                                      selfPermeableList.GetData());
         selfPermeableList.Next();
        }
-      if (item1Addr==shipGroup.ship&&shipGroup.thrust->thrusting)
-       {shipGroup.ship->ObjectLiner().Acceleration()=shipGroup.ship->ObjectLiner().Acceleration()
+      if (item1Addr==shipGroup->ship&&shipGroup->thrust->thrusting)
+       {shipGroup->ship->ObjectLiner().Acceleration()=shipGroup->ship->ObjectLiner().Acceleration()
                                                      +gravityAcceleration;
-        shipGroup.thrust->ObjectLiner().Acceleration()=shipGroup.ship->ObjectLiner().Acceleration();
+        shipGroup->thrust->ObjectLiner().Acceleration()=shipGroup->ship->ObjectLiner().Acceleration();
        }
       else
         item1Addr->ObjectLiner().Acceleration()=gravityAcceleration;
@@ -292,42 +292,42 @@ inline void PlayingField::SetGravityAcceleration()
  }
 
 inline timeval PlayingField::ResumePlay(Intersector& intersector)
- {XRaiseWindow(stage.display,stage.window);
+ {XRaiseWindow(stage->display,stage->window);
   timeval time;
   gettimeofday(&time,NULL);
   leftRotPending=rightRotPending=firing=off;
-  shipGroup.ship->ObjectRotator().AngularVelocity()=0;
-  if (shipGroup.thrust->thrusting)
-   {intersector.RemovePermeable(shipGroup.thrust);
-    shipGroup.ship->ObjectLiner().Acceleration()=Vector2d();
-    shipGroup.thrust->thrusting=Thrust::off;
+  shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+  if (shipGroup->thrust->thrusting)
+   {intersector.RemovePermeable(shipGroup->thrust);
+    shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
+    shipGroup->thrust->thrusting=Thrust::off;
    }
-  XSync(stage.display,False);
+  XSync(stage->display,False);
   return time;
  }
 
 #ifdef X11_BACKEND
 inline PlayingField::Boolean PlayingField::RunGame(Options& options)
- {XRaiseWindow(stage.display,stage.window);
+ {XRaiseWindow(stage->display,stage->window);
   nonPermeableList.Reset();
   selfPermeableList.Reset();
   permeableList.Reset();
-  score.Reset();
+  score->Reset();
   framesSinceLastBullet=0;
   framesThisLevel=0;
   nextShipScore=extraShipScore;
   framesSinceEnemy=0;
   for (int i=0;i<initialShips;++i)
-    shipYard.AddShip();
-  XFillRectangle(stage.display,pixmap,backgroundGC,
+    shipYard->AddShip();
+  XFillRectangle(stage->display,pixmap,backgroundGC,
                  playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
                  playArea.Width(),playArea.Height());
   NewRocksAndEnemy();
   DrawGame();
-  while(shipYard.NumShips())
-   {shipYard.RemoveShip();
-    stage.DrawShipYard();
-    shipGroup.NewShip();
+  while(shipYard->NumShips())
+   {shipYard->RemoveShip();
+    stage->DrawShipYard();
+    shipGroup->NewShip();
     leftRotPending=rightRotPending=firing=off;
     while(nonPermeableList.GetNumItems()||permeableList.GetNumItems())
      {timeval startTime,
@@ -335,21 +335,21 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
       gettimeofday(&startTime,NULL);
       NewRocksAndEnemy();
       if (ShipBulletGroup::autoFire&&firing)
-        shipBulletGroup.fireThisFrame=ShipBulletGroup::on;
-      XSync(stage.display,False);
+        shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
+      XSync(stage->display,False);
       XEvent event;
       char keyText[2];
-      while(XEventsQueued(stage.display,QueuedAfterReading))
-       {XNextEvent(stage.display,&event);
+      while(XEventsQueued(stage->display,QueuedAfterReading))
+       {XNextEvent(stage->display,&event);
         switch(event.type)
          {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
                                 break;
-	        case LeaveNotify:     if (stage.autoRepeatState==AutoRepeatModeOn)
-	                                XAutoRepeatOn(stage.display);
+	        case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
+	                                XAutoRepeatOn(stage->display);
                                 for(;;)
-	                               {XNextEvent(stage.display,&event);
+	                               {XNextEvent(stage->display,&event);
                                   if (event.type==EnterNotify)
-				                           {XAutoRepeatOff(stage.display);
+				                           {XAutoRepeatOff(stage->display);
                                     startTime=ResumePlay(intersector);
                                     break;
                                    }
@@ -358,46 +358,46 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
 				                             {case MappingNotify: XRefreshKeyboardMapping((XMappingEvent*)&event);
                                                           break;
                                       case Expose:
-                                      case MapNotify:     stage.Refresh();
+                                      case MapNotify:     stage->Refresh();
                                                           break;
                                      }
 	                               }
                                 break;
 	        case Expose:
-	        case ConfigureNotify: stage.Refresh();
+	        case ConfigureNotify: stage->Refresh();
                                 break;
           case KeyPress:        if (XLookupString((XKeyEvent*)&event,keyText,2,NULL,NULL)==1)
-                                  if (!shipGroup.hyper.hyperspacing)
+                                  if (!shipGroup->hyper.hyperspacing)
                                     switch(keyText[0])
-                                     {case 'e': if (shipGroup.ship->ObjectRotator().AngularVelocity())
+                                     {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity())
                                                   leftRotPending=True;
                                                 else
-				                                         {shipGroup.ship->ObjectRotator().AngularVelocity()=
-                                                    -shipGroup.ship->angularVelocity;
-                                                  if (shipGroup.thrust->thrusting)
-                                                    shipGroup.thrust->ObjectRotator().AngularVelocity()=
-                                                      -shipGroup.ship->angularVelocity;
+				                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                    -shipGroup->ship->angularVelocity;
+                                                  if (shipGroup->thrust->thrusting)
+                                                    shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                      -shipGroup->ship->angularVelocity;
 				                                         }
                                                 break;
-				                              case 'r': if (shipGroup.ship->ObjectRotator().AngularVelocity())
+				                              case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity())
                                                   rightRotPending=True;
                                                 else
-                        				                 {shipGroup.ship->ObjectRotator().AngularVelocity()=
-                                                    shipGroup.ship->angularVelocity;
-                                                  if (shipGroup.thrust->thrusting)
-                                                    shipGroup.thrust->ObjectRotator().AngularVelocity()=
-                                                      shipGroup.ship->angularVelocity;
+                        				                 {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                    shipGroup->ship->angularVelocity;
+                                                  if (shipGroup->thrust->thrusting)
+                                                    shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                      shipGroup->ship->angularVelocity;
 				                 }
                                                 break;
-                                      case 'o': shipGroup.NewThrust();
-                                                shipGroup.thrust->thrusting=Thrust::on;
-                                                intersector.AddPermeable(shipGroup.thrust,0);
+                                      case 'o': shipGroup->NewThrust();
+                                                shipGroup->thrust->thrusting=Thrust::on;
+                                                intersector.AddPermeable(shipGroup->thrust,0);
                                                 break;
-                                      case 'p': shipBulletGroup.fireThisFrame=ShipBulletGroup::on;
+                                      case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
                                                 firing=on;
                                                 break;
                                       case ' ': RemoveShip();
-                                                shipGroup.NewHyper();
+                                                shipGroup->NewHyper();
                                                 break;
 	                                    case 'q': return on;
                                                 break;
@@ -412,44 +412,44 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
                                       case 'h': goto ResetGameUpdateScoreAndReturn;
 				                             }
                                 break;
-          case KeyRelease:      if (!shipGroup.hyper.hyperspacing)
+          case KeyRelease:      if (!shipGroup->hyper.hyperspacing)
                                   if (XLookupString((XKeyEvent*)&event,keyText,2,NULL,NULL)==1)
                                     switch (keyText[0])
-                                     {case 'e': if (shipGroup.ship->ObjectRotator().AngularVelocity()<0)
+                                     {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity()<0)
                                                   if (rightRotPending)
-                                                   {shipGroup.ship->ObjectRotator().AngularVelocity()=
-                                                      shipGroup.ship->angularVelocity;
-                                                    if (shipGroup.thrust->thrusting)
-                                                      shipGroup.thrust->ObjectRotator().AngularVelocity()=
-                                                        shipGroup.ship->angularVelocity;
+                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                      shipGroup->ship->angularVelocity;
+                                                    if (shipGroup->thrust->thrusting)
+                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                        shipGroup->ship->angularVelocity;
                                                    }
                                                   else
-                                                   {shipGroup.ship->ObjectRotator().AngularVelocity()=0;
-                                                    if (shipGroup.thrust->thrusting)
-                                                      shipGroup.thrust->ObjectRotator().AngularVelocity()=0;
+                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                    if (shipGroup->thrust->thrusting)
+                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
                                                    }
                                                 leftRotPending=False;
                                                 break;
-                                      case 'r': if (shipGroup.ship->ObjectRotator().AngularVelocity()>0)
+                                      case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity()>0)
                                                   if (leftRotPending)
-                                                   {shipGroup.ship->ObjectRotator().AngularVelocity()=
-                                                      -shipGroup.ship->angularVelocity;
-                                                    if (shipGroup.thrust->thrusting)
-                                                      shipGroup.thrust->ObjectRotator().AngularVelocity()=
-                                                        -shipGroup.ship->angularVelocity;
+                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                      -shipGroup->ship->angularVelocity;
+                                                    if (shipGroup->thrust->thrusting)
+                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                        -shipGroup->ship->angularVelocity;
                                                    }
                                                   else
-                                                   {shipGroup.ship->ObjectRotator().AngularVelocity()=0;
-                                                    if (shipGroup.thrust->thrusting)
-                                                      shipGroup.thrust->ObjectRotator().AngularVelocity()=0;
+                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                    if (shipGroup->thrust->thrusting)
+                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
                                                    }
                                                 rightRotPending=False;
                                                 break;
-                                      case 'o': intersector.RemovePermeable(shipGroup.thrust);
-                                                shipGroup.ship->ObjectLiner().Acceleration()=Vector2d();
-                                                shipGroup.thrust->thrusting=Thrust::off;
+                                      case 'o': intersector.RemovePermeable(shipGroup->thrust);
+                                                shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
+                                                shipGroup->thrust->thrusting=Thrust::off;
                                                 break;
-                                      case 'p': shipBulletGroup.fireThisFrame=ShipBulletGroup::off;
+                                      case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::off;
                                                 firing=off;
                                                 break;
                                      }
@@ -457,18 +457,18 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
           case ButtonPress:     if (((XButtonPressedEvent*)&event)->button==Button1)
                                  {Boolean pointerButtonReleased=off,
                                           pointerInWindow=on;
-                                  if (button.PointerOnButton(*(XButtonEvent*)&event))
-	                                  button.PressButton();
+                                  if (button->PointerOnButton(*(XButtonEvent*)&event))
+	                                  button->PressButton();
                                   for (;;)
-                                   {XNextEvent(stage.display,&event);
+                                   {XNextEvent(stage->display,&event);
                                     if (event.type==ButtonRelease)
                                      {if (((XButtonReleasedEvent*)&event)->button==Button1)
-                                       {if (button.PointerOnButton(*(XButtonEvent*)&event))
+                                       {if (button->PointerOnButton(*(XButtonEvent*)&event))
                                           {
 #ifdef X11_BACKEND
                                            options.RealizeWindow();
 #endif
-                                           button.ReleaseButton();
+                                           button->ReleaseButton();
                                           }
                                         pointerButtonReleased=on;
                                         if (pointerInWindow)
@@ -478,7 +478,7 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
                                     else
                                       if (event.type==EnterNotify)
                                        {pointerInWindow=on;
-                                        XAutoRepeatOff(stage.display);
+                                        XAutoRepeatOff(stage->display);
                                         if (pointerButtonReleased)
                                           break;
                                        }
@@ -486,17 +486,17 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
                                         switch (event.type)
                                          {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
                                                                 break;
-                                          case LeaveNotify:     if (stage.autoRepeatState==AutoRepeatModeOn)
-                                                                  XAutoRepeatOn(stage.display);
+                                          case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
+                                                                  XAutoRepeatOn(stage->display);
                                                                 pointerInWindow=off;
                                                                 break;
                                           case Expose:
-                                          case MapNotify:       stage.Refresh();
+                                          case MapNotify:       stage->Refresh();
                                                                 break;
-                                          case MotionNotify:    if (button.PointerOnButton(*(XPointerMovedEvent*)&event))
-                                                                  button.PressButton();
+                                          case MotionNotify:    if (button->PointerOnButton(*(XPointerMovedEvent*)&event))
+                                                                  button->PressButton();
                                                                 else
-                                                                  button.ReleaseButton();
+                                                                  button->ReleaseButton();
                                                                 break;
                                          }
                                    }
@@ -518,41 +518,41 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
         usleep(uSecondsPerFrame-diffTime);
      }
    }
-  ResetGameUpdateScoreAndReturn: shipYard.ClearYard();
-  stage.DrawShipYard();
-  shipBulletGroup.Reset();
-  enemyGroup.Reset();
-  enemyBulletGroup.Reset();
-  score.UpdateTopTen();
-  int xPos=playArea.NorthWestCorner().x+(playArea.Width()-stage.hiScoreInfo->max_bounds.width*22)/2
-           -stage.hiScoreInfo->max_bounds.lbearing,
-      yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+stage.hiScoreInfo->ascent,
+  ResetGameUpdateScoreAndReturn: shipYard->ClearYard();
+  stage->DrawShipYard();
+  shipBulletGroup->Reset();
+  enemyGroup->Reset();
+  enemyBulletGroup->Reset();
+  score->UpdateTopTen();
+  int xPos=playArea.NorthWestCorner().x+(playArea.Width()-stage->hiScoreInfo->max_bounds.width*22)/2
+           -stage->hiScoreInfo->max_bounds.lbearing,
+      yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+stage->hiScoreInfo->ascent,
       yPos=yPosSave;
   char str[23];
   ostrstream strout(str,sizeof(str)/sizeof(char));
-  for(int i=0;i<score.NumScores();++i)
-   {strout<<score.TopTenName(i)<<setw(12-strlen(score.TopTenName(i)))<<" "
-          <<setw(10)<<score.TopTenScore(i);
+  for(int i=0;i<score->NumScores();++i)
+   {strout<<score->TopTenName(i)<<setw(12-strlen(score->TopTenName(i)))<<" "
+          <<setw(10)<<score->TopTenScore(i);
     str[22]='\0';
     strout.seekp(0);
-    XDrawString(stage.display,pixmap,gc,xPos,yPos,str,strlen(str));
+    XDrawString(stage->display,pixmap,gc,xPos,yPos,str,strlen(str));
     yPos+=fontHeight;
    }
-  XDrawString(stage.display,pixmap,gc,xPos,yPos=yPosSave+12*fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos=yPosSave+12*fontHeight,
               "        S -- start",strlen("        S -- start"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
               "        Q -- quit",strlen("        Q -- quit"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
               "        H -- help",strlen("        H -- help"));
-  stage.DrawPlayingField();
+  stage->DrawPlayingField();
   return off;
   }
 #endif
 
 inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
  {XSizeHints* sizeHints=XAllocSizeHints();
-  sizeHints->min_width=sizeHints->max_width=sizeHints->base_width=stage.windowWidth;
-  sizeHints->min_height=sizeHints->max_height=sizeHints->base_height=stage.windowHeight;
+  sizeHints->min_width=sizeHints->max_width=sizeHints->base_width=stage->windowWidth;
+  sizeHints->min_height=sizeHints->max_height=sizeHints->base_height=stage->windowHeight;
   sizeHints->width_inc=sizeHints->height_inc=0;
   sizeHints->win_gravity=CenterGravity;
   sizeHints->flags=PMinSize|PMaxSize|PResizeInc|PBaseSize|PWinGravity;
@@ -561,17 +561,17 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
   XTextProperty textProperty;
   XStringListToTextProperty(&gameNameAddr,1,&textProperty);
   XWMHints* windowHints=XAllocWMHints();
-  windowHints->icon_pixmap=stage.icon;
+  windowHints->icon_pixmap=stage->icon;
   windowHints->flags=IconPixmapHint;
   XClassHint* classHint=XAllocClassHint();
-  XSetWMProperties(stage.display,stage.window,&textProperty,&textProperty,
+  XSetWMProperties(stage->display,stage->window,&textProperty,&textProperty,
                    argv,argc,sizeHints,windowHints,classHint);
   XFree((char*)classHint);
   XFree((char*)windowHints);
   XFree((char*)sizeHints);
-  XSetWMProtocols(stage.display,stage.window,&WM_DELETE_WINDOW,1);
-  XAutoRepeatOff(stage.display);
-  XSelectInput(stage.display,stage.window,EnterWindowMask|LeaveWindowMask
+  XSetWMProtocols(stage->display,stage->window,&WM_DELETE_WINDOW,1);
+  XAutoRepeatOff(stage->display);
+  XSelectInput(stage->display,stage->window,EnterWindowMask|LeaveWindowMask
                                           |StructureNotifyMask|ExposureMask
                                           |KeyPressMask|KeyReleaseMask
                                            |ButtonPressMask|ButtonReleaseMask
@@ -579,24 +579,24 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
 #ifdef X11_BACKEND
   Options options(argc,argv);
 #endif
-  XMapRaised(stage.display,stage.window);
+  XMapRaised(stage->display,stage->window);
   XEvent event;
   int localHighScore=0;
   Boolean pointerButtonReleased=on,
           buttonActivated=off;
   for(;;)
-   {XNextEvent(stage.display,&event);
+   {XNextEvent(stage->display,&event);
     switch(event.type)
      {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
                             break;
-      case LeaveNotify:     if (stage.autoRepeatState==AutoRepeatModeOn)
-                              XAutoRepeatOn(stage.display);
+      case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
+                              XAutoRepeatOn(stage->display);
                             break;
-      case EnterNotify:     XAutoRepeatOff(stage.display);
+      case EnterNotify:     XAutoRepeatOff(stage->display);
                             break;
       case Expose:
       case MapNotify:
-      case ConfigureNotify: stage.Refresh();
+      case ConfigureNotify: stage->Refresh();
                             break;
       case KeyPress:        if (pointerButtonReleased)
                              {char keyText[2];
@@ -607,45 +607,45 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
 #ifdef X11_BACKEND
                                              earlyExit=RunGame(options);
 #endif
-                                             if (localHighScore<score.CurrentScore())
-                                              localHighScore=score.CurrentScore();
+                                             if (localHighScore<score->CurrentScore())
+                                              localHighScore=score->CurrentScore();
                                             if (earlyExit)
                                               return localHighScore;
                                             break;
                                   case 'q': return localHighScore;
                                             break;
                                   case 'h': GenHelpScreen();
-                                            stage.DrawPlayingField();
+                                            stage->DrawPlayingField();
                                             break;
                                  }
                              }
                             break;
       case ButtonPress:     if (((XButtonPressedEvent*)&event)->button==Button1)
                              {pointerButtonReleased=off;
-                              if (button.PointerOnButton(*(XButtonEvent*)&event))
-                               {button.PressButton();
+                              if (button->PointerOnButton(*(XButtonEvent*)&event))
+                               {button->PressButton();
                                 buttonActivated=on;
                                }
                              }
                             break;
       case ButtonRelease:   if (((XButtonReleasedEvent*)&event)->button==Button1)
                               {if (buttonActivated &&
-                                   button.PointerOnButton(*(XButtonEvent*)&event))
+                                   button->PointerOnButton(*(XButtonEvent*)&event))
                                 {
 #ifdef X11_BACKEND
                                  options.RealizeWindow();
 #endif
-                                 button.ReleaseButton();
+                                 button->ReleaseButton();
                                 }
                               buttonActivated=off;
                               pointerButtonReleased=on;
                              }
                             break;
       case MotionNotify:    if (buttonActivated &&
-                                button.PointerOnButton(*(XPointerMovedEvent*)&event))
-                              button.PressButton();
+                                button->PointerOnButton(*(XPointerMovedEvent*)&event))
+                              button->PressButton();
                             else
-                              button.ReleaseButton();
+                              button->ReleaseButton();
                             break;
       case ClientMessage:   if (((XClientMessageEvent*)&event)->message_type==WM_PROTOCOLS&&
                                 ((XClientMessageEvent*)&event)->data.l[0]==WM_DELETE_WINDOW)
@@ -656,37 +656,37 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
  }
 
 void PlayingField::GenHelpScreen()
- {XFillRectangle(stage.display,pixmap,backgroundGC,
+ {XFillRectangle(stage->display,pixmap,backgroundGC,
                  playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
                  playArea.Width(),playArea.Height());
   int xPos=playArea.NorthWestCorner().x+(playArea.Width()
-                                         -XTextWidth(stage.hiScoreInfo,
+                                         -XTextWidth(stage->hiScoreInfo,
                                                      "        H -- help (this screen)",
                                                      strlen("        H -- help (this screen)")))/2
-           -stage.hiScoreInfo->max_bounds.lbearing,
-      yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+stage.hiScoreInfo->ascent;
-  XDrawString(stage.display,pixmap,gc,xPos,yPos,
+           -stage->hiScoreInfo->max_bounds.lbearing,
+      yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+stage->hiScoreInfo->ascent;
+  XDrawString(stage->display,pixmap,gc,xPos,yPos,
               "        S -- start",strlen("        S -- start"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
               "        Q -- quit",strlen("        Q -- quit"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=2*fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=2*fontHeight,
               "        E -- rotate left",strlen("        E -- rotate left"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
               "        R -- rotate right",strlen("        R -- rotate right"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
               "        O -- thrust",strlen("        O -- thrust"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
               "        P -- fire",strlen("        P -- fire"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
               "space bar -- hyperspace",strlen("space bar -- hyperspace"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=2*fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=2*fontHeight,
               "        N -- new game",strlen("        N -- new game"));
-  XDrawString(stage.display,pixmap,gc,xPos,yPos+=2*fontHeight,
+  XDrawString(stage->display,pixmap,gc,xPos,yPos+=2*fontHeight,
               "        H -- help (this screen)",strlen("        H -- help (this screen)"));
  }
 
 inline void PlayingField::AlterExtraShipScore(const int newExtraShipScore)
- {nextShipScore=(score.CurrentScore()/newExtraShipScore+1)*newExtraShipScore;
+ {nextShipScore=(score->CurrentScore()/newExtraShipScore+1)*newExtraShipScore;
  }
 
 inline void PlayingField::AlterUSecondsPerFrame(const int newUSecondsPerFrame)

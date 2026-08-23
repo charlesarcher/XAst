@@ -203,12 +203,12 @@ class ShipGroup
     inline void AdjustFramesPerSec(const double frameRatio);
  };
 
-extern ShipGroup shipGroup;
+extern ShipGroup* shipGroup;
 
 #include"../../gamePlay/playingField.H"
 
 
-double Ship::maxVelocity=.43*PlayingField::maxLinearVelocity,
+inline double Ship::maxVelocity=.43*PlayingField::maxLinearVelocity,
        Ship::acceleration=1.425,
        Ship::angularVelocity=0.2;
 
@@ -219,10 +219,10 @@ inline Ship::Ship(const unsigned char* const i,
                                    iconHeight(iHeight),
                                    iconColor(iColor),
                                    dead(on)
- {if (!XAllocColor(stage.display,DefaultColormap(stage.display,
-                                                 DefaultScreen(stage.display)),
+ {if (!XAllocColor(stage->display,DefaultColormap(stage->display,
+                                                 DefaultScreen(stage->display)),
                    &iconColor))
-    iconColor.pixel=WhitePixel(stage.display,DefaultScreen(stage.display));
+    iconColor.pixel=WhitePixel(stage->display,DefaultScreen(stage->display));
  }
 
 Ship::~Ship()
@@ -233,11 +233,11 @@ void Ship::MissScript(Intersector& intersector,
                       const double createTime, const double existTime)
  {ObjectRotator().UpdateAngle(existTime);
   ObjectLiner().UpdateVelocity(existTime);
-  shipBulletGroup.Fire(intersector,createTime+existTime);
-  XCopyArea(stage.display,
+  shipBulletGroup->Fire(intersector,createTime+existTime);
+  XCopyArea(stage->display,
             ObjectRotator().GetPixAtTime(0),
-            playingField.pixmap,
-            playingField.gc,
+            playingField->pixmap,
+            playingField->gc,
             0,0,
             ObjectRotator().PixWidth(),
             ObjectRotator().PixHeight(),
@@ -251,33 +251,33 @@ void Ship::HitScript(Intersector& intersector,
                      const double createTime, const double existTime,
                      const Vector2d& intersectPoint)
  {intersector.RemoveNonPermeable(this);
-  if (shipGroup.thrust->thrusting)
-    intersector.RemovePermeable(shipGroup.thrust);
-  shipGroup.hyper.hyperspacing=Hyper::on;
+  if (shipGroup->thrust->thrusting)
+    intersector.RemovePermeable(shipGroup->thrust);
+  shipGroup->hyper.hyperspacing=Hyper::on;
   dead=on;
-  shipGroup.explosion.CurrentBox().MoveBox(ObjectLiner()
+  shipGroup->explosion.CurrentBox().MoveBox(ObjectLiner()
                                            .Move(OldBox().Center(),existTime)
-		                          -shipGroup.explosion.CurrentBox().Center());
+		                          -shipGroup->explosion.CurrentBox().Center());
   ObjectLiner().UpdateVelocity(existTime);
-  shipGroup.explosion.ObjectLiner().Velocity()=ObjectLiner().Velocity();
-  shipGroup.explosion.frameList.Reset();
-  shipGroup.explosion.frameTimer.Reset();
-  intersector.AddPermeable(&shipGroup.explosion,createTime+existTime);
-  if (playingField.lastHitScore)
-   {score.CurrentScore()+=playingField.lastHitScore;
-    playingField.lastHitScore=0;
+  shipGroup->explosion.ObjectLiner().Velocity()=ObjectLiner().Velocity();
+  shipGroup->explosion.frameList.Reset();
+  shipGroup->explosion.frameTimer.Reset();
+  intersector.AddPermeable(&shipGroup->explosion,createTime+existTime);
+  if (playingField->lastHitScore)
+   {score->CurrentScore()+=playingField->lastHitScore;
+    playingField->lastHitScore=0;
    }
   else
-    playingField.lastHitFromAlly=!playingField.lastHitFromAlly;
+    playingField->lastHitFromAlly=!playingField->lastHitFromAlly;
  }
 
-const Vector2d StarDestroyer::vectors[5]={Vector2d(0,-19),
+inline const Vector2d StarDestroyer::vectors[5]={Vector2d(0,-19),
                                           Vector2d(8,11),
                                           Vector2d(4,7),
                                           Vector2d(-4,7),
                                           Vector2d(-8,11)};
 
-XColor StarDestroyer::color={0,
+inline XColor StarDestroyer::color={0,
                              44461,//173
                              55512,//216
                              59110,//230
@@ -287,7 +287,7 @@ inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
                                             starDestroyerIcon_width,
                                             starDestroyerIcon_height,
                                             color),
-                                       graphic(stage.display,stage.window,color,
+                                       graphic(stage->display,stage->window,color,
                                                vectors,sizeof(vectors)/sizeof(Vector2d),
 #ifdef _CORP_LOGO_
                                                starDestroyerDecor_bits,
@@ -305,7 +305,7 @@ Rotator& StarDestroyer::ObjectRotator()
  {return rotator;
  }
 
-const Vector2d NextGenerationEnterprise::vectors[34]={Vector2d(0,-10),
+inline const Vector2d NextGenerationEnterprise::vectors[34]={Vector2d(0,-10),
                                                       Vector2d(8,-8),
                                                       Vector2d(10,-6),
                                                       Vector2d(11,-2),
@@ -340,7 +340,7 @@ const Vector2d NextGenerationEnterprise::vectors[34]={Vector2d(0,-10),
                                                       Vector2d(-10,-6),
                                                       Vector2d(-8,-8)};
 
-XColor NextGenerationEnterprise::bottomColor={0,
+inline XColor NextGenerationEnterprise::bottomColor={0,
                                               61680,//240
                                               61680,//240
                                               61680,//240
@@ -351,13 +351,13 @@ XColor NextGenerationEnterprise::bottomColor={0,
                                            0,//0
                                            DoRed|DoGreen|DoBlue};
 
-const double NextGenerationEnterprise::area=472;
+inline const double NextGenerationEnterprise::area=472;
 
 inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_bits,
                                                                   NCC1701DIcon_width,
                                                                   NCC1701DIcon_height,
                                                                   bottomColor)
- {CompositePixmap NextGenerationEnterpriseCP(stage.display,stage.window,
+ {CompositePixmap NextGenerationEnterpriseCP(stage->display,stage->window,
                                              NCC1701DDecorBottom_width,
                                              NCC1701DDecorBottom_height);
   NextGenerationEnterpriseCP.AddBitmapData(NCC1701DDecorBottom_bits,
@@ -368,7 +368,7 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
                                            NCC1701DDecorTop_width,
                                            NCC1701DDecorTop_height,
                                            topColor);
-  graphic=new RotVectorData(stage.display,stage.window,bottomColor,
+  graphic=new RotVectorData(stage->display,stage->window,bottomColor,
                             vectors,sizeof(vectors)/sizeof(Vector2d),
                             area,
                             NextGenerationEnterpriseCP);
@@ -386,7 +386,7 @@ Rotator& NextGenerationEnterprise::ObjectRotator()
  {return *rotator;
  }
 
-const Vector2d MovieEnterprise::vectors[32]={Vector2d(0,-16),
+inline const Vector2d MovieEnterprise::vectors[32]={Vector2d(0,-16),
                                              Vector2d(6,-14),
                                              Vector2d(7,-13),
                                              Vector2d(9,-7),
@@ -419,19 +419,19 @@ const Vector2d MovieEnterprise::vectors[32]={Vector2d(0,-16),
                                              Vector2d(-7,-13),
                                              Vector2d(-6,-14)};
 
-XColor MovieEnterprise::color={0,
+inline XColor MovieEnterprise::color={0,
                                61680,//240
                                61680,//240
                                61680,//240
                                DoRed|DoGreen|DoBlue};
 
-const double MovieEnterprise::area=446;
+inline const double MovieEnterprise::area=446;
 
 inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
                                                 NCC1701AIcon_width,
                                                 NCC1701AIcon_height,
                                                 color),
-                                           graphic(stage.display,stage.window,color,
+                                           graphic(stage->display,stage->window,color,
                                                    vectors,sizeof(vectors)/sizeof(Vector2d),
                                                    area,
                                                    NCC1701ADecor_bits,
@@ -455,11 +455,11 @@ Thrust::~Thrust()
 
 void Thrust::MissScript(Intersector& intersector, const double createTime,
                         const double existTime)
- {shipGroup.NewThrust();
-  XCopyArea(stage.display,
+ {shipGroup->NewThrust();
+  XCopyArea(stage->display,
             ObjectRotator().GetPixAtTime(0),
-            playingField.pixmap,
-            playingField.gc,
+            playingField->pixmap,
+            playingField->gc,
             0,0,
             ObjectRotator().PixWidth(),
             ObjectRotator().PixHeight(),
@@ -469,7 +469,7 @@ void Thrust::MissScript(Intersector& intersector, const double createTime,
             CurrentBox().NorthWestCorner().y+.5);
  }
 
-XColor StarDestroyerThrust::edgeColor={0,
+inline XColor StarDestroyerThrust::edgeColor={0,
                                        0,
                                        0,
                                        65535,//255
@@ -486,7 +486,7 @@ XColor StarDestroyerThrust::edgeColor={0,
                                          DoRed|DoGreen|DoBlue};
 
 inline StarDestroyerThrust::StarDestroyerThrust()
- {CompositePixmap thrustCP(stage.display,stage.window,
+ {CompositePixmap thrustCP(stage->display,stage->window,
                            starDestroyerThrustEdge_width,starDestroyerThrustEdge_height);
   thrustCP.AddBitmapData(starDestroyerThrustEdge_bits,
                          starDestroyerThrustEdge_width,starDestroyerThrustEdge_height,
@@ -497,7 +497,7 @@ inline StarDestroyerThrust::StarDestroyerThrust()
           .AddBitmapData(starDestroyerThrustCenter_bits,
                          starDestroyerThrustCenter_width,starDestroyerThrustCenter_height,
                          centerColor);
-  graphic=new RotPixmapData(stage.display,stage.window,thrustCP);
+  graphic=new RotPixmapData(stage->display,stage->window,thrustCP);
   rotator=new Rotator(graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity);
   SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
@@ -512,13 +512,13 @@ Rotator& StarDestroyerThrust::ObjectRotator()
  {return *rotator;
  }
 
-XColor NextGenerationEnterpriseThrust::color={0,
+inline XColor NextGenerationEnterpriseThrust::color={0,
                                               65535,//255
                                               0,
                                               0,
                                               DoRed|DoGreen|DoBlue};
 
-inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic(stage.display,stage.window,color,
+inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic(stage->display,stage->window,color,
                                                                                  NCC1701DThrustDecor_bits,
                                                                                  NCC1701DThrustDecor_width,
                                                                                  NCC1701DThrustDecor_height),
@@ -532,14 +532,14 @@ Rotator& NextGenerationEnterpriseThrust::ObjectRotator()
  {return rotator;
  }
 
-XColor MovieEnterpriseThrust::color={0,
+inline XColor MovieEnterpriseThrust::color={0,
                                      65535,//255
                                      0,
                                      0,
                                      DoRed|DoGreen|DoBlue};
 
 inline MovieEnterpriseThrust::MovieEnterpriseThrust():
-                       graphic(stage.display,stage.window,color,
+                       graphic(stage->display,stage->window,color,
                                NCC1701AThrustDecor_bits,
                                NCC1701AThrustDecor_width,NCC1701AThrustDecor_height),
                        rotator(&graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity)
@@ -553,16 +553,16 @@ Rotator& MovieEnterpriseThrust::ObjectRotator()
 
 void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double createTime,
                                        const double existTime)
- {shipGroup.NewThrust();
+ {shipGroup->NewThrust();
   int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
   GC& gc=rotator.GetMaskGCAtTime(0);
-  XSetClipOrigin(stage.display,gc,destX,destY);
-  XCopyArea(stage.display,
+  XSetClipOrigin(stage->display,gc,destX,destY);
+  XCopyArea(stage->display,
             rotator.GetPixAtTime(0),
-            playingField.pixmap,
+            playingField->pixmap,
             gc,
             0,0,
             rotator.PixWidth(),
@@ -570,13 +570,13 @@ void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double cr
             destX,destY);
  }
 
-double Hyper::percentDestructRate=1.25;
+inline double Hyper::percentDestructRate=1.25;
 
-int Hyper::destructRate=RAND_MAX_16*percentDestructRate/100;
+inline int Hyper::destructRate=RAND_MAX_16*percentDestructRate/100;
 
 inline Hyper::Hyper(): MovableObject(Vector2d(),
-                                     3*shipGroup.ship->ObjectRotator().PixWidth(),
-                                     3*shipGroup.ship->ObjectRotator().PixHeight(),
+                                     3*shipGroup->ship->ObjectRotator().PixWidth(),
+                                     3*shipGroup->ship->ObjectRotator().PixHeight(),
                                      Vector2d(),0,Vector2d()),
                        hyperspacing(on),
                        hyperCount(-destructRate)
@@ -585,65 +585,65 @@ inline Hyper::Hyper(): MovableObject(Vector2d(),
 
 void Hyper::MissScript(Intersector& intersector,
                        const double createTime, const double existTime)
- {playingField.nonPermeableList.SetCurrentAtHead();
-  for (int i=0; i<playingField.nonPermeableList.GetNumItems(); ++i)
-   {if (Intersect(playingField.nonPermeableList.GetData()->CurrentBox(),
+ {playingField->nonPermeableList.SetCurrentAtHead();
+  for (int i=0; i<playingField->nonPermeableList.GetNumItems(); ++i)
+   {if (Intersect(playingField->nonPermeableList.GetData()->CurrentBox(),
                   CurrentBox()))
       return;
-    playingField.nonPermeableList.Next();
+    playingField->nonPermeableList.Next();
    }
-  playingField.selfPermeableList.SetCurrentAtHead();
-  for (int i=0; i<playingField.selfPermeableList.GetNumItems(); ++i)
-   {if (Intersect(playingField.selfPermeableList.GetData()->CurrentBox(),
+  playingField->selfPermeableList.SetCurrentAtHead();
+  for (int i=0; i<playingField->selfPermeableList.GetNumItems(); ++i)
+   {if (Intersect(playingField->selfPermeableList.GetData()->CurrentBox(),
                   CurrentBox()))
       return;
-    playingField.selfPermeableList.Next();
+    playingField->selfPermeableList.Next();
    }
   intersector.RemovePermeable(this);
   if (gary_rand::rand_16()>(hyperCount+=destructRate))
-   {shipGroup.ship->CurrentBox().MoveBox(CurrentBox().Center()
-                                         -shipGroup.ship->CurrentBox().Center());
-    shipGroup.ship->ObjectLiner().Velocity()=Vector2d();
-    shipGroup.ship->ObjectLiner().Acceleration()=Vector2d();
-    shipGroup.ship->ObjectRotator().AngularVelocity()=0;
-    intersector.AddNonPermeable(shipGroup.ship,createTime+existTime);
-    XCopyArea(stage.display,
-	            shipGroup.ship->ObjectRotator().GetPixAtTime(0),
-              playingField.pixmap,
-              playingField.gc,
+   {shipGroup->ship->CurrentBox().MoveBox(CurrentBox().Center()
+                                         -shipGroup->ship->CurrentBox().Center());
+    shipGroup->ship->ObjectLiner().Velocity()=Vector2d();
+    shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
+    shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+    intersector.AddNonPermeable(shipGroup->ship,createTime+existTime);
+    XCopyArea(stage->display,
+	            shipGroup->ship->ObjectRotator().GetPixAtTime(0),
+              playingField->pixmap,
+              playingField->gc,
               0,0,
-	            shipGroup.ship->ObjectRotator().PixWidth(),
-	            shipGroup.ship->ObjectRotator().PixHeight(),
-	            shipGroup.ship->CurrentBox().NorthWestCorner().x+.5,
-	            shipGroup.ship->CurrentBox().NorthWestCorner().y+.5);
-    shipGroup.thrust->thrusting=Thrust::off;
-    shipGroup.hyper.hyperspacing=Hyper::off;
+	            shipGroup->ship->ObjectRotator().PixWidth(),
+	            shipGroup->ship->ObjectRotator().PixHeight(),
+	            shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
+	            shipGroup->ship->CurrentBox().NorthWestCorner().y+.5);
+    shipGroup->thrust->thrusting=Thrust::off;
+    shipGroup->hyper.hyperspacing=Hyper::off;
    }
   else
-   {shipGroup.explosion.CurrentBox().MoveBox(CurrentBox().Center()
-	                                    -shipGroup.explosion.CurrentBox().Center());
-    shipGroup.explosion.ObjectLiner().Velocity()=Vector2d();
-    intersector.AddPermeable(&shipGroup.explosion,createTime+existTime);
-    shipGroup.explosion.frameList.Reset();
-    int destX=shipGroup.explosion.CurrentBox().NorthWestCorner().x+.5,
-        destY=shipGroup.explosion.CurrentBox().NorthWestCorner().y+.5;
-    GC& gc=explosionGraphic.gc[0];
-    XSetClipOrigin(stage.display,gc,destX,destY);
-    XCopyArea(stage.display,
-              shipGroup.explosion.frameList.GetFrame(),
-              playingField.pixmap,
+   {shipGroup->explosion.CurrentBox().MoveBox(CurrentBox().Center()
+	                                    -shipGroup->explosion.CurrentBox().Center());
+    shipGroup->explosion.ObjectLiner().Velocity()=Vector2d();
+    intersector.AddPermeable(&shipGroup->explosion,createTime+existTime);
+    shipGroup->explosion.frameList.Reset();
+    int destX=shipGroup->explosion.CurrentBox().NorthWestCorner().x+.5,
+        destY=shipGroup->explosion.CurrentBox().NorthWestCorner().y+.5;
+    GC& gc=explosionGraphic->gc[0];
+    XSetClipOrigin(stage->display,gc,destX,destY);
+    XCopyArea(stage->display,
+              shipGroup->explosion.frameList.GetFrame(),
+              playingField->pixmap,
               gc,
               0,0,
-              shipGroup.explosion.frameList.PixWidth(),
-              shipGroup.explosion.frameList.PixHeight(),
+              shipGroup->explosion.frameList.PixWidth(),
+              shipGroup->explosion.frameList.PixHeight(),
 	            destX,destY);
-    shipGroup.explosion.frameList.UpdateFrameNumber();
-    shipGroup.explosion.frameTimer.Reset().TimerAlarm();
+    shipGroup->explosion.frameList.UpdateFrameNumber();
+    shipGroup->explosion.frameTimer.Reset().TimerAlarm();
    }
  }
 
 #define max(a,b) (a>b?a:b)
-const int ShipGroup::maxIconHeight=max(max(starDestroyerIcon_height,
+inline const int ShipGroup::maxIconHeight=max(max(starDestroyerIcon_height,
                                            NCC1701DIcon_height),
                                        NCC1701AIcon_height),
           ShipGroup::maxIconWidth=max(max(starDestroyerIcon_width,
@@ -651,9 +651,9 @@ const int ShipGroup::maxIconHeight=max(max(starDestroyerIcon_height,
                                       NCC1701AIcon_width);
 #undef max
 
-Ship* ShipGroup::ship=&shipGroup.starDestroyer;
+inline Ship* ShipGroup::ship=nullptr;
 
-Thrust* ShipGroup::thrust=&shipGroup.starDestroyerThrust;
+inline Thrust* ShipGroup::thrust=nullptr;
 
 inline void ShipGroup::NewShip()
  {ship->ObjectRotator().Angle()=0;
@@ -662,9 +662,9 @@ inline void ShipGroup::NewShip()
   hyper.hyperCount=-Hyper::destructRate;
   hyper.hyperspacing=Hyper::on;
   ship->dead=Ship::off;
-  shipBulletGroup.fireThisFrame=ShipBulletGroup::off;
-  playingField.permeableList.SetCurrentAtHole().GetData()=&hyper;
-  playingField.permeableList.SetCurrentAtHead().AddPrior();
+  shipBulletGroup->fireThisFrame=ShipBulletGroup::off;
+  playingField->permeableList.SetCurrentAtHole().GetData()=&hyper;
+  playingField->permeableList.SetCurrentAtHead().AddPrior();
  }
 
 inline void ShipGroup::NewThrust()
@@ -688,8 +688,8 @@ inline void ShipGroup::NewHyper()
 			                       +PlayingField::playArea.NorthWestCorner()
                              -hyper.CurrentBox().Center());
   hyper.hyperspacing=Hyper::on;
-  playingField.permeableList.SetCurrentAtHole().GetData()=&hyper;
-  playingField.permeableList.SetCurrentAtHead().AddPrior();
+  playingField->permeableList.SetCurrentAtHole().GetData()=&hyper;
+  playingField->permeableList.SetCurrentAtHead().AddPrior();
  }
 
 inline void ShipGroup::ResetAngularVelocity(const double newAngularVelocity)

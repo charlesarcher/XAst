@@ -106,22 +106,22 @@ class ShipBulletGroup
 
  };
 
-extern ShipBulletGroup shipBulletGroup;
+extern ShipBulletGroup* shipBulletGroup;
 
 #include"../../gamePlay/playingField.H"
 
-int ShipBullet::numFrames=28;
+inline int ShipBullet::numFrames=28;
 
-double ShipBullet::velocity=.57*PlayingField::maxLinearVelocity;
+inline double ShipBullet::velocity=.57*PlayingField::maxLinearVelocity;
 
-inline ShipBullet::ShipBullet(BulletExplosion* const explosion): Bullet(&shipBulletGroup.rotator,
+inline ShipBullet::ShipBullet(BulletExplosion* const explosion): Bullet(&shipBulletGroup->rotator,
 									                                                      numFrames, explosion)
  {
  }
 
 void ShipBullet::MissScript(Intersector& intersector, const double createTime,
                                                    const double existTime)
- {playingField.framesSinceLastBullet=0;
+ {playingField->framesSinceLastBullet=0;
   if (frameTimer.TimerAlarm())
    {intersector.RemoveNonPermeable(this);
     inactive=on;
@@ -129,10 +129,10 @@ void ShipBullet::MissScript(Intersector& intersector, const double createTime,
   else
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
-    XCopyArea(stage.display,
+    XCopyArea(stage->display,
               rotator->GetPixAtTime(0),
-              playingField.pixmap,
-              playingField.gc,
+              playingField->pixmap,
+              playingField->gc,
               0,0,
               rotator->PixWidth(),
               rotator->PixHeight(),
@@ -152,30 +152,30 @@ void ShipBullet::HitScript(Intersector& intersector, const double createTime,
   explosion->frameList.Reset();
   explosion->frameTimer.Reset();
   intersector.AddPermeable(explosion,createTime+existTime);
-  if (playingField.lastHitScore)
-   {score.CurrentScore()+=playingField.lastHitScore;
-    playingField.lastHitScore=0;
+  if (playingField->lastHitScore)
+   {score->CurrentScore()+=playingField->lastHitScore;
+    playingField->lastHitScore=0;
    }
   else
-    playingField.lastHitFromAlly=!playingField.lastHitFromAlly;
+    playingField->lastHitFromAlly=!playingField->lastHitFromAlly;
  }
 
 inline void ShipBullet::PositionBullet(Intersector& intersector,
                                        const double creationTime)
- {Vector2d shipNose=shipGroup.ship->ObjectRotator().GetVecsAtTime(0)[0],
+ {Vector2d shipNose=shipGroup->ship->ObjectRotator().GetVecsAtTime(0)[0],
            velocityDirection=shipNose/shipNose.Magnitude();
-  CurrentBox().MoveBox(shipNose+shipGroup.ship->CurrentBox().Center()
+  CurrentBox().MoveBox(shipNose+shipGroup->ship->CurrentBox().Center()
                        +ObjectRotator().Radius()*velocityDirection
                        +velocityDirection/2
                        -CurrentBox().Center());
-  ObjectLiner().Velocity()=shipGroup.ship->ObjectLiner().Velocity()
+  ObjectLiner().Velocity()=shipGroup->ship->ObjectLiner().Velocity()
                            +velocity*velocityDirection;
   inactive=off;
   intersector.AddNonPermeable(this,creationTime);
-  XCopyArea(stage.display,
+  XCopyArea(stage->display,
             rotator->GetPixAtTime(0),
-            playingField.pixmap,
-            playingField.gc,
+            playingField->pixmap,
+            playingField->gc,
             0,0,
             rotator->PixWidth(),
             rotator->PixHeight(),
@@ -186,23 +186,23 @@ inline void ShipBullet::PositionBullet(Intersector& intersector,
   frameTimer.Reset().TimerAlarm();
  }
 
-ShipBulletGroup::Boolean ShipBulletGroup::autoFire=off;
+inline ShipBulletGroup::Boolean ShipBulletGroup::autoFire=off;
 
-int ShipBulletGroup::numBullets=4;
+inline int ShipBulletGroup::numBullets=4;
 
-const Vector2d ShipBulletGroup::vectors[4]={Vector2d(0,-2),
+inline const Vector2d ShipBulletGroup::vectors[4]={Vector2d(0,-2),
                                             Vector2d(2,0),
                                             Vector2d(0,2),
                                             Vector2d(-2,0)};
 
-XColor ShipBulletGroup::color={0,
+inline XColor ShipBulletGroup::color={0,
                                65535,//255
                                0,
                                0,
                                DoRed|DoGreen|DoBlue};
 
 inline ShipBulletGroup::ShipBulletGroup(): fireThisFrame(off),
-                                           graphic(stage.display,stage.window,color,
+                                           graphic(stage->display,stage->window,color,
                                                    vectors,sizeof(vectors)/sizeof(Vector2d),
                                                    shipBulletDecor_bits,
                                                    shipBulletDecor_width,shipBulletDecor_height),

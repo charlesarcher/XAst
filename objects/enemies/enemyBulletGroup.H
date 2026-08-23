@@ -90,16 +90,16 @@ class EnemyBulletGroup
     unsigned int clipsFired;
  };
 
-extern EnemyBulletGroup enemyBulletGroup;
+extern EnemyBulletGroup* enemyBulletGroup;
 
 #include"../../gamePlay/playingField.H"
 
-double EnemyBullet::velocity=.5*PlayingField::maxLinearVelocity;
+inline double EnemyBullet::velocity=.5*PlayingField::maxLinearVelocity;
 
-int EnemyBullet::score=1,
+inline int EnemyBullet::score=1,
     EnemyBullet::numFrames=34;
 
-inline EnemyBullet::EnemyBullet(BulletExplosion* const explosion): Bullet(&enemyBulletGroup.rotator,
+inline EnemyBullet::EnemyBullet(BulletExplosion* const explosion): Bullet(&enemyBulletGroup->rotator,
                                                                           numFrames,explosion)
  {
  }
@@ -113,15 +113,15 @@ void EnemyBullet::HitScript(Intersector& intersector, const double createTime,
   explosion->frameList.Reset();
   explosion->frameTimer.Reset();
   intersector.AddPermeable(explosion,createTime+existTime);
-  if (playingField.lastHitFromAlly)
-   {::score.CurrentScore()+=score;
-    playingField.lastHitFromAlly=PlayingField::off;
+  if (playingField->lastHitFromAlly)
+   {::score->CurrentScore()+=score;
+    playingField->lastHitFromAlly=PlayingField::off;
    }
   else
-    if (playingField.lastHitScore)
-      playingField.lastHitScore=0;
+    if (playingField->lastHitScore)
+      playingField->lastHitScore=0;
     else
-      playingField.lastHitScore=score;
+      playingField->lastHitScore=score;
  }
 
 inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
@@ -140,10 +140,10 @@ inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
                                   shooter.CurrentBox().Center().y+1)
                          -CurrentBox().Center());
   SetToIntercept(target,velocity);
-  XCopyArea(stage.display,
+  XCopyArea(stage->display,
             rotator->GetPixAtTime(0),
-            playingField.pixmap,
-            playingField.gc,
+            playingField->pixmap,
+            playingField->gc,
             0,0,
             rotator->PixWidth(),
             rotator->PixHeight(),
@@ -157,45 +157,45 @@ inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
 inline void EnemyBullet::Aim(Intersector& intersector,
                              const double creationTime,
                              Enemy& shooter)
- {if (enemyBulletGroup.clipsFired<<8*sizeof(enemyBulletGroup.clipsFired)-4)
-   {int bulletID=enemyBulletGroup.clipsFired%enemyBulletGroup.numBullets;
-    if (playingField.selfPermeableList.GetNumItems()&&
-        playingField.selfPermeableList.GetNumItems()>=bulletID)
-     {playingField.selfPermeableList.SetCurrentAtHead();
+ {if (enemyBulletGroup->clipsFired<<8*sizeof(enemyBulletGroup->clipsFired)-4)
+   {int bulletID=enemyBulletGroup->clipsFired%enemyBulletGroup->numBullets;
+    if (playingField->selfPermeableList.GetNumItems()&&
+        playingField->selfPermeableList.GetNumItems()>=bulletID)
+     {playingField->selfPermeableList.SetCurrentAtHead();
       for (;bulletID--;)
-        playingField.selfPermeableList.Next();
+        playingField->selfPermeableList.Next();
       SetInterceptVector(shooter,
-                         *playingField.selfPermeableList.GetData());
+                         *playingField->selfPermeableList.GetData());
      }
     else
-     {int numROCKs=RockGroup::ROCKsPerLevel*(playingField.level-1)+RockGroup::initialROCKs;
+     {int numROCKs=RockGroup::ROCKsPerLevel*(playingField->level-1)+RockGroup::initialROCKs;
       if (numROCKs>RockGroup::maxROCKs)
         numROCKs=RockGroup::maxROCKs;
       SetInterceptVector(shooter,
-                         rockGroup.ROCKs[gary_rand::rand_16()*numROCKs/(RAND_MAX_16+1)]);
+                         rockGroup->ROCKs[gary_rand::rand_16()*numROCKs/(RAND_MAX_16+1)]);
      }
    }
   else
-    SetInterceptVector(shooter,*shipGroup.ship);
+    SetInterceptVector(shooter,*shipGroup->ship);
   inactive=off;
   intersector.AddNonPermeable(this,creationTime);
-  ++enemyBulletGroup.clipsFired;
+  ++enemyBulletGroup->clipsFired;
  }
 
-int EnemyBulletGroup::numBullets=2;
+inline int EnemyBulletGroup::numBullets=2;
 
-const Vector2d EnemyBulletGroup::vectors[4]={Vector2d(0,-2),
+inline const Vector2d EnemyBulletGroup::vectors[4]={Vector2d(0,-2),
                                              Vector2d(2,0),
                                              Vector2d(0,2),
                                              Vector2d(-2,0)};
 
-XColor EnemyBulletGroup::color={0,
+inline XColor EnemyBulletGroup::color={0,
                                 65535,//255
                                 0,
                                 0,
                                 DoRed|DoGreen|DoBlue};
 
-inline EnemyBulletGroup::EnemyBulletGroup(): graphic(stage.display,stage.window,color,
+inline EnemyBulletGroup::EnemyBulletGroup(): graphic(stage->display,stage->window,color,
                                                      vectors,sizeof(vectors)/sizeof(Vector2d),
                                                      enemyBulletDecor_bits,
                                                      enemyBulletDecor_width,enemyBulletDecor_height),

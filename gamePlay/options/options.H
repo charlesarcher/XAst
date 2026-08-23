@@ -391,7 +391,7 @@ class Options
 #include"../../objects/rocks/rockGroup.H"
 #include"../playingField.H"
 
-const double Options::defaultGlobalMaxVel=PlayingField::maxLinearVelocity,
+inline const double Options::defaultGlobalMaxVel=PlayingField::maxLinearVelocity,
              Options::minGlobalMaxVel=0,
              Options::maxGlobalMaxVel=.5*PlayingField::playArea.Height(),
              Options::defaultUniversalGravitationalConstant=PlayingField::universalGravitationalConst,
@@ -439,7 +439,7 @@ const double Options::defaultGlobalMaxVel=PlayingField::maxLinearVelocity,
              Options::minEnemyBulletVel=Options::minGlobalMaxVel,
              Options::maxEnemyBulletVel=Options::maxGlobalMaxVel;
 
-const int Options::defaultUSecondsPerFrame=PlayingField::uSecondsPerFrame,
+inline const int Options::defaultUSecondsPerFrame=PlayingField::uSecondsPerFrame,
           Options::defaultInitialShips=PlayingField::initialShips,
           Options::minInitialShips=1,
           Options::maxInitialShips=50,
@@ -471,12 +471,12 @@ const int Options::defaultUSecondsPerFrame=PlayingField::uSecondsPerFrame,
           Options::defaultenemyScore=enemy::score,
           Options::defaultEnemyBulletScore=EnemyBullet::score;
 
-const Options::Boolean Options::defaultOpaqueRocks=RockGroup::opaqueRocks,
+inline const Options::Boolean Options::defaultOpaqueRocks=RockGroup::opaqueRocks,
                        Options::defaultRelativisticMass=PlayingField::relativisticMass,
                        Options::defaultAutoFire=ShipBulletGroup::autoFire,
                        Options::defaultEnemiesExist=PlayingField::enemiesExist;
 
-const int Options::weightGlobalMaxVel=40,
+inline const int Options::weightGlobalMaxVel=40,
           Options::weightUniversalGravitationalConstant=100,
           Options::weightShipAccel=15,
           Options::weightShipMaxVel=7,
@@ -537,26 +537,26 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
                                                   IOState(noIOInProgress)
  {XtToolkitInitialize();
   appContext=XtCreateApplicationContext();
-  XtDisplayInitialize(appContext,stage.display,
+  XtDisplayInitialize(appContext,stage->display,
                       "XAsteroids",argv[0],NULL,0,&argc,argv);
 
-  Pixel background=stage.windowBg.pixel,
-        foreground=BlackPixel(stage.display,DefaultScreen(stage.display));
+  Pixel background=stage->windowBg.pixel,
+        foreground=BlackPixel(stage->display,DefaultScreen(stage->display));
   XmString string;
 
 /********** Create Shell Widget **********/
 
   XmFontListEntry fontListEntry=XmFontListEntryCreate(XmFONTLIST_DEFAULT_TAG,
-                                                      XmFONT_IS_FONT,stage.buttonInfo);
+                                                      XmFONT_IS_FONT,stage->buttonInfo);
   fontList=XmFontListAppendEntry(NULL,fontListEntry);
   XmFontListEntryFree(&fontListEntry);
   fontListEntry=XmFontListEntryCreate("errorFont",
-                                      XmFONT_IS_FONT,stage.errorInfo);
+                                      XmFONT_IS_FONT,stage->errorInfo);
   fontList=XmFontListAppendEntry(fontList,fontListEntry);
   XmFontListEntryFree(&fontListEntry);
-  shell=XtVaAppCreateShell("XAsteroids",argv[0],applicationShellWidgetClass,stage.display,
+  shell=XtVaAppCreateShell("XAsteroids",argv[0],applicationShellWidgetClass,stage->display,
                            XmNbackground,background,
-                           XmNiconPixmap,stage.icon,
+                           XmNiconPixmap,stage->icon,
                            XmNiconName,"Options",
                            XmNtitle,"Asteroids Options",
                            XmNdeleteResponse,XmDO_NOTHING,
@@ -565,7 +565,7 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
                            XmNtextFontList,fontList,
                            XmNkeyboardFocusPolicy,XmPOINTER,
                            NULL);
-  XmAddWMProtocolCallback(shell,playingField.WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(shell,playingField->WM_DELETE_WINDOW,
                           CloseCallback,(caddr_t)this);
 
 
@@ -1210,10 +1210,10 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
 
 /********** Create Ship Star Destroyer Toggle Button Gadget **********/
 
-  CreateToggleButtonPixmaps(shipGroup.starDestroyer.icon,
-                            shipGroup.starDestroyer.iconWidth,
-                            shipGroup.starDestroyer.iconHeight,
-                            shipGroup.starDestroyer.iconColor.pixel,
+  CreateToggleButtonPixmaps(shipGroup->starDestroyer.icon,
+                            shipGroup->starDestroyer.iconWidth,
+                            shipGroup->starDestroyer.iconHeight,
+                            shipGroup->starDestroyer.iconColor.pixel,
                             starDestroyerSelectedPixmap,
                             starDestroyerNotSelectedPixmap);
   shipStarDestroyer=XtVaCreateManagedWidget("shipStarDestroyer",
@@ -1221,7 +1221,7 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
                                             XmNbackground,background,
                                             XmNforeground,foreground,
                                             XmNshadowThickness,2,
-                                            XmNset,shipGroup.ship==&shipGroup.starDestroyer,
+                                            XmNset,shipGroup->ship==&shipGroup->starDestroyer,
                                             XmNindicatorOn,FALSE,
                                             XmNselectPixmap,starDestroyerSelectedPixmap,
                                             XmNlabelType,XmPIXMAP,
@@ -1232,16 +1232,16 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
 
 /********** Create Ship NCC1701A Toggle Button Gadget **********/
 
-  CreateToggleButtonPixmaps(shipGroup.NCC1701A.icon,
-                            shipGroup.NCC1701A.iconWidth,
-                            shipGroup.NCC1701A.iconHeight,
-                            shipGroup.NCC1701A.iconColor.pixel,
+  CreateToggleButtonPixmaps(shipGroup->NCC1701A.icon,
+                            shipGroup->NCC1701A.iconWidth,
+                            shipGroup->NCC1701A.iconHeight,
+                            shipGroup->NCC1701A.iconColor.pixel,
                             NCC1701ASelectedPixmap,
                             NCC1701ANotSelectedPixmap);
   shipNCC1701A=XtVaCreateManagedWidget("shipNCC1701A",
                                        xmToggleButtonGadgetClass,shipShape,
                                        XmNshadowThickness,2,
-                                       XmNset,shipGroup.ship==&shipGroup.NCC1701A,
+                                       XmNset,shipGroup->ship==&shipGroup->NCC1701A,
                                        XmNindicatorOn,FALSE,
                                        XmNselectPixmap,NCC1701ASelectedPixmap,
                                        XmNlabelType,XmPIXMAP,
@@ -1252,10 +1252,10 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
 
 /********** Create Ship NCC1701D Toggle Button Gadget **********/
 
-  CreateToggleButtonPixmaps(shipGroup.NCC1701D.icon,
-                            shipGroup.NCC1701D.iconWidth,
-                            shipGroup.NCC1701D.iconHeight,
-                            shipGroup.NCC1701D.iconColor.pixel,
+  CreateToggleButtonPixmaps(shipGroup->NCC1701D.icon,
+                            shipGroup->NCC1701D.iconWidth,
+                            shipGroup->NCC1701D.iconHeight,
+                            shipGroup->NCC1701D.iconColor.pixel,
                             NCC1701DSelectedPixmap,
                             NCC1701DNotSelectedPixmap);
   shipNCC1701D=XtVaCreateManagedWidget("shipNCC1701D",
@@ -1263,7 +1263,7 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
                                        XmNbackground,background,
                                        XmNforeground,foreground,
                                        XmNshadowThickness,2,
-                                       XmNset,shipGroup.ship==&shipGroup.NCC1701D,
+                                       XmNset,shipGroup->ship==&shipGroup->NCC1701D,
                                        XmNindicatorOn,FALSE,
                                        XmNselectPixmap,NCC1701DSelectedPixmap,
                                        XmNlabelType,XmPIXMAP,
@@ -2344,7 +2344,7 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
   XtSetArg(args[n],XmNdirMask,string); ++n;
   fileSelectionDialog=XmCreateFileSelectionDialog(mainForm,"fileSelectionDialog",args,n);
   XmStringFree(string);
-  XmAddWMProtocolCallback(XtParent(fileSelectionDialog),playingField.WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(XtParent(fileSelectionDialog),playingField->WM_DELETE_WINDOW,
                           CancelFileSelect,(caddr_t)this);
   XtUnmanageChild(XmFileSelectionBoxGetChild(fileSelectionDialog,XmDIALOG_HELP_BUTTON));
   Pixel topShadowColor,
@@ -2354,13 +2354,13 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
                              NULL);
   XColor troughColor;
   troughColor.pixel=bottomShadowColor;
-  XQueryColor(stage.display,DefaultColormap(stage.display,DefaultScreen(stage.display)),
+  XQueryColor(stage->display,DefaultColormap(stage->display,DefaultScreen(stage->display)),
               &troughColor);
-  troughColor.red=(troughColor.red+stage.windowBg.red)/2;
-  troughColor.green=(troughColor.green+stage.windowBg.green)/2;
-  troughColor.blue=(troughColor.blue+stage.windowBg.blue)/2;
+  troughColor.red=(troughColor.red+stage->windowBg.red)/2;
+  troughColor.green=(troughColor.green+stage->windowBg.green)/2;
+  troughColor.blue=(troughColor.blue+stage->windowBg.blue)/2;
   troughColor.flags=DoRed|DoGreen|DoBlue;
-  XAllocColor(stage.display,DefaultColormap(stage.display,DefaultScreen(stage.display)),
+  XAllocColor(stage->display,DefaultColormap(stage->display,DefaultScreen(stage->display)),
               &troughColor);
   SetWidgetChildrenColors(fileSelectionDialog,foreground,background,
                                               topShadowColor,bottomShadowColor,
@@ -2388,7 +2388,7 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
   XtVaSetValues(fileExistsQuestionDialog,
                 XmNdefaultButton,XmMessageBoxGetChild(fileExistsQuestionDialog,XmDIALOG_CANCEL_BUTTON),
                 NULL);
-  XmAddWMProtocolCallback(XtParent(fileExistsQuestionDialog),playingField.WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(XtParent(fileExistsQuestionDialog),playingField->WM_DELETE_WINDOW,
                           CancelFileExistsQuestion,(caddr_t)this);
   XtUnmanageChild(XmMessageBoxGetChild(fileExistsQuestionDialog,XmDIALOG_HELP_BUTTON));
   SetWidgetChildrenColors(fileExistsQuestionDialog,foreground,background,
@@ -2413,7 +2413,7 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
   fileErrorDialog=XmCreateErrorDialog(fileSelectionDialog,"fileErrorDialog",args,n);
   XmStringFree(string2);
   XmStringFree(string);
-  XmAddWMProtocolCallback(XtParent(fileErrorDialog),playingField.WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(XtParent(fileErrorDialog),playingField->WM_DELETE_WINDOW,
                           CancelFileError,(caddr_t)this);
   XtUnmanageChild(XmMessageBoxGetChild(fileErrorDialog,XmDIALOG_CANCEL_BUTTON));
   XtUnmanageChild(XmMessageBoxGetChild(fileErrorDialog,XmDIALOG_HELP_BUTTON));
@@ -2429,18 +2429,18 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
 
 inline Options::~Options()
  {
-  XFreePixmap(stage.display,bulletIconPixmap);
-  XFreePixmap(stage.display,enemyIconPixmap);
-  XFreePixmap(stage.display,ENEMYIconPixmap);
-  XFreePixmap(stage.display,rockIconPixmap);
-  XFreePixmap(stage.display,ROckIconPixmap);
-  XFreePixmap(stage.display,ROCKIconPixmap);
-  XFreePixmap(stage.display,NCC1701DNotSelectedPixmap);
-  XFreePixmap(stage.display,NCC1701DSelectedPixmap);
-  XFreePixmap(stage.display,NCC1701ANotSelectedPixmap);
-  XFreePixmap(stage.display,NCC1701ASelectedPixmap);
-  XFreePixmap(stage.display,starDestroyerNotSelectedPixmap);
-  XFreePixmap(stage.display,starDestroyerSelectedPixmap);
+  XFreePixmap(stage->display,bulletIconPixmap);
+  XFreePixmap(stage->display,enemyIconPixmap);
+  XFreePixmap(stage->display,ENEMYIconPixmap);
+  XFreePixmap(stage->display,rockIconPixmap);
+  XFreePixmap(stage->display,ROckIconPixmap);
+  XFreePixmap(stage->display,ROCKIconPixmap);
+  XFreePixmap(stage->display,NCC1701DNotSelectedPixmap);
+  XFreePixmap(stage->display,NCC1701DSelectedPixmap);
+  XFreePixmap(stage->display,NCC1701ANotSelectedPixmap);
+  XFreePixmap(stage->display,NCC1701ASelectedPixmap);
+  XFreePixmap(stage->display,starDestroyerNotSelectedPixmap);
+  XFreePixmap(stage->display,starDestroyerSelectedPixmap);
   XmFontListFree(fontList);
   /*XtDestroyApplicationContext(appContext);*/ //Apparently this operation is implicit in Xorg implementation
  }
@@ -2448,60 +2448,60 @@ inline Options::~Options()
 void Options::CreateScoringIconPixmaps(const unsigned char* const bitmapData,
                                        const int width, const int height, const int color,
                                        Pixmap& pixmap)
- {GC gc=XCreateGC(stage.display,stage.window,0,NULL);
-  XSetGraphicsExposures(stage.display,gc,FALSE);
-  Pixmap bitmap=XCreateBitmapFromData(stage.display,stage.window,
+ {GC gc=XCreateGC(stage->display,stage->window,0,NULL);
+  XSetGraphicsExposures(stage->display,gc,FALSE);
+  Pixmap bitmap=XCreateBitmapFromData(stage->display,stage->window,
                                       (const char * const)bitmapData,width,height);
   int iconWidth=ROCKScoringIcon_width+10,
       iconHeight=ROCKScoringIcon_height+10;
-  pixmap=XCreatePixmap(stage.display,stage.window,
+  pixmap=XCreatePixmap(stage->display,stage->window,
                        iconWidth,iconHeight,
-                       DefaultDepth(stage.display,DefaultScreen(stage.display)));
-  XSetBackground(stage.display,gc,BlackPixel(stage.display,DefaultScreen(stage.display)));
-  XSetForeground(stage.display,gc,BlackPixel(stage.display,DefaultScreen(stage.display)));
-  XFillRectangle(stage.display,pixmap,gc,0,0,
+                       DefaultDepth(stage->display,DefaultScreen(stage->display)));
+  XSetBackground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
+  XSetForeground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
+  XFillRectangle(stage->display,pixmap,gc,0,0,
                  iconWidth,iconHeight);
-  XSetForeground(stage.display,gc,color);
-  XCopyPlane(stage.display,bitmap,pixmap,gc,0,0,width,height,
+  XSetForeground(stage->display,gc,color);
+  XCopyPlane(stage->display,bitmap,pixmap,gc,0,0,width,height,
              (iconWidth-width)/2,(iconHeight-height)/2,
              1);
-  XFreePixmap(stage.display,bitmap);
-  XFreeGC(stage.display,gc);
+  XFreePixmap(stage->display,bitmap);
+  XFreeGC(stage->display,gc);
  }
 
 void Options::CreateToggleButtonPixmaps(const unsigned char* const bitmapData,
                                        const int width, const int height, const int color,
                                        Pixmap& selectedPixmap, Pixmap& notSelectedPixmap)
- {GC gc=XCreateGC(stage.display,stage.window,0,NULL);
-  XSetGraphicsExposures(stage.display,gc,FALSE);
-  Pixmap bitmap=XCreateBitmapFromData(stage.display,stage.window,
+ {GC gc=XCreateGC(stage->display,stage->window,0,NULL);
+  XSetGraphicsExposures(stage->display,gc,FALSE);
+  Pixmap bitmap=XCreateBitmapFromData(stage->display,stage->window,
                                       (const char * const)bitmapData,width,height);
-  int buttonWidth=shipGroup.maxIconWidth+10,
-      buttonHeight=shipGroup.maxIconHeight+10;
-  selectedPixmap=XCreatePixmap(stage.display,stage.window,
+  int buttonWidth=shipGroup->maxIconWidth+10,
+      buttonHeight=shipGroup->maxIconHeight+10;
+  selectedPixmap=XCreatePixmap(stage->display,stage->window,
                                buttonWidth,buttonHeight,
-                               DefaultDepth(stage.display,DefaultScreen(stage.display)));
-  notSelectedPixmap=XCreatePixmap(stage.display,stage.window,
+                               DefaultDepth(stage->display,DefaultScreen(stage->display)));
+  notSelectedPixmap=XCreatePixmap(stage->display,stage->window,
                                   buttonWidth,buttonHeight,
-                                  DefaultDepth(stage.display,DefaultScreen(stage.display)));
-  XSetBackground(stage.display,gc,BlackPixel(stage.display,DefaultScreen(stage.display)));
-  XSetForeground(stage.display,gc,BlackPixel(stage.display,DefaultScreen(stage.display)));
-  XFillRectangle(stage.display,selectedPixmap,gc,0,0,
+                                  DefaultDepth(stage->display,DefaultScreen(stage->display)));
+  XSetBackground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
+  XSetForeground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
+  XFillRectangle(stage->display,selectedPixmap,gc,0,0,
                  buttonWidth,buttonHeight);
-  XSetForeground(stage.display,gc,color);
-  XCopyPlane(stage.display,bitmap,selectedPixmap,gc,0,0,width,height,
+  XSetForeground(stage->display,gc,color);
+  XCopyPlane(stage->display,bitmap,selectedPixmap,gc,0,0,width,height,
              (buttonWidth-width)/2,(buttonHeight-height)/2,
              1);
-  XSetBackground(stage.display,gc,stage.shipYardBg.pixel);
-  XSetForeground(stage.display,gc,stage.shipYardBg.pixel);
-  XFillRectangle(stage.display,notSelectedPixmap,gc,0,0,
+  XSetBackground(stage->display,gc,stage->shipYardBg.pixel);
+  XSetForeground(stage->display,gc,stage->shipYardBg.pixel);
+  XFillRectangle(stage->display,notSelectedPixmap,gc,0,0,
                  buttonWidth,buttonHeight);
-  XSetForeground(stage.display,gc,color);
-  XCopyPlane(stage.display,bitmap,notSelectedPixmap,gc,0,0,width,height,
+  XSetForeground(stage->display,gc,color);
+  XCopyPlane(stage->display,bitmap,notSelectedPixmap,gc,0,0,width,height,
              (buttonWidth-width)/2,(buttonHeight-height)/2,
              1);
-  XFreePixmap(stage.display,bitmap);
-  XFreeGC(stage.display,gc);
+  XFreePixmap(stage->display,bitmap);
+  XFreeGC(stage->display,gc);
  }
 
 inline void Options::SetWidgetChildrenColors(Widget& parent,const Pixel foreground,
@@ -2543,24 +2543,24 @@ inline void Options::RealizeWindow()
   XEvent event;
   do
    {XtAppNextEvent(appContext,&event);
-    if (event.xany.window==stage.window)
+    if (event.xany.window==stage->window)
      {switch(event.type)
       {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
                              break;
-       case LeaveNotify:     if (stage.autoRepeatState==AutoRepeatModeOn)
-                               XAutoRepeatOn(stage.display);
+       case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
+                               XAutoRepeatOn(stage->display);
                              break;
-       case EnterNotify:     XAutoRepeatOff(stage.display);
+       case EnterNotify:     XAutoRepeatOff(stage->display);
                              break;
        case Expose:
        case MapNotify:
-       case ConfigureNotify: stage.Refresh();
+       case ConfigureNotify: stage->Refresh();
                              break;
        case ClientMessage:   if (((XClientMessageEvent*)&event)->message_type==
-                                 playingField.WM_PROTOCOLS&&
+                                 playingField->WM_PROTOCOLS&&
                                  ((XClientMessageEvent*)&event)->data.l[0]==
-                                 playingField.WM_DELETE_WINDOW)
-                              {XPutBackEvent(stage.display,&event);
+                                 playingField->WM_DELETE_WINDOW)
+                              {XPutBackEvent(stage->display,&event);
                                XtUnrealizeWidget(shell);
                                return;
                               }
@@ -2752,28 +2752,28 @@ void Options::ReadOptions()
    }
 
   switch (filedShipType)
-   {default: if (ShipGroup::ship!=&shipGroup.starDestroyer
-                 ||ShipGroup::thrust!=&shipGroup.starDestroyerThrust)
+   {default: if (ShipGroup::ship!=&shipGroup->starDestroyer
+                 ||ShipGroup::thrust!=&shipGroup->starDestroyerThrust)
               {XmToggleButtonSetState(shipNCC1701A,FALSE,FALSE);
                XmToggleButtonSetState(shipNCC1701D,FALSE,FALSE);
                XmToggleButtonSetState(shipStarDestroyer,TRUE,FALSE);
-               AlterShipShape(shipGroup.starDestroyer,shipGroup.starDestroyerThrust);
+               AlterShipShape(shipGroup->starDestroyer,shipGroup->starDestroyerThrust);
               }
              break;
-    case 1:  if (ShipGroup::ship!=&shipGroup.NCC1701A
-                 ||ShipGroup::thrust!=&shipGroup.NCC1701AThrust)
+    case 1:  if (ShipGroup::ship!=&shipGroup->NCC1701A
+                 ||ShipGroup::thrust!=&shipGroup->NCC1701AThrust)
               {XmToggleButtonSetState(shipNCC1701D,FALSE,FALSE);
                XmToggleButtonSetState(shipStarDestroyer,FALSE,FALSE);
                XmToggleButtonSetState(shipNCC1701A,TRUE,FALSE);
-               AlterShipShape(shipGroup.NCC1701A,shipGroup.NCC1701AThrust);
+               AlterShipShape(shipGroup->NCC1701A,shipGroup->NCC1701AThrust);
               }
              break;
-    case 2:  if (ShipGroup::ship!=&shipGroup.NCC1701D
-                 ||ShipGroup::thrust!=&shipGroup.NCC1701DThrust)
+    case 2:  if (ShipGroup::ship!=&shipGroup->NCC1701D
+                 ||ShipGroup::thrust!=&shipGroup->NCC1701DThrust)
               {XmToggleButtonSetState(shipNCC1701A,FALSE,FALSE);
                XmToggleButtonSetState(shipStarDestroyer,FALSE,FALSE);
                XmToggleButtonSetState(shipNCC1701D,TRUE,FALSE);
-               AlterShipShape(shipGroup.NCC1701D,shipGroup.NCC1701DThrust);
+               AlterShipShape(shipGroup->NCC1701D,shipGroup->NCC1701DThrust);
               }
              break;
    }
@@ -2909,9 +2909,9 @@ void Options::WriteOptions()
           <<PlayingField::maxLinearVelocity           <<excep<<'\n'<<excep
           <<PlayingField::universalGravitationalConst <<excep<<'\n'<<excep
           <<PlayingField::relativisticMass            <<excep<<'\n'<<excep
-          <<(ShipGroup::ship==&shipGroup.NCC1701D
+          <<(ShipGroup::ship==&shipGroup->NCC1701D
                ? 2
-	             : ShipGroup::ship==&shipGroup.NCC1701A
+	             : ShipGroup::ship==&shipGroup->NCC1701A
                    ? 1
 	                 : 0)                               <<excep<<'\n'<<excep
           <<Ship::maxVelocity                         <<excep<<'\n'<<excep
@@ -2985,11 +2985,11 @@ void Options::ResetDefaults(Widget,XtPointer clientData,XtPointer)
     ((Options*)clientData)->AlterRelativisticMass(defaultRelativisticMass);
    }
 
-  if (ShipGroup::ship!=&shipGroup.starDestroyer||ShipGroup::thrust!=&shipGroup.starDestroyerThrust)
+  if (ShipGroup::ship!=&shipGroup->starDestroyer||ShipGroup::thrust!=&shipGroup->starDestroyerThrust)
    {XmToggleButtonSetState(((Options*)clientData)->shipNCC1701A,FALSE,FALSE);
     XmToggleButtonSetState(((Options*)clientData)->shipNCC1701D,FALSE,FALSE);
     XmToggleButtonSetState(((Options*)clientData)->shipStarDestroyer,TRUE,FALSE);
-    ((Options*)clientData)->AlterShipShape(shipGroup.starDestroyer,shipGroup.starDestroyerThrust);
+    ((Options*)clientData)->AlterShipShape(shipGroup->starDestroyer,shipGroup->starDestroyerThrust);
    }
 
   if (Ship::maxVelocity!=defaultShipMaxVel)
@@ -3154,22 +3154,22 @@ void Options::ApplyRelativisticMass(Widget widget,XtPointer clientData,XtPointer
  }
 
 void Options::ApplyStarDestroyerShipShape(Widget,XtPointer clientData,XtPointer)
- {if (ShipGroup::ship!=&shipGroup.starDestroyer||ShipGroup::thrust!=&shipGroup.starDestroyerThrust)
-   {((Options*)clientData)->AlterShipShape(shipGroup.starDestroyer,shipGroup.starDestroyerThrust);
+ {if (ShipGroup::ship!=&shipGroup->starDestroyer||ShipGroup::thrust!=&shipGroup->starDestroyerThrust)
+   {((Options*)clientData)->AlterShipShape(shipGroup->starDestroyer,shipGroup->starDestroyerThrust);
     ((Options*)clientData)->SetWidgetFields();
    }
  }
 
 void Options::ApplyNCC1701AShipShape(Widget,XtPointer clientData,XtPointer)
- {if (ShipGroup::ship!=&shipGroup.NCC1701A||ShipGroup::thrust!=&shipGroup.NCC1701AThrust)
-   {((Options*)clientData)->AlterShipShape(shipGroup.NCC1701A,shipGroup.NCC1701AThrust);
+ {if (ShipGroup::ship!=&shipGroup->NCC1701A||ShipGroup::thrust!=&shipGroup->NCC1701AThrust)
+   {((Options*)clientData)->AlterShipShape(shipGroup->NCC1701A,shipGroup->NCC1701AThrust);
     ((Options*)clientData)->SetWidgetFields();
    }
  }
 
 void Options::ApplyNCC1701DShipShape(Widget,XtPointer clientData,XtPointer)
- {if (ShipGroup::ship!=&shipGroup.NCC1701D||ShipGroup::thrust!=&shipGroup.NCC1701DThrust)
-   {((Options*)clientData)->AlterShipShape(shipGroup.NCC1701D,shipGroup.NCC1701DThrust);
+ {if (ShipGroup::ship!=&shipGroup->NCC1701D||ShipGroup::thrust!=&shipGroup->NCC1701DThrust)
+   {((Options*)clientData)->AlterShipShape(shipGroup->NCC1701D,shipGroup->NCC1701DThrust);
     ((Options*)clientData)->SetWidgetFields();
    }
  }
@@ -3364,39 +3364,39 @@ void Options::AlterFramesPerSecond(const double newUSecondsPerFrame)
  {double velocityAdjustRatio=newUSecondsPerFrame/PlayingField::uSecondsPerFrame,
          maxLinearVelocity=PlayingField::maxLinearVelocity*velocityAdjustRatio;
 
-  playingField.AlterUSecondsPerFrame(newUSecondsPerFrame);
+  playingField->AlterUSecondsPerFrame(newUSecondsPerFrame);
 
   AlterGlobalMaxVel(.5*PlayingField::playArea.Height());
   if (!PlayingField::universalGravitationalConst)
-    shipGroup.ResetVelocityLimits(.5*PlayingField::playArea.Height());
+    shipGroup->ResetVelocityLimits(.5*PlayingField::playArea.Height());
 
-  shipGroup.AdjustFramesPerSec(velocityAdjustRatio);
+  shipGroup->AdjustFramesPerSec(velocityAdjustRatio);
   Ship::maxVelocity*=velocityAdjustRatio;
   Ship::acceleration*=velocityAdjustRatio*velocityAdjustRatio;
   Ship::angularVelocity*=velocityAdjustRatio;
 
-  shipBulletGroup.AdjustFramesPerSec(velocityAdjustRatio);
+  shipBulletGroup->AdjustFramesPerSec(velocityAdjustRatio);
   ShipBullet::velocity*=velocityAdjustRatio;
   ShipBullet::numFrames/=velocityAdjustRatio;
 
-  enemyGroup.AdjustFramesPerSec(velocityAdjustRatio);
+  enemyGroup->AdjustFramesPerSec(velocityAdjustRatio);
   ENEMY::minVelocity*=velocityAdjustRatio;
   ENEMY::maxVelocity*=velocityAdjustRatio;
   enemy::minVelocity*=velocityAdjustRatio;
   enemy::maxVelocity*=velocityAdjustRatio;
 
-  enemyBulletGroup.AdjustFramesPerSec(velocityAdjustRatio);
+  enemyBulletGroup->AdjustFramesPerSec(velocityAdjustRatio);
   EnemyBullet::velocity*=velocityAdjustRatio;
   EnemyBullet::numFrames/=velocityAdjustRatio;
 
-  rockGroup.AdjustFramesPerSec(velocityAdjustRatio);
+  rockGroup->AdjustFramesPerSec(velocityAdjustRatio);
   ROCK::minVelocity*=velocityAdjustRatio;
   ROCK::maxVelocity*=velocityAdjustRatio;
   ROCK::maxAngularVelocity*=velocityAdjustRatio;
 
   AlterGlobalMaxVel(maxLinearVelocity);
   if (!PlayingField::universalGravitationalConst)
-    shipGroup.ResetVelocityLimits(Ship::maxVelocity);
+    shipGroup->ResetVelocityLimits(Ship::maxVelocity);
  }
 
 void Options::AlterGlobalMaxVel(const double newMV)
@@ -3407,19 +3407,19 @@ void Options::AlterGlobalMaxVel(const double newMV)
 
   if (Ship::maxVelocity>newMaxVel||
       PlayingField::universalGravitationalConst)
-   {shipGroup.ResetVelocityLimits(newMaxVel);
+   {shipGroup->ResetVelocityLimits(newMaxVel);
     Ship::maxVelocity=newMaxVel;
     if (Ship::acceleration>newMaxVel)
       Ship::acceleration=newMaxVel;
-    if (Ship::angularVelocity>shipGroup.ship->ObjectRotator().MaxAngularVelocity())
-      Ship::angularVelocity=shipGroup.ship->ObjectRotator().MaxAngularVelocity();
+    if (Ship::angularVelocity>shipGroup->ship->ObjectRotator().MaxAngularVelocity())
+      Ship::angularVelocity=shipGroup->ship->ObjectRotator().MaxAngularVelocity();
    }
 
-  shipBulletGroup.ResetVelocityLimits(newMaxVel);
+  shipBulletGroup->ResetVelocityLimits(newMaxVel);
   if (ShipBullet::velocity>newMaxVel)
     ShipBullet::velocity=newMaxVel;
 
-  enemyGroup.ResetVelocityLimits(newMaxVel);
+  enemyGroup->ResetVelocityLimits(newMaxVel);
   if (ENEMY::minVelocity>newMaxVel)
     ENEMY::minVelocity=newMaxVel;
   if (ENEMY::maxVelocity>newMaxVel)
@@ -3429,11 +3429,11 @@ void Options::AlterGlobalMaxVel(const double newMV)
   if (enemy::maxVelocity>newMaxVel)
     enemy::maxVelocity=newMaxVel;
 
-  enemyBulletGroup.ResetVelocityLimits(newMaxVel);
+  enemyBulletGroup->ResetVelocityLimits(newMaxVel);
   if (EnemyBullet::velocity>newMaxVel)
     EnemyBullet::velocity=newMaxVel;
 
-  rockGroup.ResetVelocityLimits(newMaxVel);
+  rockGroup->ResetVelocityLimits(newMaxVel);
   if (ROCK::minVelocity>newMaxVel)
     ROCK::minVelocity=newMaxVel;
   if (ROCK::maxVelocity>newMaxVel)
@@ -3449,14 +3449,14 @@ void Options::AlterUniversalGravitationalConstant(const double newUniversalGravi
   if (PlayingField::universalGravitationalConst>maxUniversalGravitationalConstant)
     PlayingField::universalGravitationalConst=maxUniversalGravitationalConstant;
   if (PlayingField::universalGravitationalConst)
-   shipGroup.ResetVelocityLimits(PlayingField::maxLinearVelocity);
+   shipGroup->ResetVelocityLimits(PlayingField::maxLinearVelocity);
   else
-   {shipGroup.ResetVelocityLimits(Ship::maxVelocity);
-    shipBulletGroup.ResetVelocity(ShipBullet::velocity);
-    rockGroup.ResetMaxVelocity(ROCK::maxVelocity);
-    enemyGroup.ResetENEMYMaxVelocity(ENEMY::maxVelocity);
-    enemyGroup.ResetenemyMaxVelocity(enemy::maxVelocity);
-    enemyBulletGroup.ResetVelocity(EnemyBullet::velocity);
+   {shipGroup->ResetVelocityLimits(Ship::maxVelocity);
+    shipBulletGroup->ResetVelocity(ShipBullet::velocity);
+    rockGroup->ResetMaxVelocity(ROCK::maxVelocity);
+    enemyGroup->ResetENEMYMaxVelocity(ENEMY::maxVelocity);
+    enemyGroup->ResetenemyMaxVelocity(enemy::maxVelocity);
+    enemyBulletGroup->ResetVelocity(EnemyBullet::velocity);
    }
   XtSetSensitive(shipMaxVelLabel,!PlayingField::universalGravitationalConst);
   XtSetSensitive(shipMaxVelValue,!PlayingField::universalGravitationalConst);
@@ -3477,41 +3477,41 @@ void Options::AlterRelativisticMass(const Options::Boolean relMass)
  }
 
 void Options::AlterShipShape(Ship& newip,Thrust& newrust)
- {newip.CurrentBox().MoveBox(shipGroup.ship->CurrentBox().Center()
+ {newip.CurrentBox().MoveBox(shipGroup->ship->CurrentBox().Center()
                               -newip.CurrentBox().Center());
-  newip.ObjectLiner().Velocity()=shipGroup.ship->ObjectLiner().Velocity();
-  newip.ObjectLiner().Acceleration()=shipGroup.ship->ObjectLiner().Acceleration();
-  newip.ObjectRotator().Angle()=shipGroup.ship->ObjectRotator().Angle();
+  newip.ObjectLiner().Velocity()=shipGroup->ship->ObjectLiner().Velocity();
+  newip.ObjectLiner().Acceleration()=shipGroup->ship->ObjectLiner().Acceleration();
+  newip.ObjectRotator().Angle()=shipGroup->ship->ObjectRotator().Angle();
   newip.ObjectRotator().AngularVelocity()=0;
   if (Ship::angularVelocity>newip.ObjectRotator().MaxAngularVelocity())
     Ship::angularVelocity=newip.ObjectRotator().MaxAngularVelocity();
-  newip.dead=shipGroup.ship->dead;
-  playingField.RemoveShip();
+  newip.dead=shipGroup->ship->dead;
+  playingField->RemoveShip();
   ShipGroup::ship=&newip;
   ShipGroup::thrust=&newrust;
-  playingField.AddShip();
-  shipYard.AlterIcon(newip.icon,
+  playingField->AddShip();
+  shipYard->AlterIcon(newip.icon,
 	             newip.iconWidth,newip.iconHeight,
                      newip.iconColor);
-  stage.DrawShipYard();
+  stage->DrawShipYard();
  }
 
 void Options::AlterShipAccel(const double newAccel)
- {shipGroup.ResetAccelerationLimits(Ship::acceleration=newAccel>PlayingField::maxLinearVelocity
+ {shipGroup->ResetAccelerationLimits(Ship::acceleration=newAccel>PlayingField::maxLinearVelocity
                                                        ? PlayingField::maxLinearVelocity
                                                        : newAccel);
  }
 
 void Options::AlterShipMaxVel(const double newMaxVel)
- {shipGroup.ResetVelocityLimits(Ship::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
+ {shipGroup->ResetVelocityLimits(Ship::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
                                                   ? PlayingField::maxLinearVelocity
                                                   : newMaxVel);
  }
 
 void Options::AlterShipRotationalVel(const double newRotVel)
- {shipGroup.ResetAngularVelocity(Ship::angularVelocity=
-                                 newRotVel>shipGroup.ship->ObjectRotator().MaxAngularVelocity()
-                                         ? shipGroup.ship->ObjectRotator().MaxAngularVelocity()
+ {shipGroup->ResetAngularVelocity(Ship::angularVelocity=
+                                 newRotVel>shipGroup->ship->ObjectRotator().MaxAngularVelocity()
+                                         ? shipGroup->ship->ObjectRotator().MaxAngularVelocity()
                                          : newRotVel);
  }
 
@@ -3522,16 +3522,16 @@ void Options::AlterHyperspaceDestructRate(const double newDestructRate)
  }
 
 void Options::AlterInitialShips(const int newInitialShips)
- {int i=(2*newInitialShips*shipYard.NumShips()+PlayingField::initialShips)/(2*PlayingField::initialShips);
-  shipYard.ClearYard();
+ {int i=(2*newInitialShips*shipYard->NumShips()+PlayingField::initialShips)/(2*PlayingField::initialShips);
+  shipYard->ClearYard();
   for (;i--;)
-    shipYard.AddShip();
+    shipYard->AddShip();
   PlayingField::initialShips=newInitialShips;
-  stage.DrawShipYard();
+  stage->DrawShipYard();
  }
 
 void Options::AlterExtraShipScore(const int newExtraShipScore)
- {playingField.AlterExtraShipScore(PlayingField::extraShipScore=newExtraShipScore<minExtraShipScore
+ {playingField->AlterExtraShipScore(PlayingField::extraShipScore=newExtraShipScore<minExtraShipScore
                                                                 ? minExtraShipScore
                                                                 : newExtraShipScore>maxExtraShipScore
                                                                   ? maxExtraShipScore
@@ -3548,11 +3548,11 @@ void Options::AlterShipBulletVel(const double newVel)
                        : newVel<minShipBulletVel
                          ? minShipBulletVel
                          : newVel;
-  shipBulletGroup.ResetVelocity(ShipBullet::velocity);
+  shipBulletGroup->ResetVelocity(ShipBullet::velocity);
  }
 
 void Options::AlterShipBulletDuration(const int newDuration)
- {shipBulletGroup.ResetBulletDuration(ShipBullet::numFrames=newDuration>maxShipBulletDuration
+ {shipBulletGroup->ResetBulletDuration(ShipBullet::numFrames=newDuration>maxShipBulletDuration
                                                             ? maxShipBulletDuration
                                                             : newDuration<minShipBulletDuration
                                                               ? minShipBulletDuration
@@ -3564,20 +3564,20 @@ void Options::AlterNumShipBullets(const int newNumBullets)
  }
 
 void Options::AlterROCKMinVel(const double newMinVel)
- {rockGroup.ResetMinVelocity(ROCK::minVelocity=newMinVel>ROCK::maxVelocity ? ROCK::maxVelocity
+ {rockGroup->ResetMinVelocity(ROCK::minVelocity=newMinVel>ROCK::maxVelocity ? ROCK::maxVelocity
                                                                            : newMinVel);
  }
 
 void Options::AlterROCKMaxVel(const double newMaxVel)
- {rockGroup.ResetMaxVelocity(ROCK::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
+ {rockGroup->ResetMaxVelocity(ROCK::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
                                                ? PlayingField::maxLinearVelocity
                                                : newMaxVel);
   if (ROCK::minVelocity>ROCK::maxVelocity)
-    rockGroup.ResetMinVelocity(ROCK::minVelocity=ROCK::maxVelocity);
+    rockGroup->ResetMinVelocity(ROCK::minVelocity=ROCK::maxVelocity);
  }
 
 void Options::AlterROCKMaxRotationalVel(const double newRotationalVel)
- {rockGroup.ResetMaxAngularVelocity(ROCK::maxAngularVelocity=
+ {rockGroup->ResetMaxAngularVelocity(ROCK::maxAngularVelocity=
                                     newRotationalVel>PlayingField::maxLinearVelocity/(4*ROCK::scale)
                                     ? PlayingField::maxLinearVelocity/(4*ROCK::scale)
                                     : newRotationalVel);
@@ -3614,31 +3614,31 @@ void Options::AlterEnemiesExist(const Options::Boolean newEnemiesExist)
  }
 
 void Options::AlterENEMYMinVel(const double newMinVel)
- {enemyGroup.ResetENEMYMinVelocity(ENEMY::minVelocity=newMinVel>ENEMY::maxVelocity
+ {enemyGroup->ResetENEMYMinVelocity(ENEMY::minVelocity=newMinVel>ENEMY::maxVelocity
                                                       ? ENEMY::maxVelocity
                                                       : newMinVel);
  }
 
 void Options::AlterENEMYMaxVel(const double newMaxVel)
- {enemyGroup.ResetENEMYMaxVelocity(ENEMY::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
+ {enemyGroup->ResetENEMYMaxVelocity(ENEMY::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
                                                       ? PlayingField::maxLinearVelocity
                                                       : newMaxVel);
   if (ENEMY::minVelocity>ENEMY::maxVelocity)
-    enemyGroup.ResetENEMYMinVelocity(ENEMY::minVelocity=ENEMY::maxVelocity);
+    enemyGroup->ResetENEMYMinVelocity(ENEMY::minVelocity=ENEMY::maxVelocity);
  }
 
 void Options::AlterenemyMinVel(const double newMinVel)
- {enemyGroup.ResetenemyMinVelocity(enemy::minVelocity=newMinVel>enemy::maxVelocity
+ {enemyGroup->ResetenemyMinVelocity(enemy::minVelocity=newMinVel>enemy::maxVelocity
                                                       ? enemy::maxVelocity
                                                       : newMinVel);
  }
 
 void Options::AlterenemyMaxVel(const double newMaxVel)
- {enemyGroup.ResetenemyMaxVelocity(enemy::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
+ {enemyGroup->ResetenemyMaxVelocity(enemy::maxVelocity=newMaxVel>PlayingField::maxLinearVelocity
                                                       ? PlayingField::maxLinearVelocity
                                                       : newMaxVel);
   if (enemy::minVelocity>enemy::maxVelocity)
-    enemyGroup.ResetenemyMinVelocity(enemy::minVelocity=enemy::maxVelocity);
+    enemyGroup->ResetenemyMinVelocity(enemy::minVelocity=enemy::maxVelocity);
  }
 
 void Options::AlterEnemyBulletVel(const double newVel)
@@ -3647,11 +3647,11 @@ void Options::AlterEnemyBulletVel(const double newVel)
                         : newVel<minEnemyBulletVel
                           ? minEnemyBulletVel
                           : newVel;
-  enemyBulletGroup.ResetVelocity(EnemyBullet::velocity);
+  enemyBulletGroup->ResetVelocity(EnemyBullet::velocity);
  }
 
 void Options::AlterEnemyBulletDuration(const int newDuration)
- {enemyBulletGroup.ResetBulletDuration(EnemyBullet::numFrames=newDuration>maxEnemyBulletDuration
+ {enemyBulletGroup->ResetBulletDuration(EnemyBullet::numFrames=newDuration>maxEnemyBulletDuration
                                                               ? maxEnemyBulletDuration
                                                               : newDuration<minEnemyBulletDuration
                                                                 ? minEnemyBulletDuration
@@ -3684,7 +3684,7 @@ void Options::SetWidgetFields()
                /(defaultUniversalGravitationalConstant-minUniversalGravitationalConstant);
 
   scoreFactor+=weightShipShape
-               *(shipGroup.ship->ObjectRotator().Radius()-shipGroup.starDestroyer.ObjectRotator().Radius()+1);
+               *(shipGroup->ship->ObjectRotator().Radius()-shipGroup->starDestroyer.ObjectRotator().Radius()+1);
 
   SetTextWidget(shipAccelValue,
                 MakeString(1E12*Ship::acceleration
@@ -3828,14 +3828,14 @@ void Options::SetWidgetFields()
   if (!(ROCK::score=defaultROCKScore*scoreFactor+.5)) ROCK::score=1;
   if (!(ROck::score=defaultROckScore*scoreFactor+.5)) ROck::score=1;
   if (!(rock::score=defaultrockScore*scoreFactor+.5)) rock::score=1;
-  rockGroup.ResetScore(scoreFactor/lastScoreFactor);
+  rockGroup->ResetScore(scoreFactor/lastScoreFactor);
   SetScore(ROCKScoreLabel,ROCK::score);
   SetScore(ROckScoreLabel,ROck::score);
   SetScore(rockScoreLabel,rock::score);
 
   if (!(ENEMY::score=defaultENEMYScore*scoreFactor+.5)) ENEMY::score=1;
   if (!(enemy::score=defaultenemyScore*scoreFactor+.5)) enemy::score=1;
-  enemyGroup.ResetScore(scoreFactor/lastScoreFactor);
+  enemyGroup->ResetScore(scoreFactor/lastScoreFactor);
   SetScore(ENEMYScoreLabel,ENEMY::score);
   SetScore(enemyScoreLabel,enemy::score);
 

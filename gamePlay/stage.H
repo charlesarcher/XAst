@@ -30,9 +30,9 @@ class gary_rand{
 
 using namespace std;
 
-extern Button button;
-extern Score score;
-extern ShipYard shipYard;
+extern Button* button;
+extern Score* score;
+extern ShipYard* shipYard;
 
 class PlayingField;
 class Stage
@@ -101,13 +101,13 @@ class Stage
     static void terminate(int i);
  };
 
-extern Stage stage;
+extern Stage* stage;
 
 #include"playingField.H"
 #include"../objects/ships/shipGroup.H"
-extern PlayingField playingField;
+extern PlayingField* playingField;
 
-XColor Stage::windowBg={0,
+inline XColor Stage::windowBg={0,
                         46260,//180
                         46260,//180
                         46260,//180
@@ -159,7 +159,7 @@ inline Stage::Stage()
     headerHeight=titleInfo->max_bounds.ascent+titleInfo->max_bounds.descent;
   if (scoreInfo->max_bounds.ascent+scoreInfo->max_bounds.descent>headerHeight)
     headerHeight=scoreInfo->max_bounds.ascent+scoreInfo->max_bounds.descent;
-  windowHeight=headerHeight+2*shipGroup.maxIconHeight+PlayingField::playArea.Height()+60;
+  windowHeight=headerHeight+2*shipGroup->maxIconHeight+PlayingField::playArea.Height()+60;
   int temp=(windowWidth-titleWidth)/2;
   titleX=temp+titleInfo->max_bounds.width-titleInfo->max_bounds.lbearing;
   titleY=titleInfo->max_bounds.ascent+15;
@@ -175,7 +175,7 @@ inline Stage::Stage()
   shipYardX=15;
   shipYardY=headerHeight+25;
   shipYardWidth=windowWidth-30;
-  shipYardHeight=2*shipGroup.maxIconHeight+10;
+  shipYardHeight=2*shipGroup->maxIconHeight+10;
   playAreaX=(windowWidth-PlayingField::playArea.Width())/2;
   playAreaY=headerHeight+shipYardHeight+35;
   int screen=DefaultScreen(display),
@@ -241,17 +241,17 @@ inline Stage::~Stage()
 inline Stage& Stage::DrawScore()
  {char str[10];
   ostrstream strout(str,sizeof(str)/sizeof(char));
-  if (score.CurrentScore()>=score.TopTenScore(0))
-   {strout<<setw(sizeof(str)/sizeof(char))<<score.CurrentName();
+  if (score->CurrentScore()>=score->TopTenScore(0))
+   {strout<<setw(sizeof(str)/sizeof(char))<<score->CurrentName();
     XDrawImageString(display,window,hiScoreGC,
                      hiScoreUserX,hiScoreUserY,str,sizeof(str)/sizeof(char));
     strout.seekp(0);
-    strout<<setw(sizeof(str)/sizeof(char))<<score.CurrentScore();
+    strout<<setw(sizeof(str)/sizeof(char))<<score->CurrentScore();
     XDrawImageString(display,window,hiScoreGC,
                      hiScoreX,hiScoreY,str,sizeof(str)/sizeof(char));
    }
   else
-    strout<<setw(sizeof(str)/sizeof(char))<<score.CurrentScore();
+    strout<<setw(sizeof(str)/sizeof(char))<<score->CurrentScore();
   XDrawImageString(display,window,scoreGC,
                    scoreX,scoreY,str,sizeof(str)/sizeof(char));
   return *this;
@@ -259,7 +259,7 @@ inline Stage& Stage::DrawScore()
 
 inline Stage& Stage::DrawShipYard()
  {XCopyArea(display,
-            shipYard.GetYard(),
+            shipYard->GetYard(),
             window,
             defaultGC,
             0,0,
@@ -270,7 +270,7 @@ inline Stage& Stage::DrawShipYard()
 
 inline Stage& Stage::DrawPlayingField()
  {XCopyArea(display,
-            playingField.pixmap,
+            playingField->pixmap,
             window,
             defaultGC,
 	    PlayingField::playArea.NorthWestCorner().x,PlayingField::playArea.NorthWestCorner().y,
@@ -284,21 +284,21 @@ inline Stage& Stage::Refresh()
               titleX,titleY,"Asteroids",strlen("Asteroids"));
   char str[10];
   ostrstream strout(str,sizeof(str)/sizeof(char));
-  strout<<setw(sizeof(str)/sizeof(char))<<score.TopTenName(0);
+  strout<<setw(sizeof(str)/sizeof(char))<<score->TopTenName(0);
   XDrawImageString(display,window,hiScoreGC,
                    hiScoreUserX,hiScoreUserY,str,sizeof(str)/sizeof(char));
   strout.seekp(0);
-  strout<<setw(sizeof(str)/sizeof(char))<<score.TopTenScore(0);
+  strout<<setw(sizeof(str)/sizeof(char))<<score->TopTenScore(0);
   XDrawImageString(display,window,hiScoreGC,
                    hiScoreX,hiScoreY,str,sizeof(str)/sizeof(char));
-  button.DrawButton();
+  button->DrawButton();
   DrawScore().DrawShipYard().DrawPlayingField();
   return *this;
  }
 
 void Stage::terminate(int i)
- {if (stage.autoRepeatState==AutoRepeatModeOn)
-    XAutoRepeatOn(stage.display);
+ {if (stage->autoRepeatState==AutoRepeatModeOn)
+    XAutoRepeatOn(stage->display);
   struct sigaction action;
   action.sa_handler=SIG_DFL;
   *(unsigned int*)&action.sa_mask=0;

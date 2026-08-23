@@ -58,7 +58,7 @@ class Button
     Boolean buttonPressed;
  };
 
-const int Button::borderPercentVariance=25;
+inline const int Button::borderPercentVariance=25;
 
 inline void Button::CreateButton(const char* const label, const XFontStruct* const fontInfo,
                                  XColor& fg, XColor& bg,

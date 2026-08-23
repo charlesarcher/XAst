@@ -127,7 +127,7 @@ class EnemyGroup
     FrameTimer frameTimer;
  };
 
-extern EnemyGroup enemyGroup;
+extern EnemyGroup* enemyGroup;
 
 #include"enemyBulletGroup.H"
 #include"../../gamePlay/playingField.H"
@@ -135,7 +135,7 @@ extern EnemyGroup enemyGroup;
 inline Enemy::Enemy(const Vector2d* const vectors, const int numVecs, XColor& color,
                     const unsigned char* const decor, const int decorWidth, const int decorHeight,
                     const int s):
-                             graphic(stage.display,stage.window,color,
+                             graphic(stage->display,stage->window,color,
                                      vectors,numVecs,
                                      decor,decorWidth,decorHeight),
                              rotator(&graphic,0,PlayingField::maxLinearVelocity),
@@ -152,34 +152,34 @@ void Enemy::HitScript(Intersector& intersector, const double createTime,
                         const double existTime,
                         const Vector2d& intersectPoint)
  {intersector.RemoveNonPermeable(this);
-  enemyGroup.explosion.CurrentBox().MoveBox(ObjectLiner()
+  enemyGroup->explosion.CurrentBox().MoveBox(ObjectLiner()
                                             .Move(OldBox().Center(),
                                                   existTime)
-				     -enemyGroup.explosion.CurrentBox().Center());
-  enemyGroup.explosion.ObjectLiner().Velocity()=ObjectLiner().Velocity();
-  enemyGroup.explosion.frameList.Reset();
-  enemyGroup.explosion.frameTimer.Reset();
-  intersector.AddPermeable(&enemyGroup.explosion,createTime+existTime);
-  if (playingField.lastHitFromAlly)
-   {::score.CurrentScore()+=score;
-    playingField.lastHitFromAlly=PlayingField::off;
+				     -enemyGroup->explosion.CurrentBox().Center());
+  enemyGroup->explosion.ObjectLiner().Velocity()=ObjectLiner().Velocity();
+  enemyGroup->explosion.frameList.Reset();
+  enemyGroup->explosion.frameTimer.Reset();
+  intersector.AddPermeable(&enemyGroup->explosion,createTime+existTime);
+  if (playingField->lastHitFromAlly)
+   {::score->CurrentScore()+=score;
+    playingField->lastHitFromAlly=PlayingField::off;
    }
   else
-    if (playingField.lastHitScore)
-      playingField.lastHitScore=0;
+    if (playingField->lastHitScore)
+      playingField->lastHitScore=0;
     else
-      playingField.lastHitScore=score;
+      playingField->lastHitScore=score;
  }
 
-int ENEMY::score=250;
+inline int ENEMY::score=250;
 
-const int ENEMY::shiftRate=RAND_MAX_16/20,
+inline const int ENEMY::shiftRate=RAND_MAX_16/20,
           ENEMY::shiftSize=1;
 
-double ENEMY::minVelocity=.1*PlayingField::maxLinearVelocity,
+inline double ENEMY::minVelocity=.1*PlayingField::maxLinearVelocity,
        ENEMY::maxVelocity=.3*PlayingField::maxLinearVelocity;
 
-const Vector2d ENEMY::vectors[10]={Vector2d(2,-5),
+inline const Vector2d ENEMY::vectors[10]={Vector2d(2,-5),
                                    Vector2d(5,-2),
                                    Vector2d(6,-2),
                                    Vector2d(15,1),
@@ -190,7 +190,7 @@ const Vector2d ENEMY::vectors[10]={Vector2d(2,-5),
                                    Vector2d(-5,-2),
                                    Vector2d(-2,-5)};
 
-XColor ENEMY::color={0,
+inline XColor ENEMY::color={0,
                      39064,//152
                      64507,//251
                      39064,//152
@@ -205,14 +205,14 @@ inline ENEMY::ENEMY(): Enemy(vectors,sizeof(vectors)/sizeof(Vector2d),color,
 
 void ENEMY::MissScript(Intersector& intersector, const double createTime,
                                           const double existTime)
- {playingField.framesSinceEnemy=0;
-  if (enemyGroup.frameTimer.TimerAlarm()&&
+ {playingField->framesSinceEnemy=0;
+  if (enemyGroup->frameTimer.TimerAlarm()&&
       !Intersect(CurrentBox(),PlayingField::playArea))
    {intersector.RemoveNonPermeable(this);
-    enemyGroup.enemyInactive=EnemyGroup::on;
+    enemyGroup->enemyInactive=EnemyGroup::on;
    }
   else
-   {enemyBulletGroup.Fire(intersector,createTime+existTime,*this);
+   {enemyBulletGroup->Fire(intersector,createTime+existTime,*this);
     unsigned int random=gary_rand::rand_16();
     if (random<=shiftRate)
      {Vector2d velocity;
@@ -227,10 +227,10 @@ void ENEMY::MissScript(Intersector& intersector, const double createTime,
      }
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
-    XCopyArea(stage.display,
+    XCopyArea(stage->display,
               rotator.GetPixAtTime(0),
-              playingField.pixmap,
-              playingField.gc,
+              playingField->pixmap,
+              playingField->gc,
               0,0,
               rotator.PixWidth(),
               rotator.PixHeight(),
@@ -241,12 +241,12 @@ void ENEMY::MissScript(Intersector& intersector, const double createTime,
    }
  }
 
-int enemy::score=1000;
+inline int enemy::score=1000;
 
-double enemy::minVelocity=.1*PlayingField::maxLinearVelocity,
+inline double enemy::minVelocity=.1*PlayingField::maxLinearVelocity,
        enemy::maxVelocity=.4*PlayingField::maxLinearVelocity;
 
-const Vector2d enemy::vectors[8]={Vector2d(1,-3),
+inline const Vector2d enemy::vectors[8]={Vector2d(1,-3),
                                   Vector2d(3,-1),
                                   Vector2d(8,1),
                                   Vector2d(3,3),
@@ -255,7 +255,7 @@ const Vector2d enemy::vectors[8]={Vector2d(1,-3),
                                   Vector2d(-3,-1),
                                   Vector2d(-1,-3)};
 
-XColor enemy::color={0,
+inline XColor enemy::color={0,
                      0,
                      65535,//255
                      0,
@@ -269,26 +269,26 @@ inline enemy::enemy(): Enemy(vectors,sizeof(vectors)/sizeof(Vector2d),color,
 
 void enemy::MissScript(Intersector& intersector, const double createTime,
                                           const double existTime)
- {playingField.framesSinceEnemy=0;
-  if (enemyGroup.frameTimer.TimerAlarm()&&
+ {playingField->framesSinceEnemy=0;
+  if (enemyGroup->frameTimer.TimerAlarm()&&
       !Intersect(CurrentBox(),PlayingField::playArea))
    {intersector.RemoveNonPermeable(this);
-    enemyGroup.enemyInactive=EnemyGroup::on;
+    enemyGroup->enemyInactive=EnemyGroup::on;
    }
   else
-   {enemyBulletGroup.Fire(intersector,createTime+existTime,*this);
-    if (!shipGroup.hyper.hyperspacing)
-     {Vector2d TargetDeltaPos=shipGroup.ship->CurrentBox().Center()
+   {enemyBulletGroup->Fire(intersector,createTime+existTime,*this);
+    if (!shipGroup->hyper.hyperspacing)
+     {Vector2d TargetDeltaPos=shipGroup->ship->CurrentBox().Center()
                               -CurrentBox().Center();
       ObjectLiner().Velocity()=ObjectLiner().VelocityMagnitude()
                                *TargetDeltaPos/TargetDeltaPos.Magnitude();
      }
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
-    XCopyArea(stage.display,
+    XCopyArea(stage->display,
               rotator.GetPixAtTime(0),
-              playingField.pixmap,
-              playingField.gc,
+              playingField->pixmap,
+              playingField->gc,
               0,0,
               rotator.PixWidth(),
               rotator.PixHeight(),
@@ -305,7 +305,7 @@ void EnemyExplosion::MissScript(Intersector& intersector, const double createTim
    {frameDelay.Reset();
     if (frameTimer.TimerAlarm())
      {intersector.RemovePermeable(this);
-      enemyGroup.enemyInactive=EnemyGroup::on;
+      enemyGroup->enemyInactive=EnemyGroup::on;
      }
     else
      {frameList.UpdateFrameNumber();
@@ -316,9 +316,9 @@ void EnemyExplosion::MissScript(Intersector& intersector, const double createTim
       Explosion::DisplayFrame();
  }
 
-int EnemyGroup::minimumFrames=25;
+inline int EnemyGroup::minimumFrames=25;
 
-const int EnemyGroup::scoreThreshold=1800,
+inline const int EnemyGroup::scoreThreshold=1800,
           EnemyGroup::scoreLevelIncrement=500,
           EnemyGroup::ENEMYFrequency1=RAND_MAX_16*70/100,
           EnemyGroup::ENEMYFrequency2=RAND_MAX_16-ENEMYFrequency1;
@@ -329,27 +329,27 @@ inline EnemyGroup::EnemyGroup(): enemyInactive(on),
  }
 
 inline EnemyGroup::Boolean EnemyGroup::Overlap(const Box& overlapBox)
- {playingField.nonPermeableList.SetCurrentAtHead();
-  {for (int i=0; i<playingField.nonPermeableList.GetNumItems(); ++i)
-    {if (Intersect(playingField.nonPermeableList.GetData()->CurrentBox(),
+ {playingField->nonPermeableList.SetCurrentAtHead();
+  {for (int i=0; i<playingField->nonPermeableList.GetNumItems(); ++i)
+    {if (Intersect(playingField->nonPermeableList.GetData()->CurrentBox(),
                    overlapBox))
        return on;
-     playingField.nonPermeableList.Next();
+     playingField->nonPermeableList.Next();
     }
   }
-  playingField.selfPermeableList.SetCurrentAtHead();
-  {for (int i=0; i<playingField.selfPermeableList.GetNumItems(); ++i)
-    {if (Intersect(playingField.selfPermeableList.GetData()->CurrentBox(),
+  playingField->selfPermeableList.SetCurrentAtHead();
+  {for (int i=0; i<playingField->selfPermeableList.GetNumItems(); ++i)
+    {if (Intersect(playingField->selfPermeableList.GetData()->CurrentBox(),
                    overlapBox))
        return on;
-     playingField.selfPermeableList.Next();
+     playingField->selfPermeableList.Next();
     }
   }
   return off;
  }
 
 inline void EnemyGroup::NewEnemy(const int level)
- {if (gary_rand::rand_16()<(score.CurrentScore()<scoreThreshold+scoreLevelIncrement*(level>7 ? 6 : level-1)
+ {if (gary_rand::rand_16()<(score->CurrentScore()<scoreThreshold+scoreLevelIncrement*(level>7 ? 6 : level-1)
              ? ENEMYFrequency1
              : ENEMYFrequency2))
    {double velMagnitude=2*ENEMY::maxVelocity*gary_rand::rand_16()/RAND_MAX_16-ENEMY::maxVelocity;
@@ -372,7 +372,7 @@ inline void EnemyGroup::NewEnemy(const int level)
 			        ENEMy.rotator.Radius());
     if (Overlap(ENEMy.CurrentBox()))
       return;
-    playingField.nonPermeableList.SetCurrentAtHole().GetData()=&ENEMy;
+    playingField->nonPermeableList.SetCurrentAtHole().GetData()=&ENEMy;
    }
   else
    {double velMagnitude=2*enemY.maxVelocity*gary_rand::rand_16()/RAND_MAX_16-enemY.maxVelocity;
@@ -394,9 +394,9 @@ inline void EnemyGroup::NewEnemy(const int level)
                                  enemY.rotator.Radius());
     if (Overlap(enemY.CurrentBox()))
       return;
-    playingField.nonPermeableList.SetCurrentAtHole().GetData()=&enemY;
+    playingField->nonPermeableList.SetCurrentAtHole().GetData()=&enemY;
    }
-  playingField.nonPermeableList.SetCurrentAtHead().AddPrior();
+  playingField->nonPermeableList.SetCurrentAtHead().AddPrior();
   enemyInactive=off;
  }
 

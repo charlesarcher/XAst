@@ -27,7 +27,7 @@ class Explosion: public MovableObject
 
 #include"../../gamePlay/playingField.H"
 
-inline Explosion::Explosion(): frameList(explosionGraphic.frames,
+inline Explosion::Explosion(): frameList(explosionGraphic->frames,
                                          ExplosionGraphic::numFrames,
                                          ExplosionGraphic::numFrames),
 		                           frameTimer(ExplosionGraphic::numFrames),
@@ -41,11 +41,11 @@ inline void Explosion::DisplayFrame()
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
-  GC& gc=explosionGraphic.gc[frameList.GetFrameNumber()];
-  XSetClipOrigin(stage.display,gc,destX,destY);
-  XCopyArea(stage.display,
+  GC& gc=explosionGraphic->gc[frameList.GetFrameNumber()];
+  XSetClipOrigin(stage->display,gc,destX,destY);
+  XCopyArea(stage->display,
             frameList.GetFrame(),
-            playingField.pixmap,
+            playingField->pixmap,
             gc,
             0,0,
             frameList.PixWidth(),

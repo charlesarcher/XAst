@@ -78,10 +78,10 @@ void Bullet::MissScript(Intersector& intersector, const double createTime,
   else
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
-      XCopyArea(stage.display,
+      XCopyArea(stage->display,
                 rotator->GetPixAtTime(0),
-                playingField.pixmap,
-                playingField.gc,
+                playingField->pixmap,
+                playingField->gc,
                 0,0,
                 rotator->PixWidth(),
                 rotator->PixHeight(),
@@ -99,11 +99,11 @@ inline BulletExplosion::BulletExplosion(Bullet* const b): bullet(b)
 inline void BulletExplosion::DisplayFrame()
  {int destX=CurrentBox().NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
-  GC& gc=explosionGraphic.gc[frameList.GetFrameNumber()];
-  XSetClipOrigin(stage.display,gc,destX,destY);
-  XCopyArea(stage.display,
+  GC& gc=explosionGraphic->gc[frameList.GetFrameNumber()];
+  XSetClipOrigin(stage->display,gc,destX,destY);
+  XCopyArea(stage->display,
             frameList.GetFrame(),
-            playingField.pixmap,
+            playingField->pixmap,
             gc,
             0,0,
             frameList.PixWidth(),

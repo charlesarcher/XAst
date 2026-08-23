@@ -147,7 +147,7 @@ class RockGroup
                        * rockGraphic[3];
  };
 
-extern RockGroup rockGroup;
+extern RockGroup* rockGroup;
 
 #include"../../gamePlay/playingField.H"
 
@@ -176,16 +176,16 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
  {rotator.UpdateAngle(existTime);
   if (PlayingField::universalGravitationalConst)
     ObjectLiner().UpdateVelocity(existTime);
-  if (rockGroup.opaqueRocks)
+  if (rockGroup->opaqueRocks)
    {int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
         destY=CurrentBox().NorthWestCorner().y+.5;
     GC& gc=rotator.GetMaskGCAtTime(0);
-    XSetClipOrigin(stage.display,gc,destX,destY);
-    XCopyArea(stage.display,
+    XSetClipOrigin(stage->display,gc,destX,destY);
+    XCopyArea(stage->display,
               rotator.GetPixAtTime(0),
-              playingField.pixmap,
+              playingField->pixmap,
               gc,
               0,0,
               rotator.PixWidth(),
@@ -193,10 +193,10 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
               destX,destY);
    }
   else
-    XCopyArea(stage.display,
+    XCopyArea(stage->display,
               rotator.GetPixAtTime(0),
-              playingField.pixmap,
-              playingField.gc,
+              playingField->pixmap,
+              playingField->gc,
               0,0,
               rotator.PixWidth(),
               rotator.PixHeight(),
@@ -210,15 +210,15 @@ void Rock::HitScript(Intersector& intersector, const double createTime,
                              const double existTime,
                              const Vector2d& intersectPoint)
  {intersector.RemoveSelfPermeable(this);
-  if (playingField.lastHitFromAlly)
-   {::score.CurrentScore()+=score;
-    playingField.lastHitFromAlly=PlayingField::off;
+  if (playingField->lastHitFromAlly)
+   {::score->CurrentScore()+=score;
+    playingField->lastHitFromAlly=PlayingField::off;
    }
   else
-    if (playingField.lastHitScore)
-      playingField.lastHitScore=0;
+    if (playingField->lastHitScore)
+      playingField->lastHitScore=0;
     else
-      playingField.lastHitScore=score;
+      playingField->lastHitScore=score;
  }
 
 void Rock::AlterMinVelocity(const double newMinVelocity)
@@ -265,15 +265,15 @@ void SpawningRock::HitScript(Intersector& intersector, const double createTime,
                                                                   existTime,i),
                                   createTime+existTime);
   }
-  if (playingField.lastHitFromAlly)
-   {::score.CurrentScore()+=score;
-    playingField.lastHitFromAlly=PlayingField::off;
+  if (playingField->lastHitFromAlly)
+   {::score->CurrentScore()+=score;
+    playingField->lastHitFromAlly=PlayingField::off;
    }
   else
-    if (playingField.lastHitScore)
-      playingField.lastHitScore=0;
+    if (playingField->lastHitScore)
+      playingField->lastHitScore=0;
     else
-      playingField.lastHitScore=score;
+      playingField->lastHitScore=score;
  }
 
 void SpawningRock::AlterMinVelocity(const double newMinVelocity)
@@ -314,11 +314,11 @@ void SpawningRock::AlterScore(const double scoreFactor)
     spawner[i]->AlterScore(scoreFactor);
  }
 
-int ROCK::score=10;
+inline int ROCK::score=10;
 
-const double ROCK::scale=40;
+inline const double ROCK::scale=40;
 
-double ROCK::minVelocity=.07*PlayingField::maxLinearVelocity,
+inline double ROCK::minVelocity=.07*PlayingField::maxLinearVelocity,
        ROCK::maxVelocity=.13*PlayingField::maxLinearVelocity,
        ROCK::maxAngularVelocity=PlayingField::maxLinearVelocity/(4*ROCK::scale);
 
@@ -333,9 +333,9 @@ void ROCK::AlterMaxVelocity(const double newMaxVelocity)
     spawner[i]->AlterMaxVelocity(newMaxVelocity);
  }
 
-int ROck::score=20;
+inline int ROck::score=20;
 
-const double ROck::scale=sqrt(ROCK::scale*ROCK::scale/2);
+inline const double ROck::scale=sqrt(ROCK::scale*ROCK::scale/2);
 
 inline ROck::ROck(): SpawningRock(score,scale,4)
  {
@@ -348,9 +348,9 @@ void ROck::AlterMaxVelocity(const double newMaxVelocity)
     spawner[i]->AlterMaxVelocity(newMaxVelocity);
  }
 
-int rock::score=50;
+inline int rock::score=50;
 
-const double rock::scale=sqrt(ROck::scale*ROck::scale/4);
+inline const double rock::scale=sqrt(ROck::scale*ROck::scale/4);
 
 inline rock::rock(): Rock(score,scale)
  {
@@ -361,14 +361,14 @@ void rock::AlterMaxVelocity(const double newMaxVelocity)
     ObjectLiner().Velocity()=4*newMaxVelocity*ObjectLiner().Velocity()/ObjectLiner().VelocityMagnitude();
  }
 
-int RockGroup::initialROCKs=4,
+inline int RockGroup::initialROCKs=4,
     RockGroup::ROCKsPerLevel=2;
 
-const int RockGroup::maxROCKs=16;
+inline const int RockGroup::maxROCKs=16;
 
-RockGroup::Boolean RockGroup::opaqueRocks=RockGroup::on;
+inline RockGroup::Boolean RockGroup::opaqueRocks=RockGroup::on;
 
-const Vector2d RockGroup::RockVectors1[8]={Vector2d(-1,-28)/32,
+inline const Vector2d RockGroup::RockVectors1[8]={Vector2d(-1,-28)/32,
                                            Vector2d(16,-15)/32,
                                            Vector2d(28,-14)/32,
                                            Vector2d(25,20)/32,
@@ -397,16 +397,16 @@ const Vector2d RockGroup::RockVectors1[8]={Vector2d(-1,-28)/32,
                                             Vector2d(-28,-29)/40};
 
 #ifdef _CORP_LOGO_
-const unsigned char* const RockGroup::ROCKDecor_bits[3]={ROCKDecor1_bits,ROCKDecor2_bits,ROCKDecor3_bits};
-const int RockGroup::ROCKDecor_width[3]={ROCKDecor1_width,ROCKDecor2_width,ROCKDecor3_width},
+inline const unsigned char* const RockGroup::ROCKDecor_bits[3]={ROCKDecor1_bits,ROCKDecor2_bits,ROCKDecor3_bits};
+inline const int RockGroup::ROCKDecor_width[3]={ROCKDecor1_width,ROCKDecor2_width,ROCKDecor3_width},
           RockGroup::ROCKDecor_height[3]={ROCKDecor1_height,ROCKDecor2_height,ROCKDecor3_height};
 #else
-const unsigned char* const RockGroup::ROCKDecor_bits[3]={eightball_bits,peace_bits,yinyang_bits};
-const int RockGroup::ROCKDecor_width[3]={eightball_width,peace_width,yinyang_width},
+inline const unsigned char* const RockGroup::ROCKDecor_bits[3]={eightball_bits,peace_bits,yinyang_bits};
+inline const int RockGroup::ROCKDecor_width[3]={eightball_width,peace_width,yinyang_width},
           RockGroup::ROCKDecor_height[3]={eightball_height,peace_height,yinyang_height};
 #endif
 
-XColor RockGroup::RockColor={0,
+inline XColor RockGroup::RockColor={0,
                              56026,//218
                              42405,//165
                              8224,//32
@@ -422,14 +422,14 @@ inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int n
     scaledROck[i]=RockVecs[i]*ROck::scale;
     scaledrock[i]=RockVecs[i]*rock::scale;
    }
-  ROCKGraphic[graphicIndex]=new MaskedRotVectorData(stage.display,stage.window,RockColor,
+  ROCKGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
                                                     scaledROCK,numvecs,
                                                     ROCKDecor_bits[graphicIndex],
                                                     ROCKDecor_width[graphicIndex],
                                                     ROCKDecor_height[graphicIndex]);
-  ROckGraphic[graphicIndex]=new MaskedRotVectorData(stage.display,stage.window,RockColor,
+  ROckGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
                                                     scaledROck,numvecs);
-  rockGraphic[graphicIndex]=new MaskedRotVectorData(stage.display,stage.window,RockColor,
+  rockGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
                                                     scaledrock,numvecs);
   delete [] scaledrock;
   delete [] scaledROck;
@@ -452,7 +452,7 @@ inline RockGroup::~RockGroup()
  }
 
 inline void RockGroup::NewROCKs()
- {int numROCKs=ROCKsPerLevel*(playingField.level-1)+initialROCKs;
+ {int numROCKs=ROCKsPerLevel*(playingField->level-1)+initialROCKs;
   if (numROCKs>maxROCKs)
     numROCKs=maxROCKs;
   for(int i=0;i<numROCKs;++i)
@@ -555,13 +555,13 @@ inline void RockGroup::NewROCKs()
                                                 ROCKPosHeight*(2*gary_rand::rand_16()/(RAND_MAX_16+1))+ROCK::scale))
                                      +PlayingField::playArea.NorthWestCorner()
                                      -ROCKs[i].CurrentBox().Center());
-     while(!shipGroup.hyper.hyperspacing&&Intersect(ROCKs[i].CurrentBox(),shipGroup.ship->CurrentBox()));
-     playingField.selfPermeableList.SetCurrentAtHole().GetData()=&ROCKs[i];
-     playingField.selfPermeableList.SetCurrentAtHead().AddPrior();
-     XCopyArea(stage.display,
+     while(!shipGroup->hyper.hyperspacing&&Intersect(ROCKs[i].CurrentBox(),shipGroup->ship->CurrentBox()));
+     playingField->selfPermeableList.SetCurrentAtHole().GetData()=&ROCKs[i];
+     playingField->selfPermeableList.SetCurrentAtHead().AddPrior();
+     XCopyArea(stage->display,
                ROCKs[i].ObjectRotator().GetPixAtTime(0),
-               playingField.pixmap,
-               playingField.gc,
+               playingField->pixmap,
+               playingField->gc,
                0,0,
                ROCKs[i].ObjectRotator().PixWidth(),
                ROCKs[i].ObjectRotator().PixHeight(),
@@ -571,50 +571,50 @@ inline void RockGroup::NewROCKs()
  }
 
 void RockGroup::ResetMinVelocity(const double newMinVelocity)
- {playingField.selfPermeableList.SetCurrentAtHead();
-  for (int i=0;i<playingField.selfPermeableList.GetNumItems();++i)
-   {((Rock*)playingField.selfPermeableList.GetData())->AlterMinVelocity(newMinVelocity);
-    playingField.selfPermeableList.Next();
+ {playingField->selfPermeableList.SetCurrentAtHead();
+  for (int i=0;i<playingField->selfPermeableList.GetNumItems();++i)
+   {((Rock*)playingField->selfPermeableList.GetData())->AlterMinVelocity(newMinVelocity);
+    playingField->selfPermeableList.Next();
    }
  }
 
 void RockGroup::ResetMaxVelocity(const double newMaxVelocity)
- {playingField.selfPermeableList.SetCurrentAtHead();
-  for (int i=0;i<playingField.selfPermeableList.GetNumItems();++i)
-   {((Rock*)playingField.selfPermeableList.GetData())->AlterMaxVelocity(newMaxVelocity);
-    playingField.selfPermeableList.Next();
+ {playingField->selfPermeableList.SetCurrentAtHead();
+  for (int i=0;i<playingField->selfPermeableList.GetNumItems();++i)
+   {((Rock*)playingField->selfPermeableList.GetData())->AlterMaxVelocity(newMaxVelocity);
+    playingField->selfPermeableList.Next();
    }
  }
 
 void RockGroup::ResetMaxAngularVelocity(const double newMaxAngularVelocity)
- {playingField.selfPermeableList.SetCurrentAtHead();
-  for (int i=0;i<playingField.selfPermeableList.GetNumItems();++i)
-   {((Rock*)playingField.selfPermeableList.GetData())->AlterMaxAngularVelocity(newMaxAngularVelocity);
-    playingField.selfPermeableList.Next();
+ {playingField->selfPermeableList.SetCurrentAtHead();
+  for (int i=0;i<playingField->selfPermeableList.GetNumItems();++i)
+   {((Rock*)playingField->selfPermeableList.GetData())->AlterMaxAngularVelocity(newMaxAngularVelocity);
+    playingField->selfPermeableList.Next();
    }
  }
 
 void RockGroup::ResetVelocityLimits(const double newVelLimit)
- {playingField.selfPermeableList.SetCurrentAtHead();
-  for (int i=0;i<playingField.selfPermeableList.GetNumItems();++i)
-   {((Rock*)playingField.selfPermeableList.GetData())->AlterVelocityLimits(newVelLimit);
-    playingField.selfPermeableList.Next();
+ {playingField->selfPermeableList.SetCurrentAtHead();
+  for (int i=0;i<playingField->selfPermeableList.GetNumItems();++i)
+   {((Rock*)playingField->selfPermeableList.GetData())->AlterVelocityLimits(newVelLimit);
+    playingField->selfPermeableList.Next();
    }
  }
 
 void RockGroup::AdjustFramesPerSec(const double frameRatio)
- {playingField.selfPermeableList.SetCurrentAtHead();
-  for (int i=0;i<playingField.selfPermeableList.GetNumItems();++i)
-   {((Rock*)playingField.selfPermeableList.GetData())->AlterFramesPerSec(frameRatio);
-    playingField.selfPermeableList.Next();
+ {playingField->selfPermeableList.SetCurrentAtHead();
+  for (int i=0;i<playingField->selfPermeableList.GetNumItems();++i)
+   {((Rock*)playingField->selfPermeableList.GetData())->AlterFramesPerSec(frameRatio);
+    playingField->selfPermeableList.Next();
    }
  }
 
 void RockGroup::ResetScore(const double scoreFactor)
- {playingField.selfPermeableList.SetCurrentAtHead();
-  for (int i=0;i<playingField.selfPermeableList.GetNumItems();++i)
-   {((Rock*)playingField.selfPermeableList.GetData())->AlterScore(scoreFactor);
-    playingField.selfPermeableList.Next();
+ {playingField->selfPermeableList.SetCurrentAtHead();
+  for (int i=0;i<playingField->selfPermeableList.GetNumItems();++i)
+   {((Rock*)playingField->selfPermeableList.GetData())->AlterScore(scoreFactor);
+    playingField->selfPermeableList.Next();
    }
  }
 
