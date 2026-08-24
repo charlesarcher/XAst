@@ -26,7 +26,8 @@ endif
 # Task 27 landed the D14 engine `#else` branches, so the two D14 .C units
 # (rotatorDisplayData/compositePixmap) now compile on EVERY leg: guards-closed
 # on GL/VK (engine-rotation data path + CPU compositing), macro'd on X11.
-# They are still not in the GL/VK link list (XAsteroids.o-only link list).
+# Since task 29 they are ALSO in every link list ($(GAME_OBJECTS)): their
+# engine-branch symbols are referenced by the domain.
 ifneq ($(filter $(BACKEND),GL VK),)
 BACKEND_CXXFLAGS=$(VENDOR_INCS)
 endif
@@ -37,7 +38,13 @@ obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o: BAC
 # The decode unit must stay macro-free on every leg that builds it.
 $(OBJDIR)/xbmDecodeSelfTest.o: BACKEND_CXXFLAGS=$(VENDOR_INCS)
 
+# Default goal (task 29): AutoRepeatOn is an X11-only utility (F1 exception
+# zone (d)) — built on the X11 leg only. GPU legs build the game binary alone.
+ifeq ($(BACKEND),X11)
 all: XAsteroids AutoRepeatOn
+else
+all: XAsteroids
+endif
 
 # Compile-only per-backend objects; no link step (GL/VK link rules: tasks 29/37).
 # The XBM decode self-test (task 26) compiles into the GL/VK legs ONLY: the
@@ -111,11 +118,43 @@ harness: obj/harness
 obj/harness: test/harness/harness.C
 	${CXX} ${CXXFLAGS} $< ${LDFLAGS} -lX11 -lXtst -o $@
 
-$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H bitmaps/ENEMYDecor.xbm bitmaps/ROCKDecor1.xbm bitmaps/ROCKDecor2.xbm bitmaps/ROCKDecor3.xbm XAsteroids.C utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H bitmaps/enemyBulletDecor.xbm objects/enemies/enemyBulletGroup.H bitmaps/enemyDecor.xbm objects/enemies/enemyGroup.H objects/explosions/explosion.H bitmaps/explosionCenter.xbm bitmaps/explosionEdge.xbm objects/explosions/explosionGraphic.H bitmaps/explosionMiddle.xbm utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H bitmaps/starDestroyerIcon.xbm bitmaps/NCC1701DIcon.xbm bitmaps/NCC1701AIcon.xbm bitmaps/shipBulletDecor.xbm objects/ships/shipBulletGroup.H bitmaps/starDestroyerDecor.xbm bitmaps/NCC1701DDecorBottom.xbm bitmaps/NCC1701DDecorTop.xbm bitmaps/NCC1701ADecor.xbm objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H bitmaps/starDestroyerThrustCenter.xbm bitmaps/starDestroyerThrustEdge.xbm bitmaps/starDestroyerThrustMiddle.xbm bitmaps/NCC1701DThrustDecor.xbm bitmaps/NCC1701AThrustDecor.xbm utilities/vector2d.H | $(OBJDIR)
+# XBM dependency list — refreshed at task 29 (D10/D13; was stale). Reconciliation:
+# 32 datasets on disk = 26 game datasets consumed by this TU chain (incl. the
+# previously-missing eightball/peace/yinyang via rockGroup.H and fortytwo via
+# shipGroup.H) + 6 Options-side scoring icons (transitive via options.H, which
+# is in this TU's include chain — listed so icon edits trigger recompiles).
+# Both _CORP_LOGO_ variants are covered because every casing variant is listed.
+GAME_XBMS=bitmaps/ENEMYDecor.xbm bitmaps/ROCKDecor1.xbm bitmaps/ROCKDecor2.xbm \
+ bitmaps/ROCKDecor3.xbm bitmaps/eightball.xbm bitmaps/peace.xbm bitmaps/yinyang.xbm \
+ bitmaps/enemyBulletDecor.xbm bitmaps/enemyDecor.xbm bitmaps/explosionCenter.xbm \
+ bitmaps/explosionEdge.xbm bitmaps/explosionMiddle.xbm bitmaps/fortytwo.xbm \
+ bitmaps/NCC1701ADecor.xbm bitmaps/NCC1701AIcon.xbm bitmaps/NCC1701AThrustDecor.xbm \
+ bitmaps/NCC1701DDecorBottom.xbm bitmaps/NCC1701DDecorTop.xbm bitmaps/NCC1701DIcon.xbm \
+ bitmaps/NCC1701DThrustDecor.xbm bitmaps/shipBulletDecor.xbm bitmaps/starDestroyerDecor.xbm \
+ bitmaps/starDestroyerIcon.xbm bitmaps/starDestroyerThrustCenter.xbm \
+ bitmaps/starDestroyerThrustEdge.xbm bitmaps/starDestroyerThrustMiddle.xbm
+OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon.xbm \
+ bitmaps/ENEMYScoringIcon.xbm bitmaps/rockScoringIcon.xbm bitmaps/ROckScoringIcon.xbm \
+ bitmaps/ROCKScoringIcon.xbm
+
+$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
+# --- Link rules (task 29, F3/D10/U23) ---------------------------------------
+# F3 asserts each backend's link line BY RECIPE INSPECTION (make V=1), not by
+# eyeball: GL links -lglfw -lGL with NO -lXm/-lXt/-lX11; the X11 line keeps
+# -lXm -lXt -lX11 byte-identical to the pre-task-29 tree. The VK link rule
+# lands at Phase 4 task 37 (until then BACKEND=VK supports `objects` only).
+# Both legs link the two D14 units ($(GAME_OBJECTS)): since task 27 they
+# compile on EVERY leg (guards-closed engine branches on GL) and DEFINE the
+# RotatorDisplayData-subclass / CPU-composite symbols the domain references.
+ifeq ($(BACKEND),GL)
+XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) obj/GL/glad.o
+	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) obj/GL/glad.o ${LDFLAGS} -lglfw -lGL -o XAsteroids
+else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
+endif
 
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
