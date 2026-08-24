@@ -35,19 +35,34 @@ class ExplosionGraphic
     // wiring: frames 0/1/2/3/4 wore center/middle/edge/edge/middle.
     inline TextureId MaskId(const int frameNumber) const;
 
+#ifndef X11_BACKEND
+    // Task-36 GL legs: the five composite frames ride the task-27 CPU
+    // compositing (proven byte-equal to the guarded CompositePixmap output in
+    // test/composite/) uploaded as RGBA8 textures; clipMask[] holds real R8
+    // coverage textures so MaskId() feeds drawTextureMasked directly.
+    inline TextureId FrameId(const int frameNumber) const;
+    inline int FrameWidth() const;
+    inline int FrameHeight() const;
+#endif
+
   private:
 
-    // Guards-closed transitional fallback: ids stay 0 so masked draws skip
-    // (the engine call no-ops on a zero mask); the real cross-backend path
-    // lands at Phase 3/task 34.
+    // X11: backend-owned depth-1 mask bitmaps. GL: R8 discard-mask textures
+    // created in the ctor below (same center/middle/edge order).
     TextureId clipMask[3]={0,0,0};
+
+#ifndef X11_BACKEND
+    TextureId glFrames[5]={0,0,0,0,0};
+    int glFrameW=0,
+        glFrameH=0;
+#endif
 
 #ifdef X11_BACKEND
     static XColor hottest,
                   hotter,
                   hot;
 #endif
- };
+  };
 
 extern ExplosionGraphic* explosionGraphic;
 
@@ -56,6 +71,17 @@ inline const int ExplosionGraphic::numFrames=5;
 inline TextureId ExplosionGraphic::MaskId(const int frameNumber) const
  {static const int maskOfFrame[numFrames]={0,1,2,2,1};
   return clipMask[maskOfFrame[frameNumber]];}
+
+#ifndef X11_BACKEND
+inline TextureId ExplosionGraphic::FrameId(const int frameNumber) const
+ {return glFrames[frameNumber];}
+
+inline int ExplosionGraphic::FrameWidth() const
+ {return glFrameW;}
+
+inline int ExplosionGraphic::FrameHeight() const
+ {return glFrameH;}
+#endif
 
 #ifdef X11_BACKEND
 inline XColor ExplosionGraphic::hottest={0,
@@ -139,14 +165,82 @@ inline ExplosionGraphic::ExplosionGraphic(RenderingEngine& eng):
                                                                 explosionEdge_width,
                                                                 explosionEdge_height);
   #endif
+  #ifndef X11_BACKEND
+  // The five frames via the CPU composite (same layer stacks, same order,
+  // same later-layer-overwrites semantics as the guarded block above); the
+  // three masks become R8 discard textures in center/middle/edge order.
+  const unsigned short hottestR=65535,hottestG=65535,hottestB=65535,
+                       hotterR=65535, hotterG=65535, hotterB=0,
+                       hotR=65535,     hotG=42405,   hotB=0;
+  const int w=explosionEdge_width,
+            h=explosionEdge_height;
+  {CompositeLayerSpec f0[1]={{explosionCenter_bits,explosionCenter_width,
+                              explosionCenter_height,hottestR,hottestG,hottestB}};
+   CompositeFrameRGBA8 frame;
+   compositeFrameStack(frame,w,h,f0,1);
+   glFrames[0]=engine.createTextureFromBitmap(frame.rgba8.data(),w,h,4);
+  }
+  {CompositeLayerSpec f1[2]={{explosionMiddle_bits,explosionMiddle_width,
+                              explosionMiddle_height,hotterR,hotterG,hotterB},
+                             {explosionCenter_bits,explosionCenter_width,
+                              explosionCenter_height,hottestR,hottestG,hottestB}};
+   CompositeFrameRGBA8 frame;
+   compositeFrameStack(frame,w,h,f1,2);
+   glFrames[1]=engine.createTextureFromBitmap(frame.rgba8.data(),w,h,4);
+  }
+  for(int i=2;i<4;++i)
+   {CompositeLayerSpec f23[3]={{explosionEdge_bits,explosionEdge_width,
+                                explosionEdge_height,hotR,hotG,hotB},
+                               {explosionMiddle_bits,explosionMiddle_width,
+                                explosionMiddle_height,hotterR,hotterG,hotterB},
+                               {explosionCenter_bits,explosionCenter_width,
+                                explosionCenter_height,hottestR,hottestG,hottestB}};
+    CompositeFrameRGBA8 frame;
+    compositeFrameStack(frame,w,h,f23,3);
+    glFrames[i]=engine.createTextureFromBitmap(frame.rgba8.data(),w,h,4);
+   }
+  {CompositeLayerSpec f4[2]={{explosionMiddle_bits,explosionMiddle_width,
+                              explosionMiddle_height,hotR,hotG,hotB},
+                             {explosionCenter_bits,explosionCenter_width,
+                              explosionCenter_height,hotterR,hotterG,hotterB}};
+   CompositeFrameRGBA8 frame;
+   compositeFrameStack(frame,w,h,f4,2);
+   glFrames[4]=engine.createTextureFromBitmap(frame.rgba8.data(),w,h,4);
+  }
+  {std::vector<uint8_t> maskBytes;
+   compositeMaskExpandR8(explosionCenter_bits,explosionCenter_width,
+                         explosionCenter_height,maskBytes);
+   clipMask[0]=engine.createTextureFromBitmap(maskBytes.data(),
+                                              explosionCenter_width,
+                                              explosionCenter_height,1);
+  }
+  {std::vector<uint8_t> maskBytes;
+   compositeMaskExpandR8(explosionMiddle_bits,explosionMiddle_width,
+                         explosionMiddle_height,maskBytes);
+   clipMask[1]=engine.createTextureFromBitmap(maskBytes.data(),
+                                              explosionMiddle_width,
+                                              explosionMiddle_height,1);
+  }
+  {std::vector<uint8_t> maskBytes;
+   compositeMaskExpandR8(explosionEdge_bits,explosionEdge_width,
+                         explosionEdge_height,maskBytes);
+   clipMask[2]=engine.createTextureFromBitmap(maskBytes.data(),
+                                              explosionEdge_width,
+                                              explosionEdge_height,1);
+  }
+  glFrameW=w;
+  glFrameH=h;
+  #endif
  }
 
 inline ExplosionGraphic::~ExplosionGraphic()
- {
-  #ifdef X11_BACKEND
+  {
+#ifndef X11_BACKEND
+  for(int i=numFrames;i--;)
+    engine.deleteTexture(glFrames[i]);
+#endif
   for(int i=3;i--;)
     engine.deleteTexture(clipMask[i]);
-  #endif
   for(int i=numFrames;i--;)
     frames[i].~CompositePixmap();
   delete [] (char*)frames;

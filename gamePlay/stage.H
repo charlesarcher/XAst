@@ -243,35 +243,32 @@ inline Stage::~Stage()
 
 inline Stage& Stage::DrawScore()
  {char str[12];
+  // Task-36: the drawString calls are pure engine calls — the guards that
+  // used to wrap them (GL had no backend when task 14 landed) are gone so
+  // the score header renders on every leg; X11 emits the identical calls.
   if (score->CurrentScore()>=score->TopTenScore(0))
    {snprintf(str,sizeof(str),"%10.10s",score->CurrentName());
-#ifdef X11_BACKEND
     engine.drawStringOpaque(str,(float)hiScoreUserX,(float)hiScoreUserY,
                             EngineFont_HiScore,
                             0.0f,0.0f,0.0f,
                             46260.0f/65535.0f,46260.0f/65535.0f,
                             46260.0f/65535.0f);
-#endif
     snprintf(str,sizeof(str),"%10d",score->CurrentScore());
-#ifdef X11_BACKEND
     engine.drawStringOpaque(str,(float)hiScoreX,(float)hiScoreY,
                             EngineFont_HiScore,
                             0.0f,0.0f,0.0f,
                             46260.0f/65535.0f,46260.0f/65535.0f,
                             46260.0f/65535.0f);
-#endif
    }
   else
     snprintf(str,sizeof(str),"%10d",score->CurrentScore());
-#ifdef X11_BACKEND
   engine.drawStringOpaque(str,(float)scoreX,(float)scoreY,
                           EngineFont_Score,
                           0.0f,0.0f,0.0f,
                           46260.0f/65535.0f,46260.0f/65535.0f,
                           46260.0f/65535.0f);
-#endif
   return *this;
- }
+  }
 
 inline Stage& Stage::DrawShipYard()
  {

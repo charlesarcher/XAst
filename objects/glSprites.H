@@ -27,6 +27,7 @@
 // ============================================================================
 
 #include<cstdint>
+#include<cmath>
 #include<vector>
 #include"../utilities/vector2d.H"
 
@@ -101,6 +102,60 @@ inline std::vector<uint8_t> glBakeStaticSprite(
           glsprites_detail::plotPixel(buf,side,offX+i,offY+j,r,g,b);
    }
   return buf;
+ }
+
+// ---------------------------------------------------------------------------
+// Task-36: per-angle scatter rotation for the pure-bitmap flames — replicates
+// RotPixmapData/MaskedRotPixmapData::CreatePix point math exactly: source
+// pixel (i,j) lands at int(x*cos(a)-y*sin(a)+radius+.5),
+// int(y*cos(a)+x*sin(a)+radius+.5) with x=i-.5*(w-1), y=j-.5*(h-1),
+// a=k*incAngle, numPix=int(2pi*radius+.5), radius=(max(w,h)-1)/2. The X11
+// leg scatters every composite pixel that is not background; here the alpha
+// byte carries painted-ness (the CPU composite contract). Out-of-range
+// points clip, like XDrawPoint on the sideSize pixmap.
+// ---------------------------------------------------------------------------
+struct GlRotatedFrames
+ {std::vector<std::vector<uint8_t>> rgba;
+  std::vector<std::vector<uint8_t>> mask;
+  int side=0,
+      numPix=0;
+ };
+
+inline GlRotatedFrames glBakeRotatedSprite(const uint8_t* rgba8,const int w,
+                                           const int h,const bool withMask)
+ {const int side=w>h?w:h;
+  const double radius=(side-1)/2.0;
+  const int numPix=int(6.28318530717958*radius+.5);
+  const double incAngle=6.28318530717958/numPix;
+  GlRotatedFrames out;
+  out.side=side;
+  out.numPix=numPix;
+  out.rgba.assign(numPix,std::vector<uint8_t>(static_cast<size_t>(side)*side*4,0));
+  if (withMask)
+    out.mask.assign(numPix,std::vector<uint8_t>(static_cast<size_t>(side)*side,0));
+  for(int j=0;j<h;++j)
+   for(int i=0;i<w;++i)
+    {const uint8_t* px=rgba8+(static_cast<size_t>(j)*w+i)*4;
+     if (!px[3])
+       continue;
+     const double x=i-.5*(w-1),
+                  y=j-.5*(h-1);
+     for(int k=0;k<numPix;++k)
+      {const double angle=k*incAngle;
+       const int xRot=int(x*cos(angle)-y*sin(angle)+radius+.5),
+                 yRot=int(y*cos(angle)+x*sin(angle)+radius+.5);
+       if (xRot<0||yRot<0||xRot>=side||yRot>=side)
+         continue;
+       uint8_t* dst=&out.rgba[k][(static_cast<size_t>(yRot)*side+xRot)*4];
+       dst[0]=px[0];
+       dst[1]=px[1];
+       dst[2]=px[2];
+       dst[3]=255;
+       if (withMask)
+         out.mask[k][static_cast<size_t>(yRot)*side+xRot]=255;
+      }
+    }
+  return out;
  }
 
 #endif

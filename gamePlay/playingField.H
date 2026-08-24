@@ -220,15 +220,20 @@ class PlayingField
 
     void PresentFrame();
     void RenderFrameDraws();
+#ifndef X11_BACKEND
+    // Task-36: per-frame repaint of the persistent window chrome (title,
+    // hi-score header, score, yard, button). The X11 window keeps these
+    // between frames because the field present copies only the play rect;
+    // the GL swap consumes the whole back buffer, so D8's redraw-everything
+    // contract needs this leg every frame.
+    inline void DrawHudChrome();
+#endif
 
   };
 
 extern PlayingField* playingField;
 
-#ifndef X11_BACKEND
-#ifndef GL_BACKEND
-#error "A concrete GPU backend macro is required for the non-X11 build"
-#endif
+#ifdef GL_BACKEND
 // ---------------------------------------------------------------------------
 // GL input bridge (task 35). glBackend's typed-event seam (D16) is not wired
 // yet — pollEvents() returns 0 — so main() installs a GLFW key callback that
@@ -416,6 +421,11 @@ inline void PlayingField::PresentFrame()
   engine.beginRenderTo((TextureId)pixmap);
   // (3) canvas play-area sub-rect only (the border ring survives);
   engine.clear();
+  #ifndef X11_BACKEND
+  // GL: clear() wipes the whole window (the canvas indirection collapsed),
+  // so the chrome comes back before the world pass (disjoint regions).
+  DrawHudChrome();
+  #endif
   // (4) LOGICAL CLIENT coords: Stage layout values + play-area extents; the
   // backend applies any present transform uniformly. On X11 the scissor is
   // stored-only today, which is byte-identical by construction: the frame-end
@@ -433,10 +443,52 @@ inline void PlayingField::PresentFrame()
   // (6) HUD lives outside the play rect;
   // (7) HUD pass;
   DrawGame();
-  // (8) present — requests the field leg and replays both request-gated
-  // legs (yard first, then field), no internal sync (Q13-proven).
-  stage->DrawPlayingField();
+   // (8) present — requests the field leg and replays both request-gated
+   // legs (yard first, then field), no internal sync (Q13-proven).
+   stage->DrawPlayingField();
+  }
+
+#ifndef X11_BACKEND
+// Task-36: full-surface base repaint + persistent chrome. The X11 window
+// carries a gray background pixel, keeps title/header/yard/button between
+// frames (the field present copies only the play rect), and blacks the play
+// area via the canvas clear; the GL swap consumes the whole back buffer, so
+// D8's redraw-everything contract needs all of it every frame. Regions are
+// disjoint, so ordering against the world pass is pixel-irrelevant.
+inline void PlayingField::DrawHudChrome()
+ {// window background (stage.H windowBg 46260 gray);
+  engine.drawRect(0.0f,0.0f,(float)stage->windowWidth,(float)stage->windowHeight,
+                  46260.0f/65535.0f,46260.0f/65535.0f,46260.0f/65535.0f,true);
+  // play-area base (the canvas clear's visible equivalent);
+  engine.drawRect((float)stage->playAreaX,(float)stage->playAreaY,
+                  (float)playArea.Width(),(float)playArea.Height(),
+                  0.0f,0.0f,0.0f,true);
+  // title + hi-score header (the static legs of Stage::Refresh — no expose
+  // path exists on this leg);
+  engine.drawStringTransparent("Asteroids",(float)stage->titleX,(float)stage->titleY,
+                               EngineFont_Title,0.0f,0.0f,0.0f);
+  char str[12];
+  snprintf(str,sizeof(str),"%10.10s",score->TopTenName(0));
+  engine.drawStringOpaque(str,(float)stage->hiScoreUserX,(float)stage->hiScoreUserY,
+                          EngineFont_HiScore,
+                          0.0f,0.0f,0.0f,
+                          46260.0f/65535.0f,46260.0f/65535.0f,
+                          46260.0f/65535.0f);
+  snprintf(str,sizeof(str),"%10d",score->TopTenScore(0));
+  engine.drawStringOpaque(str,(float)stage->hiScoreX,(float)stage->hiScoreY,
+                          EngineFont_HiScore,
+                          0.0f,0.0f,0.0f,
+                          46260.0f/65535.0f,46260.0f/65535.0f,
+                          46260.0f/65535.0f);
+  stage->DrawScore();
+  // yard + button (GL counterparts of the two request-gated present legs);
+  engine.drawTexture(shipYard->GetYard(),(float)stage->shipYardX,
+                     (float)stage->shipYardY,
+                     (float)stage->shipYardWidth,(float)stage->shipYardHeight,
+                     1.0f);
+  button->DrawButton();
  }
+#endif
 
  inline Vector2d PlayingField::CalcGravityAcceleration(const MovableObject* const obj1,
                                                        const MovableObject* const obj2)
@@ -791,9 +843,14 @@ inline PlayingField::Boolean PlayingField::RunGame()
       if (ShipBulletGroup::autoFire&&firing)
         shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
       int numEvents=engine.pollEvents(events,256);
+#ifdef GL_BACKEND
+      // GL-only until task 42: bridge drain + close latch need the concrete
+      // GLBackend; VK compiles guards-closed with neither backend macro and
+      // gets its own pollEvents wiring at plan task 42.
       numEvents+=glDrainEvents(events+numEvents,256-numEvents);
       if (static_cast<GLBackend&>(engine).closeRequested_)
         return on;
+#endif
       for (int i=0;i<numEvents;++i)
        {const GameEvent& event=events[i];
         switch(event.type)
@@ -910,6 +967,9 @@ inline PlayingField::Boolean PlayingField::RunGame()
   char str[23];
   engine.beginRenderTo((TextureId)pixmap);
   engine.clear();
+  // Task-36: base+chrome BEFORE the table (clear() wiped the whole window
+  // on this leg).
+  DrawHudChrome();
   for(int i=0;i<score->NumScores();++i)
    {const int nameWidth=12-(int)strlen(score->TopTenName(i));
     snprintf(str,sizeof(str),"%s%*s%10d",
@@ -925,14 +985,14 @@ inline PlayingField::Boolean PlayingField::RunGame()
   engine.drawStringTransparent("        Q -- quit",(float)xPos,
                                (float)(yPos+=fontHeight),
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.drawStringTransparent("        H -- help",(float)xPos,
-                               (float)(yPos+=fontHeight),
-                               EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.endRenderTo();
-  stage->DrawPlayingField();
-  engine.endFrame();
-  return off;
-  }
+   engine.drawStringTransparent("        H -- help",(float)xPos,
+                                (float)(yPos+=fontHeight),
+                                EngineFont_HiScore,1.0f,1.0f,1.0f);
+   engine.endRenderTo();
+   stage->DrawPlayingField();
+   engine.endFrame();
+   return off;
+   }
 #endif
 
 inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
@@ -1013,15 +1073,25 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
   // the mouse legs; keys arrive through engine.pollEvents + the GLFW bridge.
   int localHighScore=0;
   GameEvent events[64];
+  // Task-36 initial present: full surface = base+chrome+help text. The
+  // guarded branch gets this composite from the Expose-driven Stage::Refresh
+  // after the ctor's GenHelpScreen; no damage events exist on this leg, and
+  // the ctor's draw alone would be wiped by the first chrome repaint.
+  engine.beginFrame();
+  GenHelpScreen();
+  stage->DrawPlayingField();
+  engine.endFrame();
   for(;;)
    {// No backend frame clock here: beginFrame owns the glfwPollEvents pump
     // (the typed-event stub contributes nothing), so pump every iteration
     // or keys parked at a static screen are never delivered.
     engine.beginFrame();
     int numEvents=engine.pollEvents(events,64);
+#ifdef GL_BACKEND
     numEvents+=glDrainEvents(events+numEvents,64-numEvents);
     if (static_cast<GLBackend&>(engine).closeRequested_)
       return localHighScore;
+#endif
     for (int i=0;i<numEvents;++i)
      {const GameEvent& event=events[i];
       if (event.type==GameEvent::KeyDown)
@@ -1103,6 +1173,9 @@ void PlayingField::GenHelpScreen()
                                                                   EngineFont_HiScore))/2,
       yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+hiScoreFm.max_bounds.ascent;
   engine.beginRenderTo((TextureId)pixmap);
+  // Task-36: base+chrome BEFORE the text — clear() wiped the whole window
+  // and the strings must land on the restored surface.
+  DrawHudChrome();
   engine.drawStringTransparent("        S -- start",(float)xPos,(float)yPos,
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
   engine.drawStringTransparent("        Q -- quit",(float)xPos,
@@ -1126,12 +1199,12 @@ void PlayingField::GenHelpScreen()
   engine.drawStringTransparent("        N -- new game",(float)xPos,
                                (float)(yPos+=2*fontHeight),
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
-                               (float)(yPos+=2*fontHeight),
-                               EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.endRenderTo();
-  #endif
- }
+   engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
+                                (float)(yPos+=2*fontHeight),
+                                EngineFont_HiScore,1.0f,1.0f,1.0f);
+   engine.endRenderTo();
+   #endif
+  }
 
 inline void PlayingField::AlterExtraShipScore(const int newExtraShipScore)
  {nextShipScore=(score->CurrentScore()/newExtraShipScore+1)*newExtraShipScore;

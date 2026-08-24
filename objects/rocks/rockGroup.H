@@ -193,6 +193,15 @@ class RockGroup
 
 extern RockGroup* rockGroup;
 
+#ifndef X11_BACKEND
+// Task-36: the guarded rock pixmaps carry the RockColor wireframe outline
+// under the decor; the GL legs draw it as a quantized-angle LINE_LOOP, so
+// the components ride here as floats (the guarded static is X11-zone).
+static const float glRockOutlineR=56026.0f/65535.0f,
+                   glRockOutlineG=42405.0f/65535.0f,
+                   glRockOutlineB=8224.0f/65535.0f;
+#endif
+
 #include"../../gamePlay/playingField.H"
 
 inline Rock::Rock(const int s, const double scale): rotator(PlayingField::maxLinearVelocity/(4*scale)),
@@ -245,6 +254,16 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
         destY=CurrentBox().NorthWestCorner().y+.5;
+    // Task-36 outline leg: the guarded masked copy carries the RockColor
+    // wireframe under the decor; GetVecsAtTime(0) is already quantized, so
+    // the MVP is translation-only (ship outline idiom).
+    playingField->DeferDrawOutline(
+        destX+rotator.PixWidth()*.5f,
+        destY+rotator.PixHeight()*.5f,
+        0.0f,
+        rotator.GetVecsAtTime(0),
+        rotator.GetNumVecs(),
+        glRockOutlineR,glRockOutlineG,glRockOutlineB);
     // D2 GL composite leg: GPU rotation about the rock center carries the
     // continuous angle; the decor quad is centered in local space so the
     // MVP reproduces the guarded pipeline's point-rotation math.
@@ -271,6 +290,15 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
         destY=CurrentBox().NorthWestCorner().y+.5;
+    // Task-36 outline leg (non-opaque branch: the guarded plain copy also
+    // carries the wireframe).
+    playingField->DeferDrawOutline(
+        destX+rotator.PixWidth()*.5f,
+        destY+rotator.PixHeight()*.5f,
+        0.0f,
+        rotator.GetVecsAtTime(0),
+        rotator.GetNumVecs(),
+        glRockOutlineR,glRockOutlineG,glRockOutlineB);
     playingField->DeferDrawTransformed(
         destX+rotator.PixWidth()*.5f,
         destY+rotator.PixHeight()*.5f,
@@ -698,15 +726,24 @@ inline void RockGroup::NewROCKs()
                              ROCKs[i].ObjectRotator().PixHeight());
      #endif
      #ifndef X11_BACKEND
-     playingField->DeferDrawTransformed(
-         (float)(ROCKs[i].CurrentBox().NorthWestCorner().x+.5)
-                +ROCKs[i].ObjectRotator().PixWidth()*.5f,
-         (float)(ROCKs[i].CurrentBox().NorthWestCorner().y+.5)
-                +ROCKs[i].ObjectRotator().PixHeight()*.5f,
-         (float)ROCKs[i].ObjectRotator().Angle(),
-         ROCKs[i].glContent,rockGroup->opaqueRocks ? ROCKs[i].glMask : 0,
-         -ROCKs[i].glW*.5f,-ROCKs[i].glH*.5f,
-         (float)ROCKs[i].glW,(float)ROCKs[i].glH);
+     {const float centerX=(float)(ROCKs[i].CurrentBox().NorthWestCorner().x+.5)
+                          +ROCKs[i].ObjectRotator().PixWidth()*.5f,
+                 centerY=(float)(ROCKs[i].CurrentBox().NorthWestCorner().y+.5)
+                          +ROCKs[i].ObjectRotator().PixHeight()*.5f;
+      // Task-36 outline leg: the spawn-placement blit carries the wireframe.
+      playingField->DeferDrawOutline(
+          centerX,centerY,
+          0.0f,
+          ROCKs[i].ObjectRotator().GetVecsAtTime(0),
+          ROCKs[i].ObjectRotator().GetNumVecs(),
+          glRockOutlineR,glRockOutlineG,glRockOutlineB);
+      playingField->DeferDrawTransformed(
+          centerX,centerY,
+          (float)ROCKs[i].ObjectRotator().Angle(),
+          ROCKs[i].glContent,rockGroup->opaqueRocks ? ROCKs[i].glMask : 0,
+          -ROCKs[i].glW*.5f,-ROCKs[i].glH*.5f,
+          (float)ROCKs[i].glW,(float)ROCKs[i].glH);
+     }
      #endif
     }
   }

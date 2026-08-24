@@ -84,6 +84,21 @@ struct Config {
     bool keepWork = false;
     bool quiet = false;
 };
+
+// Task-36 tiered-regime anchor: optional per-leg crop rects applied before
+// the diff. The GL window geometry is font-metric-derived and differs from
+// the X11 baseline (stb substitutions), so pixel-addressable comparison of
+// the bitmap-content domain (the 640x512 play area) needs each leg's own
+// origin. Format "X,Y,W,H"; empty => uncropped (legacy behavior).
+struct CropRect {
+    int x = 0, y = 0, w = 0, h = 0;
+    bool valid = false;
+};
+static CropRect g_mineCrop, g_refCrop;
+static bool parseCropRect(const std::string& s, CropRect& r) {
+    return sscanf(s.c_str(), "%d,%d,%d,%d", &r.x, &r.y, &r.w, &r.h) == 4 &&
+           r.w > 0 && r.h > 0 && (r.valid = true);
+}
 static Config cfg;
 
 static const char* GAME_WM_NAME       = "Asteroids";               // playingField.H:559
@@ -395,6 +410,15 @@ static bool diffAgainstRef(const std::string& mine, const std::string& ref,
     return end && end != buf;
 }
 
+static bool cropPng(const std::string& src, const CropRect& r,
+                    const std::string& dst) {
+    const std::string cmd =
+        "convert '" + src + "' -crop " + std::to_string(r.w) + "x" +
+        std::to_string(r.h) + "+" + std::to_string(r.x) + "+" +
+        std::to_string(r.y) + " +repage png:'" + dst + "'";
+    return ::system(cmd.c_str()) == 0 && fileExists(dst);
+}
+
 // ------------------------------------------------------------------ manifest
 static std::vector<Checkpoint> g_checkpoints;
 
@@ -428,6 +452,12 @@ static void writeManifest(const std::string& path, const std::string& workDir,
                 c.name.c_str(), c.boundary, c.tMs, c.w, c.h, c.path.c_str());
     if (haveDiff) {
         fprintf(f, "diff_reference: %s\n", cfg.refDir.c_str());
+        if (g_mineCrop.valid)
+            fprintf(f, "mine_crop: %d,%d,%d,%d\n", g_mineCrop.x, g_mineCrop.y,
+                    g_mineCrop.w, g_mineCrop.h);
+        if (g_refCrop.valid)
+            fprintf(f, "ref_crop: %d,%d,%d,%d\n", g_refCrop.x, g_refCrop.y,
+                    g_refCrop.w, g_refCrop.h);
         for (const auto& c : g_checkpoints)
             fprintf(f, "  diff %s AE=%.6f mask=%s %s\n", c.name.c_str(), c.ae,
                     c.maskPath.c_str(),
@@ -872,6 +902,8 @@ int main(int argc, char** argv) {
         else if (a == "--geometry") cfg.geometry = need("WxHxD");
         else if (a == "--game") cfg.gamePath = need("path");
         else if (a == "--hiscore") cfg.hiscoreFixture = need("fixture");
+        else if (a == "--mine-rect") { if (!parseCropRect(need("X,Y,W,H"), g_mineCrop)) die("bad --mine-rect"); }
+        else if (a == "--ref-rect") { if (!parseCropRect(need("X,Y,W,H"), g_refCrop)) die("bad --ref-rect"); }
         else if (a == "--settle") cfg.settleSecs = atoi(need("secs").c_str());
         else if (a == "--poll-ms") cfg.pollMs = atoi(need("ms").c_str());
         else if (a == "--stability") cfg.stability = atoi(need("N").c_str());
@@ -960,9 +992,27 @@ int main(int argc, char** argv) {
                     diffPass = false;
                     continue;
                 }
+                // Task-36: per-leg crop anchoring (see CropRect note).
+                std::string mineCmp = c.path, refCmp = ref;
+                if (g_mineCrop.valid) {
+                    mineCmp = cfg.outDir + "/.crop_mine_" + c.name + ".png";
+                    if (!cropPng(c.path, g_mineCrop, mineCmp)) {
+                        ERR("mine crop failed for " + c.name);
+                        diffPass = false;
+                        continue;
+                    }
+                }
+                if (g_refCrop.valid) {
+                    refCmp = cfg.outDir + "/.crop_ref_" + c.name + ".png";
+                    if (!cropPng(ref, g_refCrop, refCmp)) {
+                        ERR("ref crop failed for " + c.name);
+                        diffPass = false;
+                        continue;
+                    }
+                }
                 if (fileExists(mask)) c.maskPath = mask;
                 double ae = -1;
-                if (!diffAgainstRef(c.path, ref, c.maskPath, ae)) {
+                if (!diffAgainstRef(mineCmp, refCmp, c.maskPath, ae)) {
                     ERR("compare failed for " + c.name);
                     diffPass = false;
                     continue;

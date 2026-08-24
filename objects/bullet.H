@@ -116,21 +116,32 @@ inline BulletExplosion::BulletExplosion(Bullet* const b): bullet(b)
  }
 
 inline void BulletExplosion::DisplayFrame()
- {
-  #ifdef X11_BACKEND
-  int destX=CurrentBox().NorthWestCorner().x+.5,
-      destY=CurrentBox().NorthWestCorner().y+.5;
-  // Per-frame clip-origin + masked copy absorbed into the engine's masked
-  // draw (D6); MaskId maps frame number to its original per-frame mask.
-  // Deferred (task 24): the record replays onto the freshly cleared canvas
-  // in original emission order.
-  playingField->DeferDrawMasked(frameList.GetFrame(),
-                                explosionGraphic->MaskId(frameList.GetFrameNumber()),
-                                destX,destY,
-                                frameList.PixWidth(),
-                                frameList.PixHeight());
-  #endif
- }
+  {
+   #ifdef X11_BACKEND
+   int destX=CurrentBox().NorthWestCorner().x+.5,
+       destY=CurrentBox().NorthWestCorner().y+.5;
+   // Per-frame clip-origin + masked copy absorbed into the engine's masked
+   // draw (D6); MaskId maps frame number to its original per-frame mask.
+   // Deferred (task 24): the record replays onto the freshly cleared canvas
+   // in original emission order.
+   playingField->DeferDrawMasked(frameList.GetFrame(),
+                                 explosionGraphic->MaskId(frameList.GetFrameNumber()),
+                                 destX,destY,
+                                 frameList.PixWidth(),
+                                 frameList.PixHeight());
+   #endif
+   #ifndef X11_BACKEND
+   // Task-36: CPU-composited frame textures; dims from the graphic (the
+   // frameList storage is never constructed guards-closed).
+   int destX=CurrentBox().NorthWestCorner().x+.5,
+       destY=CurrentBox().NorthWestCorner().y+.5;
+   playingField->DeferDrawMasked(explosionGraphic->FrameId(frameList.GetFrameNumber()),
+                                 explosionGraphic->MaskId(frameList.GetFrameNumber()),
+                                 destX,destY,
+                                 (float)explosionGraphic->FrameWidth(),
+                                 (float)explosionGraphic->FrameHeight());
+   #endif
+  }
 
 void BulletExplosion::MissScript(Intersector& intersector, const double createTime,
                    	                                   const double existTime)

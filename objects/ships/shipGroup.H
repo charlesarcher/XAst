@@ -75,6 +75,14 @@ class Ship: public MovableObject
     float glColorR=0.0f,
           glColorG=0.0f,
           glColorB=0.0f;
+    // Task-36 D2 composite body: the decor bitmap uploaded once at ctor
+    // (RGBA8 content tinted with the guarded color components + R8 coverage
+    // mask), drawn under the quantized rotator angle about the sprite
+    // center — the rock DeferDrawTransformed pattern.
+    TextureId glDecorContent=0,
+              glDecorMask=0;
+    int glDecorW=0,
+        glDecorH=0;
 #endif
     static double maxVelocity,
                   acceleration,
@@ -149,13 +157,14 @@ class Thrust: public MovableObject
     Boolean thrusting;
 
 #ifndef X11_BACKEND
-    // Task-35 m13 degenerate path: pure-bitmap flames ride ONE pre-computed
-    // texture with NO setTransform (rotation offers no visual change); the
-    // masked variant additionally carries its R8 coverage mask.
-    TextureId glTex=0,
-              glMask=0;
-    int glW=0,
-        glH=0;
+    // Task-35 m13 degenerate path, task-36 revision: the X11 leg blits
+    // PRE-ROTATED pixmaps (RotPixmapData rotates through numPix discrete
+    // angles), so the GL twin bakes one texture per quantized angle with the
+    // same scatter math (glSprites.H) and blits the matching slot unrotated.
+    // The masked variant additionally carries per-angle R8 coverage masks.
+    std::vector<TextureId> glTexArr,
+                           glMaskArr;
+    int glSide=0;
 #endif
   };
 
@@ -269,6 +278,27 @@ class ShipGroup
 
 extern ShipGroup* shipGroup;
 
+#ifndef X11_BACKEND
+// Task-36: single-layer decor upload (content tinted + R8 coverage mask).
+// The multi-color NCC1701D stack composites inline in its ctor.
+inline void glUploadShipDecor(RenderingEngine& engine,
+                              const unsigned char* bits,const int w,const int h,
+                              const unsigned short r,const unsigned short g,
+                              const unsigned short b,
+                              TextureId& content,TextureId& mask,
+                              int& outW,int& outH)
+ {CompositeLayerSpec layer={bits,w,h,r,g,b};
+  CompositeFrameRGBA8 frame;
+  compositeFrameStack(frame,w,h,&layer,1);
+  content=engine.createTextureFromBitmap(frame.rgba8.data(),w,h,4);
+  std::vector<uint8_t> maskBytes;
+  compositeMaskExpandR8(bits,w,h,maskBytes);
+  mask=engine.createTextureFromBitmap(maskBytes.data(),w,h,1);
+  outW=w;
+  outH=h;
+ }
+#endif
+
 #ifdef X11_BACKEND
 // Engine-first DI ctor (task 13, consumed from task 20). Members still pull
 // stage->display themselves until task 22 migrates them. Memberwise
@@ -353,6 +383,23 @@ void Ship::MissScript(Intersector& intersector,
        ObjectRotator().GetVecsAtTime(0),
        ObjectRotator().GetNumVecs(),
        glColorR,glColorG,glColorB);
+   // Task-36 composite body: the decor quad rides the SAME quantized angle
+   // the X11 pixmap rasterizer used (index math mirrored from GetVecs), so
+   // it stays registered with the outline; rotation happens about the sprite
+   // center, matching PixmapDecorInit's point-rotation placement.
+   if (glDecorContent)
+    {const double theta=ObjectRotator().Angle();
+     const int numPix=int(6.28318530717958*ObjectRotator().Radius()+.5);
+     const double incAngle=6.28318530717958/numPix;
+     const int idx=int((fmod(theta,6.28318530717958)+6.28318530717958)
+                       /incAngle+.5)%numPix;
+     playingField->DeferDrawTransformed(
+         destX+ObjectRotator().PixWidth()*.5f,
+         destY+ObjectRotator().PixHeight()*.5f,
+         (float)(idx*incAngle),
+         glDecorContent,glDecorMask,
+         -glDecorW*.5f,-glDecorH*.5f,(float)glDecorW,(float)glDecorH);
+    }
   }
   #endif
  }
@@ -438,7 +485,16 @@ inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
   glColorR=44461.0f/65535.0f;
   glColorG=55512.0f/65535.0f;
   glColorB=59110.0f/65535.0f;
- }
+  glUploadShipDecor(shipGroup->engine,
+                    #ifdef _CORP_LOGO_
+                    starDestroyerDecor_bits,starDestroyerDecor_width,
+                    starDestroyerDecor_height,
+                    #else
+                    fortytwo_bits,fortytwo_width,fortytwo_height,
+                    #endif
+                    44461,55512,59110,
+                    glDecorContent,glDecorMask,glDecorW,glDecorH);
+  }
 #endif
 
 Rotator& StarDestroyer::ObjectRotator()
@@ -541,6 +597,31 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
   glColorR=61680.0f/65535.0f;
   glColorG=61680.0f/65535.0f;
   glColorB=61680.0f/65535.0f;
+  // Task-36 composite body: the guarded leg stamps a two-color CompositePixmap
+  // (bottom gray + top red); the CPU stack reproduces it layer-for-layer.
+  {CompositeLayerSpec layers[2]={{NCC1701DDecorBottom_bits,
+                                  NCC1701DDecorBottom_width,
+                                  NCC1701DDecorBottom_height,61680,61680,61680},
+                                 {NCC1701DDecorTop_bits,
+                                  NCC1701DDecorTop_width,
+                                  NCC1701DDecorTop_height,49344,0,0}};
+   CompositeFrameRGBA8 frame;
+   compositeFrameStack(frame,NCC1701DDecorBottom_width,
+                       NCC1701DDecorBottom_height,layers,2);
+   glDecorContent=shipGroup->engine.createTextureFromBitmap(
+       frame.rgba8.data(),frame.width,frame.height,4);
+   // Mask = composite coverage (alpha), i.e. the union of both layers —
+   // the guarded leg scatters every non-background composite pixel.
+   {std::vector<uint8_t> maskBytes(frame.rgba8.size()/4);
+    for (size_t p=0;p<maskBytes.size();++p)
+      maskBytes[p]=frame.rgba8[p*4+3];
+    glDecorMask=shipGroup->engine.createTextureFromBitmap(maskBytes.data(),
+                                                          frame.width,
+                                                          frame.height,1);
+   }
+   glDecorW=frame.width;
+   glDecorH=frame.height;
+  }
   }
 #endif
 
@@ -631,6 +712,10 @@ inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
   glColorR=61680.0f/65535.0f;
   glColorG=61680.0f/65535.0f;
   glColorB=61680.0f/65535.0f;
+  glUploadShipDecor(shipGroup->engine,
+                    NCC1701ADecor_bits,NCC1701ADecor_width,NCC1701ADecor_height,
+                    61680,61680,61680,
+                    glDecorContent,glDecorMask,glDecorW,glDecorH);
   }
 #endif
 
@@ -659,17 +744,22 @@ void Thrust::MissScript(Intersector& intersector, const double createTime,
                           ObjectRotator().PixHeight());
   #endif
   #ifndef X11_BACKEND
-  // m13 degenerate static-texture path: the flame is a pure-bitmap sprite
-  // pre-computed at init; it draws under the IDENTITY transform — no
-  // setTransform call, no angle interpolation (asserted by the Q4 trace).
-  playingField->DeferDraw(glTex,
-                          CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                     ObjectLiner().Velocity())
-                                      .NorthWestCorner().x+.5,
-                          CurrentBox().NorthWestCorner().y+.5,
-                          (float)glW,(float)glH);
+  // m13 static-texture path (task-36 revision): blit the pre-rotated frame
+  // for the rotator's quantized angle — identity transform, no setTransform.
+  {const double theta=ObjectRotator().Angle();
+   const int numPix=(int)glTexArr.size();
+   const double incAngle=6.28318530717958/numPix;
+   const int idx=int((fmod(theta,6.28318530717958)+6.28318530717958)
+                     /incAngle+.5)%numPix;
+   playingField->DeferDraw(glTexArr[idx],
+                           CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                      ObjectLiner().Velocity())
+                                       .NorthWestCorner().x+.5,
+                           CurrentBox().NorthWestCorner().y+.5,
+                           (float)glSide,(float)glSide);
+  }
   #endif
- }
+  }
 
 #ifdef X11_BACKEND
 inline XColor StarDestroyerThrust::edgeColor={0,
@@ -727,10 +817,16 @@ inline StarDestroyerThrust::StarDestroyerThrust()
   CompositeFrameRGBA8 frame;
   compositeFrameStack(frame,starDestroyerThrustEdge_width,
                       starDestroyerThrustEdge_height,layers,3);
-  glTex=shipGroup->engine.createTextureFromBitmap(frame.rgba8.data(),
-                                                  frame.width,frame.height,4);
-  glW=frame.width;
-  glH=frame.height;
+  // Task-36: bake the per-angle pre-rotated frames (X11 blits RotPixmapData
+  // pixmaps, not the raw bitmap).
+  {GlRotatedFrames rot=glBakeRotatedSprite(frame.rgba8.data(),frame.width,
+                                           frame.height,false);
+   glTexArr.resize(rot.numPix);
+   for(int k=0;k<rot.numPix;++k)
+     glTexArr[k]=shipGroup->engine.createTextureFromBitmap(rot.rgba[k].data(),
+                                                           rot.side,rot.side,4);
+   glSide=rot.side;
+  }
   graphic=new RotPixmapData(stage->display,stage->window,glEdgeColor,
                             starDestroyerThrustEdge_bits,
                             starDestroyerThrustEdge_width,
@@ -782,16 +878,21 @@ inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
   // m13 pre-computed texture: single red layer, no mask (RotPixmapData).
+  // Task-36: baked per-angle like the guarded rotation pipeline.
   CompositeLayerSpec layer={NCC1701DThrustDecor_bits,
                             NCC1701DThrustDecor_width,NCC1701DThrustDecor_height,
                             65535,0,0};
   CompositeFrameRGBA8 frame;
   compositeFrameStack(frame,NCC1701DThrustDecor_width,
                       NCC1701DThrustDecor_height,&layer,1);
-  glTex=shipGroup->engine.createTextureFromBitmap(frame.rgba8.data(),
-                                                  frame.width,frame.height,4);
-  glW=frame.width;
-  glH=frame.height;
+  {GlRotatedFrames rot=glBakeRotatedSprite(frame.rgba8.data(),frame.width,
+                                           frame.height,false);
+   glTexArr.resize(rot.numPix);
+   for(int k=0;k<rot.numPix;++k)
+     glTexArr[k]=shipGroup->engine.createTextureFromBitmap(rot.rgba[k].data(),
+                                                           rot.side,rot.side,4);
+   glSide=rot.side;
+  }
   }
 #endif
 
@@ -829,22 +930,25 @@ inline MovieEnterpriseThrust::MovieEnterpriseThrust():
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
   // m13 pre-computed texture + R8 coverage mask (MaskedRotPixmapData twin).
+  // Task-36: baked per-angle (content + mask) like the guarded pipeline.
   CompositeLayerSpec layer={NCC1701AThrustDecor_bits,
                             NCC1701AThrustDecor_width,NCC1701AThrustDecor_height,
                             65535,0,0};
   CompositeFrameRGBA8 frame;
   compositeFrameStack(frame,NCC1701AThrustDecor_width,
                       NCC1701AThrustDecor_height,&layer,1);
-  glTex=shipGroup->engine.createTextureFromBitmap(frame.rgba8.data(),
-                                                  frame.width,frame.height,4);
-  std::vector<uint8_t> maskBytes;
-  compositeMaskExpandR8(NCC1701AThrustDecor_bits,
-                        NCC1701AThrustDecor_width,NCC1701AThrustDecor_height,
-                        maskBytes);
-  glMask=shipGroup->engine.createTextureFromBitmap(maskBytes.data(),
-                                                   frame.width,frame.height,1);
-  glW=frame.width;
-  glH=frame.height;
+  {GlRotatedFrames rot=glBakeRotatedSprite(frame.rgba8.data(),frame.width,
+                                           frame.height,true);
+   glTexArr.resize(rot.numPix);
+   glMaskArr.resize(rot.numPix);
+   for(int k=0;k<rot.numPix;++k)
+    {glTexArr[k]=shipGroup->engine.createTextureFromBitmap(rot.rgba[k].data(),
+                                                           rot.side,rot.side,4);
+     glMaskArr[k]=shipGroup->engine.createTextureFromBitmap(rot.mask[k].data(),
+                                                            rot.side,rot.side,1);
+    }
+   glSide=rot.side;
+  }
   }
 #endif
 
@@ -873,15 +977,21 @@ void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double cr
   #ifndef X11_BACKEND
   int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
                                        ObjectLiner().Velocity())
-                        .NorthWestCorner().x+.5,
+                       .NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
-  // m13 degenerate static-texture path, masked variant: identity transform,
-  // no setTransform call.
-  playingField->DeferDrawMasked(glTex,glMask,
-                                destX,destY,
-                                (float)glW,(float)glH);
+  // m13 static-texture path, masked variant (task-36 revision): per-angle
+  // pre-rotated content + R8 mask, identity transform.
+  {const double theta=ObjectRotator().Angle();
+   const int numPix=(int)glTexArr.size();
+   const double incAngle=6.28318530717958/numPix;
+   const int idx=int((fmod(theta,6.28318530717958)+6.28318530717958)
+                     /incAngle+.5)%numPix;
+   playingField->DeferDrawMasked(glTexArr[idx],glMaskArr[idx],
+                                 destX,destY,
+                                 (float)glSide,(float)glSide);
+  }
   #endif
- }
+  }
 
 inline double Hyper::percentDestructRate=1.25;
 
@@ -928,17 +1038,38 @@ void Hyper::MissScript(Intersector& intersector,
                              shipGroup->ship->ObjectRotator().PixHeight());
      #endif
      #ifndef X11_BACKEND
-     playingField->DeferDrawOutline(
-         (float)(shipGroup->ship->CurrentBox().NorthWestCorner().x+.5)
-                +shipGroup->ship->ObjectRotator().PixWidth()*.5f,
-         (float)(shipGroup->ship->CurrentBox().NorthWestCorner().y+.5)
-                +shipGroup->ship->ObjectRotator().PixHeight()*.5f,
-         0.0f,
-         shipGroup->ship->ObjectRotator().GetVecsAtTime(0),
-         shipGroup->ship->ObjectRotator().GetNumVecs(),
-         shipGroup->ship->glColorR,
-         shipGroup->ship->glColorG,
-         shipGroup->ship->glColorB);
+     {const int destX=shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
+                destY=shipGroup->ship->CurrentBox().NorthWestCorner().y+.5;
+      playingField->DeferDrawOutline(
+          (float)destX+shipGroup->ship->ObjectRotator().PixWidth()*.5f,
+          (float)destY+shipGroup->ship->ObjectRotator().PixHeight()*.5f,
+          0.0f,
+          shipGroup->ship->ObjectRotator().GetVecsAtTime(0),
+          shipGroup->ship->ObjectRotator().GetNumVecs(),
+          shipGroup->ship->glColorR,
+          shipGroup->ship->glColorG,
+          shipGroup->ship->glColorB);
+      // Task-36 composite body: same quantized-angle decor leg as
+      // Ship::MissScript (the X11 blit carries outline + decor together).
+      if (shipGroup->ship->glDecorContent)
+       {const double theta=shipGroup->ship->ObjectRotator().Angle();
+        const int numPix=int(6.28318530717958
+                             *shipGroup->ship->ObjectRotator().Radius()+.5);
+        const double incAngle=6.28318530717958/numPix;
+        const int idx=int((fmod(theta,6.28318530717958)+6.28318530717958)
+                          /incAngle+.5)%numPix;
+        playingField->DeferDrawTransformed(
+            (float)destX+shipGroup->ship->ObjectRotator().PixWidth()*.5f,
+            (float)destY+shipGroup->ship->ObjectRotator().PixHeight()*.5f,
+            (float)(idx*incAngle),
+            shipGroup->ship->glDecorContent,
+            shipGroup->ship->glDecorMask,
+            -shipGroup->ship->glDecorW*.5f,
+            -shipGroup->ship->glDecorH*.5f,
+            (float)shipGroup->ship->glDecorW,
+            (float)shipGroup->ship->glDecorH);
+       }
+     }
      #endif
     shipGroup->thrust->thrusting=Thrust::off;
     shipGroup->hyper.hyperspacing=Hyper::off;
