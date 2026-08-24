@@ -37,7 +37,16 @@ class Bullet: public MovableObject
     Rotator* rotator;
     Boolean inactive;
     BulletExplosion* explosion;
- };
+
+#ifndef X11_BACKEND
+    // Task-35 m13 static-texture path: bullets share their owning group's
+    // pre-baked NonRotVectorData sprite; the group-less base-class draw leg
+    // fires only when a derived ctor wired these (EnemyBullet does).
+    TextureId glTex=0;
+    int glW=0,
+        glH=0;
+#endif
+  };
 
 class BulletExplosion: public Explosion
  {public:
@@ -89,6 +98,15 @@ void Bullet::MissScript(Intersector& intersector, const double createTime,
                             CurrentBox().NorthWestCorner().y+.5,
                             rotator->PixWidth(),
                             rotator->PixHeight());
+    #endif
+    #ifndef X11_BACKEND
+    if (glTex)
+      playingField->DeferDraw(glTex,
+                              CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                         ObjectLiner().Velocity())
+                                          .NorthWestCorner().x+.5,
+                              CurrentBox().NorthWestCorner().y+.5,
+                              (float)glW,(float)glH);
     #endif
    }
  }

@@ -16,6 +16,10 @@
 #include"enemyGroup.H"
 #include"../../gamePlay/stage.H"
 #include"../../bitmaps/enemyBulletDecor.xbm"
+#ifndef X11_BACKEND
+#include<vector>
+#include"../glSprites.H"
+#endif
 
 #ifndef _ENEMYBULLETGROUP_H
 #define _ENEMYBULLETGROUP_H
@@ -63,6 +67,15 @@ class EnemyBulletGroup
 
     static XColor color;
 
+#ifndef X11_BACKEND
+    // Task-35 m13 static-texture path: one pre-baked sprite shared by every
+    // enemy bullet, uploaded at group init (engine reference is bound before
+    // the member ctors run).
+    TextureId glBulletTex=0;
+    int glBulletW=0,
+        glBulletH=0;
+#endif
+
   private:
     static const Vector2d vectors[4];
 
@@ -109,6 +122,11 @@ inline int EnemyBullet::score=1,
 inline EnemyBullet::EnemyBullet(BulletExplosion* const explosion): Bullet(&enemyBulletGroup->rotator,
                                                                           numFrames,explosion)
  {
+  #ifndef X11_BACKEND
+  glTex=enemyBulletGroup->glBulletTex;
+  glW=enemyBulletGroup->glBulletW;
+  glH=enemyBulletGroup->glBulletH;
+  #endif
  }
 
 void EnemyBullet::HitScript(Intersector& intersector, const double createTime,
@@ -229,6 +247,18 @@ inline EnemyBulletGroup::EnemyBulletGroup(RenderingEngine& eng): engine(eng),
                                              reloadTimer(2),
                                              clipsFired(0)
  {
+  #ifndef X11_BACKEND
+  const int side=graphic.GetPixWidth();
+  const std::vector<uint8_t> rgba=
+      glBakeStaticSprite(side,graphic.GetRadius(),
+                         graphic.GetVecs(0),graphic.GetNumVecs(),
+                         color.red,color.green,color.blue,
+                         enemyBulletDecor_bits,
+                         enemyBulletDecor_width,enemyBulletDecor_height);
+  glBulletTex=engine.createTextureFromBitmap(rgba.data(),side,side,4);
+  glBulletW=side;
+  glBulletH=side;
+  #endif
  }
 
 inline void EnemyBulletGroup::Fire(Intersector& intersector,

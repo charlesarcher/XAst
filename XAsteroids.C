@@ -32,6 +32,32 @@ EnemyGroup* enemyGroup = nullptr;
 EnemyBulletGroup* enemyBulletGroup = nullptr;
 PlayingField* playingField = nullptr;
 
+#ifdef GL_BACKEND
+// Task-35 input bridge: glBackend's typed-event seam (D16) is not wired yet,
+// so the harness's XTest synthetic keys are captured here (GLFW receives
+// them through X11) and translated into the playingField.H queue that the
+// GL game loop drains. US-layout mapping, press/release only — GLFW repeat
+// events are dropped exactly like the X11 boundary drops repeats.
+static void glKeyTrampoline(GLFWwindow*,int key,int,int action,int)
+ {if (action!=GLFW_PRESS&&action!=GLFW_RELEASE)
+    return;
+  char character=0;
+  switch(key)
+   {case GLFW_KEY_S: character='s'; break;
+    case GLFW_KEY_Q: character='q'; break;
+    case GLFW_KEY_H: character='h'; break;
+    case GLFW_KEY_E: character='e'; break;
+    case GLFW_KEY_R: character='r'; break;
+    case GLFW_KEY_O: character='o'; break;
+    case GLFW_KEY_P: character='p'; break;
+    case GLFW_KEY_N: character='n'; break;
+    case GLFW_KEY_SPACE: character=' '; break;
+   }
+  if (character)
+    glEnqueueKeyEvent(action==GLFW_PRESS,character);
+ }
+#endif
+
 int main (int argc, char *argv[])
  {
   #ifdef X11_BACKEND
@@ -96,10 +122,11 @@ int main (int argc, char *argv[])
   return 0;
   #endif
   #ifdef GL_BACKEND
-  // Task-31 stub loop (M5-M1 relocated clause): engine init + a paced
-  // beginFrame/clear/endFrame loop under Xvfb. Non-interactive rendering —
-  // primitives/text/textures/rotation land at tasks 32-35; the full scripted
-  // session identity assertion is Q10 at task 36.
+  // Task 35: engine init as at task 31. With XAST_GL_SMOKE set the old
+  // paced smoke loop below still runs (task-32/34 acceptance scenes);
+  // otherwise the REAL game runs — all 11 globals constructed exactly like
+  // the X11 branch (same order; ctor arguments identical modulo the guarded
+  // X11-only ones) and playingField->PlayTheGame drives the full loop.
   GLBackend engine;
   engine.setCanonicalLayout(PlayingField::playArea.Width(),
                             PlayingField::playArea.Height(),
@@ -108,12 +135,13 @@ int main (int argc, char *argv[])
    {fprintf(stderr,"XAsteroids: initialization failed.\n");
     return 1;
    }
+  const char* smoke=getenv("XAST_GL_SMOKE");  // task-32 acceptance scenes
+  if (smoke&&smoke[0])
    {const long uSecondsPerFrame=62500;          // D4 default (16 fps)
     timeval start,now;
     gettimeofday(&start,nullptr);
     const char* frameLog=getenv("XAST_FRAME_LOG");
-    const char* smoke=getenv("XAST_GL_SMOKE");  // task-32 acceptance scenes
-    const bool smokeOn=smoke&&smoke[0];
+    const bool smokeOn=true;
     for (int frame=0;frame<160;++frame)
      {engine.beginFrame();
       engine.clear();                       // D8 flow: clear every frame
@@ -211,7 +239,59 @@ int main (int argc, char *argv[])
       if (elapsed<(frame+1)*uSecondsPerFrame)
         usleep((useconds_t)((frame+1)*uSecondsPerFrame-elapsed));
      }
+    engine.shutdown();
+    return 0;
    }
+  // ---- the real game on GL (task 35) ----
+  glfwSetKeyCallback(engine.window,glKeyTrampoline);
+  stage = new Stage(engine);
+  stage->display=nullptr;                    // deterministic shim values: the
+  stage->window=0;                           // GL rotator-data path ignores them
+  button = new Button(engine,
+                      "Options",
+                      stage->buttonX,stage->buttonY);
+  score = new Score;
+  explosionGraphic = new ExplosionGraphic(engine);
+  shipGroup = (ShipGroup*)::operator new(sizeof(ShipGroup));
+  ShipGroup::ship=&shipGroup->starDestroyer;
+  ShipGroup::thrust=&shipGroup->starDestroyerThrust;
+  new (shipGroup) ShipGroup(engine);
+  shipYard = new ShipYard(engine,
+                          shipGroup->ship->icon,
+                          shipGroup->ship->iconWidth,
+                          shipGroup->ship->iconHeight,
+                          StarDestroyer::glColor.red,
+                          StarDestroyer::glColor.green,
+                          StarDestroyer::glColor.blue,
+                          stage->shipYardWidth,stage->shipYardHeight);
+  shipBulletGroup = (ShipBulletGroup*)::operator new(sizeof(ShipBulletGroup));
+  new (shipBulletGroup) ShipBulletGroup(engine);
+  rockGroup = new RockGroup(engine);
+  enemyGroup = new EnemyGroup(engine);
+  enemyBulletGroup = (EnemyBulletGroup*)::operator new(sizeof(EnemyBulletGroup));
+  new (enemyBulletGroup) EnemyBulletGroup(engine);
+  playingField = new PlayingField(engine);
+
+  // Initial present: the ctor-drawn help screen reaches the window here
+  // (the guarded branch's stage present legs own this step on X11).
+  engine.beginFrame();
+  engine.endFrame();
+
+  cout<<"Your highest score this game was "<<playingField->PlayTheGame(argc>1 ? atoi(argv[1])
+                                                                                    : 1,
+                                                                           argc, argv)<<'.'<<endl;
+
+  delete playingField;
+  delete enemyBulletGroup;
+  delete enemyGroup;
+  delete rockGroup;
+  delete shipBulletGroup;
+  delete shipYard;
+  delete shipGroup;
+  delete explosionGraphic;
+  delete score;
+  delete button;
+  delete stage;
   engine.shutdown();
   return 0;
   #endif

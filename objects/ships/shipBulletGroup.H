@@ -16,6 +16,10 @@
 #include"../explosions/explosion.H"
 #include"../../gamePlay/stage.H"
 #include"../../bitmaps/shipBulletDecor.xbm"
+#ifndef X11_BACKEND
+#include<vector>
+#include"../glSprites.H"
+#endif
 
 #ifndef _SHIPBULLETGROUP_H
 #define _SHIPBULLETGROUP_H
@@ -65,6 +69,14 @@ class ShipBulletGroup
     static Boolean autoFire;
 
     static int numBullets;
+
+#ifndef X11_BACKEND
+    // Task-35 m13 static-texture path: one pre-baked sprite for the whole
+    // magazine (the shared NonRotVectorData graphic), uploaded at group init.
+    TextureId glBulletTex=0;
+    int glBulletW=0,
+        glBulletH=0;
+#endif
 
   private:
 
@@ -125,6 +137,11 @@ inline double ShipBullet::velocity=.57*PlayingField::maxLinearVelocity;
 inline ShipBullet::ShipBullet(BulletExplosion* const explosion): Bullet(&shipBulletGroup->rotator,
 									                                                      numFrames, explosion)
  {
+  #ifndef X11_BACKEND
+  glTex=shipBulletGroup->glBulletTex;
+  glW=shipBulletGroup->glBulletW;
+  glH=shipBulletGroup->glBulletH;
+  #endif
  }
 
 void ShipBullet::MissScript(Intersector& intersector, const double createTime,
@@ -145,6 +162,15 @@ void ShipBullet::MissScript(Intersector& intersector, const double createTime,
                             CurrentBox().NorthWestCorner().y+.5,
                             rotator->PixWidth(),
                             rotator->PixHeight());
+    #endif
+    #ifndef X11_BACKEND
+    if (glTex)
+      playingField->DeferDraw(glTex,
+                              CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                         ObjectLiner().Velocity())
+                                          .NorthWestCorner().x+.5,
+                              CurrentBox().NorthWestCorner().y+.5,
+                              (float)glW,(float)glH);
     #endif
    }
  }
@@ -186,6 +212,15 @@ inline void ShipBullet::PositionBullet(Intersector& intersector,
                           CurrentBox().NorthWestCorner().y+.5,
                           rotator->PixWidth(),
                           rotator->PixHeight());
+  #endif
+  #ifndef X11_BACKEND
+  if (glTex)
+    playingField->DeferDraw(glTex,
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                        .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            (float)glW,(float)glH);
   #endif
   frameTimer.Reset().TimerAlarm();
  }
@@ -245,6 +280,18 @@ inline ShipBulletGroup::ShipBulletGroup(RenderingEngine& eng): engine(eng), fire
                                            explosion16(&bullet16),
                                            reloadTimer(1)
  {
+  #ifndef X11_BACKEND
+  const int side=graphic.GetPixWidth();
+  const std::vector<uint8_t> rgba=
+      glBakeStaticSprite(side,graphic.GetRadius(),
+                         graphic.GetVecs(0),graphic.GetNumVecs(),
+                         color.red,color.green,color.blue,
+                         shipBulletDecor_bits,
+                         shipBulletDecor_width,shipBulletDecor_height);
+  glBulletTex=engine.createTextureFromBitmap(rgba.data(),side,side,4);
+  glBulletW=side;
+  glBulletH=side;
+  #endif
  }
 
 inline void ShipBulletGroup::Fire(Intersector& intersector,

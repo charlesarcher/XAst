@@ -35,6 +35,10 @@
 #include"../../bitmaps/NCC1701ADecor.xbm"
 #include"../../bitmaps/NCC1701AThrustDecor.xbm"
 #include"../../bitmaps/NCC1701AIcon.xbm"
+#ifndef X11_BACKEND
+#include<vector>
+#include"../glSprites.H"
+#endif
 
 #ifndef _SHIPGROUP_H
 #define _SHIPGROUP_H
@@ -48,6 +52,9 @@ class Ship: public MovableObject
     Ship(const unsigned char* const icon,
          const int iconWidth, const int iconHeight,
          XColor& iconColor);
+#else
+    Ship(const unsigned char* const icon,
+         const int iconWidth, const int iconHeight);
 #endif
     virtual ~Ship();
     virtual Rotator& ObjectRotator()=0;
@@ -62,34 +69,40 @@ class Ship: public MovableObject
               iconHeight;
 #ifdef X11_BACKEND
     XColor iconColor;
+#else
+    // Task-35 wireframe color (the guarded ctors pass their XColor static to
+    // the rotator data; GL keeps the components for the outline draw).
+    float glColorR=0.0f,
+          glColorG=0.0f,
+          glColorB=0.0f;
 #endif
     static double maxVelocity,
                   acceleration,
                   angularVelocity;
     Boolean dead;
- };
+  };
 
 class StarDestroyer: public Ship
  {public:
-#ifdef X11_BACKEND
     StarDestroyer();
-#endif
     virtual Rotator& ObjectRotator();
 
   private:
     static const Vector2d vectors[5];
 #ifdef X11_BACKEND
     static XColor color;
+#else
+  public:
+    // GL twin of the guarded color static (main() feeds it to ShipYard).
+    static XColor glColor;
 #endif
     RotVectorData graphic;
     Rotator rotator;
- };
+  };
 
 class NextGenerationEnterprise: public Ship
  {public:
-#ifdef X11_BACKEND
     NextGenerationEnterprise();
-#endif
     virtual ~NextGenerationEnterprise();
     virtual Rotator& ObjectRotator();
 
@@ -98,31 +111,33 @@ class NextGenerationEnterprise: public Ship
 #ifdef X11_BACKEND
     static XColor bottomColor,
                   topColor;
+#else
+    static XColor glColor;
 #endif
     static const double area;
     RotVectorData* graphic;
     Rotator* rotator;
- };
+  };
 
 class MovieEnterprise: public Ship
  {public:
-#ifdef X11_BACKEND
     MovieEnterprise();
-#endif
     virtual Rotator& ObjectRotator();
 
   private:
     static const Vector2d vectors[32];
 #ifdef X11_BACKEND
     static XColor color;
+#else
+    static XColor glColor;
 #endif
     static const double area;
     RotVectorData graphic;
     Rotator rotator;
- };
+  };
 
 class Thrust: public MovableObject
- {public:
+  {public:
     typedef int Boolean;
     enum {off, on};
 
@@ -132,57 +147,67 @@ class Thrust: public MovableObject
     virtual void MissScript(Intersector&, const double createTime,
                                           const double existTime);
     Boolean thrusting;
- };
+
+#ifndef X11_BACKEND
+    // Task-35 m13 degenerate path: pure-bitmap flames ride ONE pre-computed
+    // texture with NO setTransform (rotation offers no visual change); the
+    // masked variant additionally carries its R8 coverage mask.
+    TextureId glTex=0,
+              glMask=0;
+    int glW=0,
+        glH=0;
+#endif
+  };
 
 class StarDestroyerThrust: public Thrust
- {public:
-#ifdef X11_BACKEND
+  {public:
     StarDestroyerThrust();
-#endif
     virtual ~StarDestroyerThrust();
     virtual Rotator& ObjectRotator();
 
-  private:
+   private:
 #ifdef X11_BACKEND
     static XColor edgeColor,
                   middleColor,
                   centerColor;
+#else
+    static XColor glEdgeColor;
 #endif
     RotPixmapData* graphic;
     Rotator* rotator;
- };
+  };
 
 class NextGenerationEnterpriseThrust: public Thrust
- {public:
-#ifdef X11_BACKEND
+  {public:
     NextGenerationEnterpriseThrust();
-#endif
     virtual Rotator& ObjectRotator();
 
-  private:
+   private:
 #ifdef X11_BACKEND
     static XColor color;
+#else
+    static XColor glColor;
 #endif
     RotPixmapData graphic;
     Rotator rotator;
- };
+  };
 
 class MovieEnterpriseThrust: public Thrust
- {public:
-#ifdef X11_BACKEND
+  {public:
     MovieEnterpriseThrust();
-#endif
     virtual Rotator& ObjectRotator();
     virtual void MissScript(Intersector&, const double createTime,
                                           const double existTime);
 
-  private:
+   private:
 #ifdef X11_BACKEND
     static XColor color;
+#else
+    static XColor glColor;
 #endif
     MaskedRotPixmapData graphic;
     Rotator rotator;
- };
+  };
 
 
 class ShipGroup;
@@ -253,6 +278,10 @@ extern ShipGroup* shipGroup;
 inline ShipGroup::ShipGroup(RenderingEngine& eng): engine(eng)
  {
  }
+#else
+inline ShipGroup::ShipGroup(RenderingEngine& eng): engine(eng)
+ {
+ }
 #endif
 
 #include"../../gamePlay/playingField.H"
@@ -279,6 +308,14 @@ inline Ship::Ship(const unsigned char* const i,
                     &iconColor))
        iconColor.pixel=WhitePixel(stage->display,DefaultScreen(stage->display));
   }
+#else
+inline Ship::Ship(const unsigned char* const i,
+                  const int iWidth, const int iHeight): icon(i),
+                                                        iconWidth(iWidth),
+                                                        iconHeight(iHeight),
+                                                        dead(on)
+  {
+  }
 #endif
 
 Ship::~Ship()
@@ -298,6 +335,25 @@ void Ship::MissScript(Intersector& intersector,
                           CurrentBox().NorthWestCorner().y+.5,
                           ObjectRotator().PixWidth(),
                           ObjectRotator().PixHeight());
+  #endif
+  #ifndef X11_BACKEND
+  {const int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                              ObjectLiner().Velocity())
+                              .NorthWestCorner().x+.5,
+           destY=CurrentBox().NorthWestCorner().y+.5;
+   // D2 wireframe leg: GetVecsAtTime(0) already applies the rotator's
+   // discrete-angle quantization (the exact vecs the X11 rasterizer walks),
+   // so the MVP carries TRANSLATION ONLY — a continuous angle here would
+   // double-rotate. Documented fork; the continuous-angle MVP rotation is
+   // exercised by the rock composite path.
+   playingField->DeferDrawOutline(
+       destX+ObjectRotator().PixWidth()*.5f,
+       destY+ObjectRotator().PixHeight()*.5f,
+       0.0f,
+       ObjectRotator().GetVecsAtTime(0),
+       ObjectRotator().GetNumVecs(),
+       glColorR,glColorG,glColorB);
+  }
   #endif
  }
 
@@ -356,6 +412,32 @@ inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
                                                rotator(&graphic,angularVelocity,PlayingField::maxLinearVelocity)
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),maxVelocity,Vector2d());
+ }
+#else
+inline XColor StarDestroyer::glColor={0,
+                              44461,//173
+                              55512,//216
+                              59110,//230
+                              DoRed|DoGreen|DoBlue};
+
+inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
+                                            starDestroyerIcon_width,
+                                            starDestroyerIcon_height),
+                                       graphic(stage->display,stage->window,glColor,
+                                               vectors,sizeof(vectors)/sizeof(Vector2d),
+#ifdef _CORP_LOGO_
+                                               starDestroyerDecor_bits,
+                                               starDestroyerDecor_width,starDestroyerDecor_height),
+#else
+                                               fortytwo_bits,
+                                               fortytwo_width,fortytwo_height),
+#endif
+                                               rotator(&graphic,angularVelocity,PlayingField::maxLinearVelocity)
+ {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
+                   Vector2d(),maxVelocity,Vector2d());
+  glColorR=44461.0f/65535.0f;
+  glColorG=55512.0f/65535.0f;
+  glColorB=59110.0f/65535.0f;
  }
 #endif
 
@@ -436,7 +518,30 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
   rotator=new Rotator(graphic,angularVelocity,PlayingField::maxLinearVelocity);
   SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
                    Vector2d(),maxVelocity,Vector2d());
- }
+  }
+#else
+inline XColor NextGenerationEnterprise::glColor={0,
+                                          61680,//240
+                                          61680,//240
+                                          61680,//240
+                                          DoRed|DoGreen|DoBlue};
+
+inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_bits,
+                                                                  NCC1701DIcon_width,
+                                                                  NCC1701DIcon_height)
+ {// No CompositePixmap on GL (its engine branch aborts): the wireframe-only
+  // D2 path needs the outline data only, so the no-decor RotVectorData
+  // overload feeds the identical geometry.
+  graphic=new RotVectorData(stage->display,stage->window,glColor,
+                            vectors,sizeof(vectors)/sizeof(Vector2d),
+                            area);
+  rotator=new Rotator(graphic,angularVelocity,PlayingField::maxLinearVelocity);
+  SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
+                   Vector2d(),maxVelocity,Vector2d());
+  glColorR=61680.0f/65535.0f;
+  glColorG=61680.0f/65535.0f;
+  glColorB=61680.0f/65535.0f;
+  }
 #endif
 
 NextGenerationEnterprise::~NextGenerationEnterprise()
@@ -504,7 +609,29 @@ inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
                                            rotator(&graphic,angularVelocity,PlayingField::maxLinearVelocity)
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),maxVelocity,Vector2d());
- }
+  }
+#else
+inline XColor MovieEnterprise::glColor={0,
+                                 61680,//240
+                                 61680,//240
+                                 61680,//240
+                                 DoRed|DoGreen|DoBlue};
+
+inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
+                                                NCC1701AIcon_width,
+                                                NCC1701AIcon_height),
+                                           graphic(stage->display,stage->window,glColor,
+                                                   vectors,sizeof(vectors)/sizeof(Vector2d),
+                                                   area,
+                                                   NCC1701ADecor_bits,
+                                                   NCC1701ADecor_width,NCC1701ADecor_height),
+                                           rotator(&graphic,angularVelocity,PlayingField::maxLinearVelocity)
+ {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
+                   Vector2d(),maxVelocity,Vector2d());
+  glColorR=61680.0f/65535.0f;
+  glColorG=61680.0f/65535.0f;
+  glColorB=61680.0f/65535.0f;
+  }
 #endif
 
 Rotator& MovieEnterprise::ObjectRotator()
@@ -530,6 +657,17 @@ void Thrust::MissScript(Intersector& intersector, const double createTime,
                           CurrentBox().NorthWestCorner().y+.5,
                           ObjectRotator().PixWidth(),
                           ObjectRotator().PixHeight());
+  #endif
+  #ifndef X11_BACKEND
+  // m13 degenerate static-texture path: the flame is a pure-bitmap sprite
+  // pre-computed at init; it draws under the IDENTITY transform — no
+  // setTransform call, no angle interpolation (asserted by the Q4 trace).
+  playingField->DeferDraw(glTex,
+                          CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                     ObjectLiner().Velocity())
+                                      .NorthWestCorner().x+.5,
+                          CurrentBox().NorthWestCorner().y+.5,
+                          (float)glW,(float)glH);
   #endif
  }
 
@@ -566,7 +704,41 @@ inline StarDestroyerThrust::StarDestroyerThrust()
   rotator=new Rotator(graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity);
   SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
- }
+  }
+#else
+inline XColor StarDestroyerThrust::glEdgeColor={0,
+                                         0,
+                                         0,
+                                         65535,//255
+                                         DoRed|DoGreen|DoBlue};
+
+inline StarDestroyerThrust::StarDestroyerThrust()
+ {// CPU composite mirrors the guarded stack (edge/middle/center, later
+  // layers overwrite) into the m13 pre-computed texture. The rotator data
+  // rides the edge-bitmap ctor: all three layers are 17x40, so the base
+  // sideSize matches the guarded CompositePixmap variant exactly.
+  CompositeLayerSpec layers[3]={
+      {starDestroyerThrustEdge_bits,
+       starDestroyerThrustEdge_width,starDestroyerThrustEdge_height,0,0,65535},
+      {starDestroyerThrustMiddle_bits,
+       starDestroyerThrustMiddle_width,starDestroyerThrustMiddle_height,0,49087,65535},
+      {starDestroyerThrustCenter_bits,
+       starDestroyerThrustCenter_width,starDestroyerThrustCenter_height,61680,63736,65535}};
+  CompositeFrameRGBA8 frame;
+  compositeFrameStack(frame,starDestroyerThrustEdge_width,
+                      starDestroyerThrustEdge_height,layers,3);
+  glTex=shipGroup->engine.createTextureFromBitmap(frame.rgba8.data(),
+                                                  frame.width,frame.height,4);
+  glW=frame.width;
+  glH=frame.height;
+  graphic=new RotPixmapData(stage->display,stage->window,glEdgeColor,
+                            starDestroyerThrustEdge_bits,
+                            starDestroyerThrustEdge_width,
+                            starDestroyerThrustEdge_height);
+  rotator=new Rotator(graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity);
+  SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
+                   Vector2d(),Ship::maxVelocity,Vector2d());
+  }
 #endif
 
 inline StarDestroyerThrust::~StarDestroyerThrust()
@@ -593,7 +765,34 @@ inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic
                                                                                  PlayingField::maxLinearVelocity)
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
- }
+  }
+#else
+inline XColor NextGenerationEnterpriseThrust::glColor={0,
+                                                65535,//255
+                                                0,
+                                                0,
+                                                DoRed|DoGreen|DoBlue};
+
+inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic(stage->display,stage->window,glColor,
+                                                                                 NCC1701DThrustDecor_bits,
+                                                                                 NCC1701DThrustDecor_width,
+                                                                                 NCC1701DThrustDecor_height),
+                                                                         rotator(&graphic,Ship::angularVelocity,
+                                                                                 PlayingField::maxLinearVelocity)
+ {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
+                   Vector2d(),Ship::maxVelocity,Vector2d());
+  // m13 pre-computed texture: single red layer, no mask (RotPixmapData).
+  CompositeLayerSpec layer={NCC1701DThrustDecor_bits,
+                            NCC1701DThrustDecor_width,NCC1701DThrustDecor_height,
+                            65535,0,0};
+  CompositeFrameRGBA8 frame;
+  compositeFrameStack(frame,NCC1701DThrustDecor_width,
+                      NCC1701DThrustDecor_height,&layer,1);
+  glTex=shipGroup->engine.createTextureFromBitmap(frame.rgba8.data(),
+                                                  frame.width,frame.height,4);
+  glW=frame.width;
+  glH=frame.height;
+  }
 #endif
 
 Rotator& NextGenerationEnterpriseThrust::ObjectRotator()
@@ -614,7 +813,39 @@ inline MovieEnterpriseThrust::MovieEnterpriseThrust():
                        rotator(&graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity)
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
- }
+  }
+#else
+inline XColor MovieEnterpriseThrust::glColor={0,
+                                       65535,//255
+                                       0,
+                                       0,
+                                       DoRed|DoGreen|DoBlue};
+
+inline MovieEnterpriseThrust::MovieEnterpriseThrust():
+                       graphic(stage->display,stage->window,glColor,
+                               NCC1701AThrustDecor_bits,
+                               NCC1701AThrustDecor_width,NCC1701AThrustDecor_height),
+                       rotator(&graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity)
+ {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
+                   Vector2d(),Ship::maxVelocity,Vector2d());
+  // m13 pre-computed texture + R8 coverage mask (MaskedRotPixmapData twin).
+  CompositeLayerSpec layer={NCC1701AThrustDecor_bits,
+                            NCC1701AThrustDecor_width,NCC1701AThrustDecor_height,
+                            65535,0,0};
+  CompositeFrameRGBA8 frame;
+  compositeFrameStack(frame,NCC1701AThrustDecor_width,
+                      NCC1701AThrustDecor_height,&layer,1);
+  glTex=shipGroup->engine.createTextureFromBitmap(frame.rgba8.data(),
+                                                  frame.width,frame.height,4);
+  std::vector<uint8_t> maskBytes;
+  compositeMaskExpandR8(NCC1701AThrustDecor_bits,
+                        NCC1701AThrustDecor_width,NCC1701AThrustDecor_height,
+                        maskBytes);
+  glMask=shipGroup->engine.createTextureFromBitmap(maskBytes.data(),
+                                                   frame.width,frame.height,1);
+  glW=frame.width;
+  glH=frame.height;
+  }
 #endif
 
 Rotator& MovieEnterpriseThrust::ObjectRotator()
@@ -638,6 +869,17 @@ void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double cr
                                 destX,destY,
                                 rotator.PixWidth(),
                                 rotator.PixHeight());
+  #endif
+  #ifndef X11_BACKEND
+  int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                       ObjectLiner().Velocity())
+                        .NorthWestCorner().x+.5,
+      destY=CurrentBox().NorthWestCorner().y+.5;
+  // m13 degenerate static-texture path, masked variant: identity transform,
+  // no setTransform call.
+  playingField->DeferDrawMasked(glTex,glMask,
+                                destX,destY,
+                                (float)glW,(float)glH);
   #endif
  }
 
@@ -677,14 +919,27 @@ void Hyper::MissScript(Intersector& intersector,
     shipGroup->ship->ObjectLiner().Velocity()=Vector2d();
     shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
     shipGroup->ship->ObjectRotator().AngularVelocity()=0;
-    intersector.AddNonPermeable(shipGroup->ship,createTime+existTime);
-    #ifdef X11_BACKEND
-    playingField->DeferDraw((TextureId)shipGroup->ship->ObjectRotator().GetPixAtTime(0),
-                            shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
-                            shipGroup->ship->CurrentBox().NorthWestCorner().y+.5,
-                            shipGroup->ship->ObjectRotator().PixWidth(),
-                            shipGroup->ship->ObjectRotator().PixHeight());
-    #endif
+     intersector.AddNonPermeable(shipGroup->ship,createTime+existTime);
+     #ifdef X11_BACKEND
+     playingField->DeferDraw((TextureId)shipGroup->ship->ObjectRotator().GetPixAtTime(0),
+                             shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
+                             shipGroup->ship->CurrentBox().NorthWestCorner().y+.5,
+                             shipGroup->ship->ObjectRotator().PixWidth(),
+                             shipGroup->ship->ObjectRotator().PixHeight());
+     #endif
+     #ifndef X11_BACKEND
+     playingField->DeferDrawOutline(
+         (float)(shipGroup->ship->CurrentBox().NorthWestCorner().x+.5)
+                +shipGroup->ship->ObjectRotator().PixWidth()*.5f,
+         (float)(shipGroup->ship->CurrentBox().NorthWestCorner().y+.5)
+                +shipGroup->ship->ObjectRotator().PixHeight()*.5f,
+         0.0f,
+         shipGroup->ship->ObjectRotator().GetVecsAtTime(0),
+         shipGroup->ship->ObjectRotator().GetNumVecs(),
+         shipGroup->ship->glColorR,
+         shipGroup->ship->glColorG,
+         shipGroup->ship->glColorB);
+     #endif
     shipGroup->thrust->thrusting=Thrust::off;
     shipGroup->hyper.hyperspacing=Hyper::off;
    }

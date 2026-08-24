@@ -19,6 +19,10 @@
 #include"../../gamePlay/stage.H"
 #include"../../bitmaps/ENEMYDecor.xbm"
 #include"../../bitmaps/enemyDecor.xbm"
+#ifndef X11_BACKEND
+#include<vector>
+#include"../glSprites.H"
+#endif
 
 class EnemyGroup;
 class Enemy: public MovableObject
@@ -39,9 +43,20 @@ class Enemy: public MovableObject
     NonRotVectorData graphic;
     Rotator rotator;
 
+#ifndef X11_BACKEND
+    // Task-35 m13 static-texture path: enemies never rotate (angular
+    // velocity 0), so the outline+decor sprite bakes ONCE and draws with no
+    // setTransform; GLEnsureTexture is defined after EnemyGroup below (it
+    // reaches the engine through the group).
+    TextureId glTex=0;
+    int glW=0,
+        glH=0;
+    void GLEnsureTexture();
+#endif
+
   private:
     int score;
- };
+  };
 
 
 class ENEMY: public Enemy
@@ -134,6 +149,23 @@ class EnemyGroup
  };
 
 extern EnemyGroup* enemyGroup;
+
+#ifndef X11_BACKEND
+inline void Enemy::GLEnsureTexture()
+ {if (glTex)
+    return;
+  RenderingEngine& eng=enemyGroup->engine;
+  const int side=graphic.GetPixWidth();
+  const std::vector<uint8_t> rgba=
+      glBakeStaticSprite(side,graphic.GetRadius(),
+                         graphic.GetVecs(0),graphic.GetNumVecs(),
+                         graphic.DecorRed(),graphic.DecorGreen(),graphic.DecorBlue(),
+                         graphic.DecorBits(),graphic.DecorWidth(),graphic.DecorHeight());
+  glTex=eng.createTextureFromBitmap(rgba.data(),side,side,4);
+  glW=side;
+  glH=side;
+ }
+#endif
 
 #include"enemyBulletGroup.H"
 #include"../../gamePlay/playingField.H"
@@ -242,6 +274,15 @@ void ENEMY::MissScript(Intersector& intersector, const double createTime,
                             rotator.PixWidth(),
                             rotator.PixHeight());
     #endif
+    #ifndef X11_BACKEND
+    GLEnsureTexture();
+    playingField->DeferDraw(glTex,
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                        .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            (float)glW,(float)glH);
+    #endif
    }
  }
 
@@ -297,6 +338,15 @@ void enemy::MissScript(Intersector& intersector, const double createTime,
                             CurrentBox().NorthWestCorner().y+.5,
                             rotator.PixWidth(),
                             rotator.PixHeight());
+    #endif
+    #ifndef X11_BACKEND
+    GLEnsureTexture();
+    playingField->DeferDraw(glTex,
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                        .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            (float)glW,(float)glH);
     #endif
    }
  }

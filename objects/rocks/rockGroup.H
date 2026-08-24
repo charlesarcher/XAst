@@ -46,10 +46,21 @@ class Rock: public MovableObject
     virtual void AlterFramesPerSec(const double frameRatio);
     virtual void AlterScore(const double scoreFactor);
 
+#ifndef X11_BACKEND
+    // Task-35 D2 composite path: the decor texture ids this rock draws with,
+    // captured at SetRock from the owning group's init-time uploads (the
+    // rotator's X11 pixmap/mask accessors abort on GL — GetMaskAtTime is
+    // pixmap-based and NOT usable here).
+    TextureId glContent=0,
+              glMask=0;
+    int glW=0,
+        glH=0;
+#endif
+
   protected:
     Rotator rotator;
     int score;
- };
+  };
 
 class SpawningRock: public Rock
  {public:
@@ -141,6 +152,28 @@ class RockGroup
     static XColor RockColor;
 #endif
 
+#ifndef X11_BACKEND
+    // Task-35: the three decor bitmaps upload ONCE here (content RGBA8 in
+    // RockColor + R8 coverage mask) at group init; rocks capture their ids
+    // via GLDecorIds at SetRock.
+    TextureId glDecorContent[3]={0,0,0},
+              glDecorMask[3]={0,0,0};
+    int glDecorW[3]={0,0,0},
+        glDecorH[3]={0,0,0};
+    inline void GLDecorIds(const unsigned char* bits,
+                           TextureId& content,TextureId& mask,int& w,int& h)
+      {for (int i=0;i<3;++i)
+        if (bits==ROCKDecor_bits[i])
+          {content=glDecorContent[i];
+           mask=glDecorMask[i];
+           w=glDecorW[i];
+           h=glDecorH[i];
+           return;
+          }
+        content=0;mask=0;w=0;h=0;
+      }
+#endif
+
   private:
     void SetVectorData(const Vector2d* const RockVecs, const int numvecs,
                        const int graphicIndex);
@@ -176,6 +209,9 @@ inline void Rock::SetRock(const Vector2d& velocity,
   SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
 		               velocity,PlayingField::maxLinearVelocity,Vector2d());
   score=s;
+  #ifndef X11_BACKEND
+  rockGroup->GLDecorIds(graphic->DecorBits(),glContent,glMask,glW,glH);
+  #endif
  }
 
 Rotator& Rock::ObjectRotator()
@@ -204,19 +240,44 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
                                   rotator.PixWidth(),
                                   rotator.PixHeight());
     #endif
+    #ifndef X11_BACKEND
+    int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                         ObjectLiner().Velocity())
+                          .NorthWestCorner().x+.5,
+        destY=CurrentBox().NorthWestCorner().y+.5;
+    // D2 GL composite leg: GPU rotation about the rock center carries the
+    // continuous angle; the decor quad is centered in local space so the
+    // MVP reproduces the guarded pipeline's point-rotation math.
+    playingField->DeferDrawTransformed(
+        destX+rotator.PixWidth()*.5f,
+        destY+rotator.PixHeight()*.5f,
+        (float)rotator.Angle(),
+        glContent,glMask,
+        -glW*.5f,-glH*.5f,(float)glW,(float)glH);
+    #endif
    }
   else
   #ifdef X11_BACKEND
    {playingField->DeferDraw((TextureId)rotator.GetPixAtTime(0),
                             CurrentBox().WrapMovingBox(PlayingField::playArea,
                                                        ObjectLiner().Velocity())
-                                       .NorthWestCorner().x+.5,
+                                        .NorthWestCorner().x+.5,
                             CurrentBox().NorthWestCorner().y+.5,
                             rotator.PixWidth(),
                             rotator.PixHeight());
    }
   #else
-   ;
+   {int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                         ObjectLiner().Velocity())
+                          .NorthWestCorner().x+.5,
+        destY=CurrentBox().NorthWestCorner().y+.5;
+    playingField->DeferDrawTransformed(
+        destX+rotator.PixWidth()*.5f,
+        destY+rotator.PixHeight()*.5f,
+        (float)rotator.Angle(),
+        glContent,0,
+        -glW*.5f,-glH*.5f,(float)glW,(float)glH);
+   }
   #endif
  }
 
@@ -430,39 +491,88 @@ inline XColor RockGroup::RockColor={0,
 
 inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int numvecs,
                                  const int graphicIndex)
- {
-  #ifdef X11_BACKEND
-  Vector2d* scaledROCK=new Vector2d[numvecs],
-           * scaledROck=new Vector2d[numvecs],
-           * scaledrock=new Vector2d[numvecs];
-  for(int i=0;i<numvecs;++i)
-   {scaledROCK[i]=RockVecs[i]*ROCK::scale;
-    scaledROck[i]=RockVecs[i]*ROck::scale;
-    scaledrock[i]=RockVecs[i]*rock::scale;
-   }
-  ROCKGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
-                                                    scaledROCK,numvecs,
-                                                    ROCKDecor_bits[graphicIndex],
-                                                    ROCKDecor_width[graphicIndex],
-                                                    ROCKDecor_height[graphicIndex]);
-  ROckGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
-                                                    scaledROck,numvecs);
-  rockGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
-                                                    scaledrock,numvecs);
-  delete [] scaledrock;
-  delete [] scaledROck;
-  delete [] scaledROCK;
-  #endif
- }
+  {
+   #ifdef X11_BACKEND
+   Vector2d* scaledROCK=new Vector2d[numvecs],
+            * scaledROck=new Vector2d[numvecs],
+            * scaledrock=new Vector2d[numvecs];
+   for(int i=0;i<numvecs;++i)
+    {scaledROCK[i]=RockVecs[i]*ROCK::scale;
+     scaledROck[i]=RockVecs[i]*ROck::scale;
+     scaledrock[i]=RockVecs[i]*rock::scale;
+    }
+   ROCKGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
+                                                     scaledROCK,numvecs,
+                                                     ROCKDecor_bits[graphicIndex],
+                                                     ROCKDecor_width[graphicIndex],
+                                                     ROCKDecor_height[graphicIndex]);
+   ROckGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
+                                                     scaledROck,numvecs);
+   rockGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
+                                                     scaledrock,numvecs);
+   delete [] scaledrock;
+   delete [] scaledROck;
+   delete [] scaledROCK;
+   #endif
+   #ifndef X11_BACKEND
+   // Task 35: the task-27 engine branches of the MaskedRotVectorData
+   // constructors capture the same geometry+decor data server-free, so the
+   // nine graphics must be built here too — NewROCKs hands these pointers
+   // to SetRock, and a null graphic is fatal.
+   Vector2d* scaledROCK=new Vector2d[numvecs],
+            * scaledROck=new Vector2d[numvecs],
+            * scaledrock=new Vector2d[numvecs];
+   for(int i=0;i<numvecs;++i)
+    {scaledROCK[i]=RockVecs[i]*ROCK::scale;
+     scaledROck[i]=RockVecs[i]*ROck::scale;
+     scaledrock[i]=RockVecs[i]*rock::scale;
+    }
+   XColor rockColor={0,
+                     56026,//218
+                     42405,//165
+                     8224,//32
+                     DoRed|DoGreen|DoBlue};
+   ROCKGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,rockColor,
+                                                     scaledROCK,numvecs,
+                                                     ROCKDecor_bits[graphicIndex],
+                                                     ROCKDecor_width[graphicIndex],
+                                                     ROCKDecor_height[graphicIndex]);
+   ROckGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,rockColor,
+                                                     scaledROck,numvecs);
+   rockGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,rockColor,
+                                                     scaledrock,numvecs);
+   delete [] scaledrock;
+   delete [] scaledROck;
+   delete [] scaledROCK;
+   #endif
+  }
 
 inline RockGroup::RockGroup(RenderingEngine& eng): engine(eng)
- {
-  #ifdef X11_BACKEND
-  SetVectorData(RockVectors1,sizeof(RockVectors1)/sizeof(Vector2d),0);
-  SetVectorData(RockVectors2,sizeof(RockVectors2)/sizeof(Vector2d),1);
-  SetVectorData(RockVectors3,sizeof(RockVectors3)/sizeof(Vector2d),2);
-  #endif
- }
+  {
+   SetVectorData(RockVectors1,sizeof(RockVectors1)/sizeof(Vector2d),0);
+   SetVectorData(RockVectors2,sizeof(RockVectors2)/sizeof(Vector2d),1);
+   SetVectorData(RockVectors3,sizeof(RockVectors3)/sizeof(Vector2d),2);
+   #ifndef X11_BACKEND
+   // Decor uploads (content tinted with the guarded RockColor components;
+   // mask = unpacked R8 coverage of the same bits).
+   const unsigned short rockRed=56026,
+                        rockGreen=42405,
+                        rockBlue=8224;
+   for (int i=0;i<3;++i)
+    {const int w=ROCKDecor_width[i],
+               h=ROCKDecor_height[i];
+     CompositeLayerSpec layer={ROCKDecor_bits[i],w,h,rockRed,rockGreen,rockBlue};
+     CompositeFrameRGBA8 frame;
+     compositeFrameStack(frame,w,h,&layer,1);
+     glDecorContent[i]=engine.createTextureFromBitmap(frame.rgba8.data(),w,h,4);
+     std::vector<uint8_t> maskBytes;
+     compositeMaskExpandR8(ROCKDecor_bits[i],w,h,maskBytes);
+     glDecorMask[i]=engine.createTextureFromBitmap(maskBytes.data(),w,h,1);
+     glDecorW[i]=w;
+     glDecorH[i]=h;
+    }
+   #endif
+  }
 
 
 inline RockGroup::~RockGroup()
@@ -587,8 +697,19 @@ inline void RockGroup::NewROCKs()
                              ROCKs[i].ObjectRotator().PixWidth(),
                              ROCKs[i].ObjectRotator().PixHeight());
      #endif
+     #ifndef X11_BACKEND
+     playingField->DeferDrawTransformed(
+         (float)(ROCKs[i].CurrentBox().NorthWestCorner().x+.5)
+                +ROCKs[i].ObjectRotator().PixWidth()*.5f,
+         (float)(ROCKs[i].CurrentBox().NorthWestCorner().y+.5)
+                +ROCKs[i].ObjectRotator().PixHeight()*.5f,
+         (float)ROCKs[i].ObjectRotator().Angle(),
+         ROCKs[i].glContent,rockGroup->opaqueRocks ? ROCKs[i].glMask : 0,
+         -ROCKs[i].glW*.5f,-ROCKs[i].glH*.5f,
+         (float)ROCKs[i].glW,(float)ROCKs[i].glH);
+     #endif
     }
- }
+  }
 
 void RockGroup::ResetMinVelocity(const double newMinVelocity)
  {playingField->selfPermeableList.SetCurrentAtHead();

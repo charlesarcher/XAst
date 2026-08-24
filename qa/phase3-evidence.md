@@ -305,3 +305,89 @@ leg at task 36; this task gates the engine methods themselves.
 
 Commit: `feat: GLBackend textures (R8/RGB), R8 discard masks, 5 explosion frame
 textures, render-target FBO, menu pair (D6/D13/M1)`
+
+## Task 35 — GLBackend rotation (D2; NonRot degenerate static-texture path)
+
+**Executor note:** executed directly (delegation outage pattern of tasks 33/34
+persisted).
+
+### Implementation
+
+- **Rocks (`MaskedRotVectorData`, all 9 graphics)**: `RockGroup` ctor uploads
+  each decor bitmap ONCE (RGBA8 content tinted with the guarded RockColor
+  components 56026/42405/8224 via `compositeFrameStack`, plus an R8 unpacked
+  coverage mask via `compositeMaskExpandR8`); `Rock::SetRock` captures the ids
+  (`GLDecorIds`). Draw = `DeferDrawTransformed(center, rotator.Angle(),
+  content, mask, centered-local quad)` — GPU rotation about the object center
+  reproduces the guarded point-rotation math; replay emits
+  `setTransform/drawTextureMasked/resetTransform`.
+- **Ship wireframes (`RotVectorData`)**: `drawPolygon` LINE_LOOP from
+  `GetVecsAtTime(0)` under a TRANSLATION-ONLY MVP. **Documented fork:** the
+  discrete-angle vecs already carry the X11 rotator quantization; adding the
+  continuous angle to the MVP would double-rotate. The continuous-angle MVP
+  leg is exercised by the rock path instead.
+- **Thrust flames (`RotPixmapData`/`MaskedRotPixmapData`) — m13 degenerate
+  path**: ONE pre-computed texture per flame (SDT: edge/middle/center CPU
+  composite; NCC1701D: single red layer; NCC1701A: red layer + R8 mask),
+  drawn with NO `setTransform` call and no angle interpolation (identity-MVP
+  fast leg, Q4-traceable by construction: records carry tx=ty=angle=0).
+- **Enemies/enemy bullets/ship bullets (`NonRotVectorData`) — m13 static-
+  texture path**: one baked sprite per group (outline + decor in the object
+  color, `objects/glSprites.H` Bresenham baker mirroring BuildPixmap point
+  mapping and XCopyPlane centering), uploaded at group init (bullets) or
+  lazily at first draw (enemies), drawn with no transform.
+- **main() GL branch**: all 11 globals constructed exactly like the X11
+  branch (same order; placement-new staging preserved) +
+  `playingField->PlayTheGame(...)`. The task-31/32/34 smoke loop survives
+  verbatim behind `XAST_GL_SMOKE`.
+- **playingField.H**: `FrameDrawRecord` gained GL-only transform + outline
+  payload; `DeferDrawTransformed`/`DeferDrawOutline`; replay emits transforms
+  only for transformed records (m13 fast path stays transform-free); GL legs
+  of `RunGame`/`PlayTheGame`/`GenHelpScreen` mirror the guarded flow minus
+  Motif Options/click-session/frameClockSync; `pixmap(0)` so the canvas
+  indirection collapses deterministically; GL font metrics feed fontHeight.
+- **GL input bridge**: glBackend's typed-event seam (D16) is still open
+  (`pollEvents` returns 0), so main() installs a GLFW key callback
+  (US-layout s/q/h/e/r/o/p/n/space, repeats dropped) feeding a header-inline
+  queue that the GL loops drain beside `engine.pollEvents`. The outer
+  PlayTheGame loop pumps via `beginFrame()` — without it keys parked at a
+  static screen are never delivered (found and fixed during this task).
+
+### Defects caught by the real-game gate (both fixed before commit)
+
+1. **`GLBackend::drawLine` stack smash (pre-existing latent)**: the thick
+   path wrote 6 verts × 5 floats into `float verts[20]`. Every earlier GL
+   main skipped the globals, so the Button ctor's width-3 face frames never
+   exercised it; the real-game main tripped it immediately (gdb:
+   `__stack_chk_fail` in drawLine x2=52 width=3). Fixed: verts[30].
+2. **`rockGraphic[]` NULL on GL**: `SetVectorData` ran only under
+   `X11_BACKEND`, so `NewROCKs` handed `SetRock` a null graphic → SEGV in
+   `RotatorDisplayData::GetRadius`. Fixed: the task-27 engine branches of
+   the `MaskedRotVectorData` ctors are server-free, so SetVectorData now
+   builds the same nine graphics on every leg.
+
+### Design-fork / divergence record (identity is task 36's gate)
+
+- Ship wireframes draw outline ONLY (decor dots omitted on GL).
+- Rocks draw decor composite only (no polygon outline / black body fill).
+- Static sprites use transparent backgrounds where X11 blits opaque black
+  squares (equivalent on the cleared-black canvas).
+- Bresenham strokes approximate XDrawLines rasterization.
+- Explosion frames do NOT render on GL yet (`CompositePixmap`/frameList
+  textures are X11-zone; `ExplosionGraphic::MaskId()` stays 0-guarded).
+
+### Acceptance legs
+
+| Assertion | Result |
+|---|---|
+| `make BACKEND=X11 all` | green (no new warnings from touched files) |
+| Q13 harness vs baseline (seed 12345, session.script) | **RESULT: PASS (all checkpoints AE=0)** |
+| `make BACKEND=GL all` | green |
+| GL seeded session under Xvfb via harness | 13/13 checkpoints captured @ same boundaries as X11 (help/start/gp1..gp10/hiscore), 1720 boundaries, **runs without crash**, clean exit rc=0 on final 'q' |
+| GL gameplay content in captures | rocks render WITH decor (yinyang/eightball visible), ship wireframe at center, hi-score table rows render; gp5 black frame = empty-field state after timing-divergent deaths (expected pre-identity) |
+| Smoke regression (`XAST_GL_SMOKE=tex`) | exit 0, GL banner, real-game path not entered |
+| ASan cycle on GL (open/play[thrust+fire]/close) | exit rc=0, "highest score" printed, **zero AddressSanitizer reports** (detect_leaks=1); O3 build restored |
+| Harness note | GL game must run from repo root (stb fonts load via relative paths); driven through a `cd` wrapper (`--game`), no source change |
+
+Commit: `feat: GLBackend rotation (D2) — MVP wireframe, texture composite +
+mask, pre-computed pure-bitmap, NonRot static-texture degenerate path (m13)`

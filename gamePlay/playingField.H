@@ -22,6 +22,10 @@
 #include<unistd.h>
 #include"../utilities/rendering/x11Backend.H"
 #endif
+#if !defined(X11_BACKEND) && defined(GL_BACKEND)
+#include<unistd.h>
+#include"../utilities/rendering/glBackend.H"
+#endif
 #include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
 #include"../utilities/vector2d.H"
@@ -88,10 +92,21 @@ class PlayingField
     // immediate call received them (same double→float conversions at the
     // same statement positions).
     struct FrameDrawRecord
-     {TextureId tex;     // content texture
-      TextureId mask;    // 0 → plain texture leg
-      float x,y,w,h;
-     };
+      {TextureId tex;     // content texture
+       TextureId mask;    // 0 → plain texture leg
+       float x,y,w,h;
+#ifndef X11_BACKEND
+       // Task-35 GL legs: transformed texture draws (rock composite) and
+       // wireframe outline draws (ship) replay their MVP under the record.
+       // Zero transform + !outline = the m13 fast path (no setTransform).
+       float tx,ty,angle;
+       bool outline;
+       static const int maxOutlineVecs=40;
+       float oVerts[2*maxOutlineVecs];
+       int oCount;
+       float oR,oG,oB;
+#endif
+      };
     // Capacity bound: worst case per frame ≈ 176 rock misses + 16 spawn
     // placements + ship/thrust/hyper/enemy sprites + ≤10 enemy-bullet and
     // ≤16 ship-bullet aims/misses/explosion frames + 2 big explosions
@@ -106,6 +121,11 @@ class PlayingField
       FrameDrawRecord& record=frameDraws[numFrameDraws++];
       record.tex=tex;record.mask=0;
       record.x=x;record.y=y;record.w=w;record.h=h;
+      #ifndef X11_BACKEND
+      record.tx=record.ty=record.angle=0.0f;
+      record.outline=false;
+      record.oCount=0;
+      #endif
      }
     inline void DeferDrawMasked(TextureId tex,TextureId mask,
                                 float x,float y,float w,float h)
@@ -116,7 +136,52 @@ class PlayingField
       FrameDrawRecord& record=frameDraws[numFrameDraws++];
       record.tex=tex;record.mask=mask;
       record.x=x;record.y=y;record.w=w;record.h=h;
+      #ifndef X11_BACKEND
+      record.tx=record.ty=record.angle=0.0f;
+      record.outline=false;
+      record.oCount=0;
+      #endif
      }
+
+#ifndef X11_BACKEND
+    // Task-35 D2 legs: a texture drawn under an object-local MVP (rock
+    // decor composite), and a wireframe outline replayed as a LINE_LOOP.
+    inline void DeferDrawTransformed(float tx,float ty,float angle,
+                                     TextureId tex,TextureId mask,
+                                     float x,float y,float w,float h)
+     {if (numFrameDraws>=maxFrameDraws)
+       {fprintf(stderr,"frame draw list overflow\n");
+        abort();
+        }
+      FrameDrawRecord& record=frameDraws[numFrameDraws++];
+      record.tex=tex;record.mask=mask;
+      record.x=x;record.y=y;record.w=w;record.h=h;
+      record.tx=tx;record.ty=ty;record.angle=angle;
+      record.outline=false;
+      record.oCount=0;
+     }
+    inline void DeferDrawOutline(float tx,float ty,float angle,
+                                 const Vector2d* verts,int count,
+                                 float r,float g,float b)
+     {if (numFrameDraws>=maxFrameDraws)
+       {fprintf(stderr,"frame draw list overflow\n");
+        abort();
+        }
+      FrameDrawRecord& record=frameDraws[numFrameDraws++];
+      record.tex=0;record.mask=0;
+      record.x=record.y=record.w=record.h=0.0f;
+      record.tx=tx;record.ty=ty;record.angle=angle;
+      record.outline=true;
+      record.oCount=count<FrameDrawRecord::maxOutlineVecs
+                      ? count
+                      : FrameDrawRecord::maxOutlineVecs;
+      for (int i=0;i<record.oCount;++i)
+       {record.oVerts[2*i]=(float)verts[i].x;
+        record.oVerts[2*i+1]=(float)verts[i].y;
+       }
+      record.oR=r;record.oG=g;record.oB=b;
+     }
+#endif
 
 
   private:
@@ -124,8 +189,7 @@ class PlayingField
 #ifdef X11_BACKEND
     Boolean RunGame(Options& options);
 #else
-    class OptionsMenu;
-    Boolean RunGame(RenderingEngine& engine, OptionsMenu& menu);
+    Boolean RunGame();
 #endif
     void DrawGame();
     void NewRocksAndEnemy();
@@ -161,6 +225,46 @@ class PlayingField
 
 extern PlayingField* playingField;
 
+#ifndef X11_BACKEND
+#ifndef GL_BACKEND
+#error "A concrete GPU backend macro is required for the non-X11 build"
+#endif
+// ---------------------------------------------------------------------------
+// GL input bridge (task 35). glBackend's typed-event seam (D16) is not wired
+// yet — pollEvents() returns 0 — so main() installs a GLFW key callback that
+// appends translated GameEvents here; RunGame/PlayTheGame drain this queue
+// alongside engine.pollEvents. The harness's XTest synthetic keys reach GLFW
+// through X11, which makes the seeded scripted session drivable on GL.
+// Header-inline statics: this header is included by exactly ONE TU per link
+// (XAsteroids.o) — the repo-wide header-inline convention.
+// ---------------------------------------------------------------------------
+inline GameEvent glEventQueue[256];
+inline int glEventHead=0,
+           glEventTail=0;
+
+inline void glEnqueueKeyEvent(bool down,char character)
+ {const int next=(glEventTail+1)%256;
+  if (next==glEventHead)
+    return;
+  GameEvent& event=glEventQueue[glEventTail];
+  event.type=down ? GameEvent::KeyDown : GameEvent::KeyUp;
+  event.key=0;
+  event.character=character;
+  event.x=0;
+  event.y=0;
+  glEventTail=next;
+ }
+
+inline int glDrainEvents(GameEvent* out,int maxCount)
+ {int n=0;
+  while (glEventHead!=glEventTail&&n<maxCount)
+   {out[n++]=glEventQueue[glEventHead];
+    glEventHead=(glEventHead+1)%256;
+   }
+  return n;
+ }
+#endif
+
 inline int PlayingField::uSecondsPerFrame=62500,
     PlayingField::initialShips=3,
     PlayingField::extraShipScore=10000;
@@ -177,6 +281,8 @@ inline PlayingField::PlayingField(RenderingEngine& eng): engine(eng),
 #ifdef X11_BACKEND
                                      gc(static_cast<X11Backend&>(eng).gxorGC()),
                                      pixmap(static_cast<X11Backend&>(eng).canvas()),
+#else
+                                     pixmap(0),
 #endif
                                      lastHitFromAlly(off),
                                      lastHitScore(0),
@@ -203,8 +309,15 @@ inline PlayingField::PlayingField(RenderingEngine& eng): engine(eng),
                                       rightRotPending(off),
                                       firing(off),
                                       numFrameDraws(0)
- {GenHelpScreen();
- }
+  {
+   #ifndef X11_BACKEND
+   FontMetrics hiScoreFm;
+   engine.getFontMetrics(EngineFont_HiScore,hiScoreFm);
+   fontHeight=(int)hiScoreFm.max_bounds.ascent
+             +(int)hiScoreFm.max_bounds.descent+4;
+   #endif
+   GenHelpScreen();
+  }
 
 inline PlayingField::~PlayingField()
  {// Disarmed at task 15 (D15): the canvas and both GCs are backend-owned
@@ -266,17 +379,33 @@ inline void PlayingField::DrawGame()
  }
 
 inline void PlayingField::RenderFrameDraws()
- {for (int i=0;i<numFrameDraws;++i)
-   {const FrameDrawRecord& record=frameDraws[i];
-    if (record.mask)
-      engine.drawTextureMasked(record.tex,record.mask,record.x,record.y,
-                               record.w,record.h);
-    else
-      engine.drawTexture(record.tex,record.x,record.y,record.w,record.h,
-                         1.0f);
+  {for (int i=0;i<numFrameDraws;++i)
+    {const FrameDrawRecord& record=frameDraws[i];
+     #ifndef X11_BACKEND
+     if (record.outline)
+      {engine.setTransform(record.tx,record.ty,record.angle);
+       engine.drawPolygon(record.oVerts,record.oCount,
+                          record.oR,record.oG,record.oB,false);
+       engine.resetTransform();
+       continue;
+      }
+     const bool transformed=record.tx!=0.0f||record.ty!=0.0f||record.angle!=0.0f;
+     if (transformed)
+       engine.setTransform(record.tx,record.ty,record.angle);
+     #endif
+     if (record.mask)
+       engine.drawTextureMasked(record.tex,record.mask,record.x,record.y,
+                                record.w,record.h);
+     else
+       engine.drawTexture(record.tex,record.x,record.y,record.w,record.h,
+                          1.0f);
+     #ifndef X11_BACKEND
+     if (transformed)
+       engine.resetTransform();
+     #endif
     }
-  numFrameDraws=0;
- }
+   numFrameDraws=0;
+  }
 
 inline void PlayingField::PresentFrame()
  {// ---- D8 canonical frame structure (task 24) ----
@@ -628,6 +757,182 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   stage->DrawPlayingField();
   return off;
   }
+#else
+inline PlayingField::Boolean PlayingField::RunGame()
+ {// GL mirror of the guarded loop: same simulation order and event handling,
+  // minus the Motif Options dialog, the click-session state machine and
+  // frameClockSync (no X11 frame clock exists here; the tail usleep paces).
+  // Events come from engine.pollEvents PLUS the GLFW key bridge above.
+  nonPermeableList.Reset();
+  selfPermeableList.Reset();
+  permeableList.Reset();
+  score->Reset();
+  framesSinceLastBullet=0;
+  framesThisLevel=0;
+  nextShipScore=extraShipScore;
+  framesSinceEnemy=0;
+  for (int i=0;i<initialShips;++i)
+    shipYard->AddShip();
+  numFrameDraws=0;
+  NewRocksAndEnemy();
+  PresentFrame();
+  engine.endFrame();
+  GameEvent events[256];
+  while(shipYard->NumShips())
+   {shipYard->RemoveShip();
+    stage->DrawShipYard();
+    shipGroup->NewShip();
+    leftRotPending=rightRotPending=firing=off;
+    while(nonPermeableList.GetNumItems()||permeableList.GetNumItems())
+     {timeval startTime,
+              endTime;
+      gettimeofday(&startTime,NULL);
+      NewRocksAndEnemy();
+      if (ShipBulletGroup::autoFire&&firing)
+        shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
+      int numEvents=engine.pollEvents(events,256);
+      numEvents+=glDrainEvents(events+numEvents,256-numEvents);
+      if (static_cast<GLBackend&>(engine).closeRequested_)
+        return on;
+      for (int i=0;i<numEvents;++i)
+       {const GameEvent& event=events[i];
+        switch(event.type)
+         {case GameEvent::KeyDown:      if (!shipGroup->hyper.hyperspacing)
+                                          switch(event.character)
+                                           {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity())
+                                                        leftRotPending=on;
+                                                      else
+				                                 {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                          -shipGroup->ship->angularVelocity;
+                                                      if (shipGroup->thrust->thrusting)
+                                                        shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                          -shipGroup->ship->angularVelocity;
+ 				                                 }
+                                                      break;
+ 				                              case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity())
+                                                        rightRotPending=on;
+                                                      else
+                        				                 {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                          shipGroup->ship->angularVelocity;
+                                                      if (shipGroup->thrust->thrusting)
+                                                        shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                          shipGroup->ship->angularVelocity;
+ 				                                 }
+                                                      break;
+                                              case 'o': shipGroup->NewThrust();
+                                                        shipGroup->thrust->thrusting=Thrust::on;
+                                                        intersector.AddPermeable(shipGroup->thrust,0);
+                                                        break;
+                                              case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
+                                                        firing=on;
+                                                        break;
+                                              case ' ': RemoveShip();
+                                                        shipGroup->NewHyper();
+                                                        break;
+ 	                                    case 'q': return on;
+                                                      break;
+                                              case 'n':
+                                              case 'h': goto ResetGameUpdateScoreAndReturn;
+                                             }
+                                        else
+                                          switch(event.character)
+                                           {case 'q': return on;
+                                                      break;
+                                            case 'n':
+                                            case 'h': goto ResetGameUpdateScoreAndReturn;
+ 				                             }
+                                        break;
+          case GameEvent::KeyUp:        if (!shipGroup->hyper.hyperspacing)
+                                          switch (event.character)
+                                           {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity()<0)
+                                                        if (rightRotPending)
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                            shipGroup->ship->angularVelocity;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                              shipGroup->ship->angularVelocity;
+                                                         }
+                                                        else
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
+                                                         }
+                                                      leftRotPending=off;
+                                                      break;
+                                              case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity()>0)
+                                                        if (leftRotPending)
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                            -shipGroup->ship->angularVelocity;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                              -shipGroup->ship->angularVelocity;
+                                                         }
+                                                        else
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
+                                                         }
+                                                      rightRotPending=off;
+                                                      break;
+                                              case 'o': intersector.RemovePermeable(shipGroup->thrust);
+                                                        shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
+                                                        shipGroup->thrust->thrusting=Thrust::off;
+                                                        break;
+                                              case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::off;
+                                                        firing=off;
+                                                        break;
+                                             }
+                                        break;
+          default:                      break;
+         }
+       }
+      SetGravityAcceleration();
+      intersector.Intersect();
+      PresentFrame();
+      engine.endFrame();
+      gettimeofday(&endTime,NULL);
+      unsigned int diffTime=endTime.tv_usec-startTime.tv_usec+(endTime.tv_sec-startTime.tv_sec)*1000000;
+      if (diffTime<uSecondsPerFrame)
+        usleep(uSecondsPerFrame-diffTime);
+     }
+    }
+  ResetGameUpdateScoreAndReturn: shipYard->ClearYard();
+  stage->DrawShipYard();
+  shipBulletGroup->Reset();
+  enemyGroup->Reset();
+  enemyBulletGroup->Reset();
+  score->UpdateTopTen();
+  FontMetrics hiScoreFm;
+  engine.getFontMetrics(EngineFont_HiScore,hiScoreFm);
+  int xPos=playArea.NorthWestCorner().x+(playArea.Width()-hiScoreFm.max_bounds.width*22)/2,
+      yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+hiScoreFm.max_bounds.ascent,
+      yPos=yPosSave;
+  char str[23];
+  engine.beginRenderTo((TextureId)pixmap);
+  engine.clear();
+  for(int i=0;i<score->NumScores();++i)
+   {const int nameWidth=12-(int)strlen(score->TopTenName(i));
+    snprintf(str,sizeof(str),"%s%*s%10d",
+             score->TopTenName(i),nameWidth>0?nameWidth:1,"",
+             score->TopTenScore(i));
+    engine.drawStringTransparent(str,(float)xPos,(float)yPos,
+                                 EngineFont_HiScore,1.0f,1.0f,1.0f);
+    yPos+=fontHeight;
+   }
+  engine.drawStringTransparent("        S -- start",(float)xPos,
+                               (float)(yPos=yPosSave+12*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        Q -- quit",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        H -- help",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.endRenderTo();
+  stage->DrawPlayingField();
+  engine.endFrame();
+  return off;
+  }
 #endif
 
 inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
@@ -703,6 +1008,44 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
       usleep(1000);
     }
   #endif
+  #ifndef X11_BACKEND
+  // GL outer loop: mirrors the guarded one minus Options (Motif dialog) and
+  // the mouse legs; keys arrive through engine.pollEvents + the GLFW bridge.
+  int localHighScore=0;
+  GameEvent events[64];
+  for(;;)
+   {// No backend frame clock here: beginFrame owns the glfwPollEvents pump
+    // (the typed-event stub contributes nothing), so pump every iteration
+    // or keys parked at a static screen are never delivered.
+    engine.beginFrame();
+    int numEvents=engine.pollEvents(events,64);
+    numEvents+=glDrainEvents(events+numEvents,64-numEvents);
+    if (static_cast<GLBackend&>(engine).closeRequested_)
+      return localHighScore;
+    for (int i=0;i<numEvents;++i)
+     {const GameEvent& event=events[i];
+      if (event.type==GameEvent::KeyDown)
+        switch(event.character)
+         {case 's': level=l;
+                    Boolean earlyExit;
+                    earlyExit=RunGame();
+                    if (localHighScore<score->CurrentScore())
+                      localHighScore=score->CurrentScore();
+                    if (earlyExit)
+                      return localHighScore;
+                    break;
+          case 'q': return localHighScore;
+                    break;
+          case 'h': GenHelpScreen();
+                    stage->DrawPlayingField();
+                    engine.endFrame();
+                    break;
+         }
+     }
+    if (!numEvents)
+      usleep(1000);
+   }
+  #endif
   return 0;
  }
 
@@ -717,6 +1060,48 @@ void PlayingField::GenHelpScreen()
                                                                   EngineFont_HiScore))/2
            -stage->hiScoreInfo->max_bounds.lbearing,
       yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+stage->hiScoreInfo->ascent;
+  engine.beginRenderTo((TextureId)pixmap);
+  engine.drawStringTransparent("        S -- start",(float)xPos,(float)yPos,
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        Q -- quit",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        E -- rotate left",(float)xPos,
+                               (float)(yPos+=2*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        R -- rotate right",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        O -- thrust",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        P -- fire",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("space bar -- hyperspace",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        N -- new game",(float)xPos,
+                               (float)(yPos+=2*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
+                               (float)(yPos+=2*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.endRenderTo();
+  #endif
+  #ifndef X11_BACKEND
+  // GL leg: the canvas indirection collapses (pixmap=0 → beginRenderTo is a
+  // no-op), so the text draws straight onto the window; metrics come from
+  // the engine instead of stage's guarded font structs.
+  engine.beginRenderTo((TextureId)pixmap);
+  engine.clear();
+  engine.endRenderTo();
+  FontMetrics hiScoreFm;
+  engine.getFontMetrics(EngineFont_HiScore,hiScoreFm);
+  int xPos=playArea.NorthWestCorner().x+(playArea.Width()
+                                         -(int)engine.measureText("        H -- help (this screen)",
+                                                                  EngineFont_HiScore))/2,
+      yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+hiScoreFm.max_bounds.ascent;
   engine.beginRenderTo((TextureId)pixmap);
   engine.drawStringTransparent("        S -- start",(float)xPos,(float)yPos,
                                EngineFont_HiScore,1.0f,1.0f,1.0f);

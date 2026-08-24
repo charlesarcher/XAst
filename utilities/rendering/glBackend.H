@@ -333,9 +333,12 @@ class GLBackend : public RenderingEngine
      {// SC8: width 1 = GL_LINE_STRIP (core-profile glLineWidth caps at 1);
       // width>1 = filled quad expanded perpendicular in LOGICAL space so the
       // stroke scales with the letterbox like the X11 canvas blit does.
+      // Task 35: verts must hold the THICK path's 6 verts x 5 floats — [20]
+      // smashed the stack the moment the Button ctor's width-3 frames ran
+      // (first exercise: the real-game main constructs the globals).
       if (!window)
         return;
-      float verts[20];
+      float verts[30];
       int count;
       GLenum mode;
       if (width<2.0f)
