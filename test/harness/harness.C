@@ -699,8 +699,20 @@ static void runQuiescence(const std::vector<Line>& lines, RunStats& stats) {
         sleepMs(cfg.pollMs);
         if (!grabClient(cur)) {
             // Window gone: benign iff the game self-exited ('q' / WM_DELETE).
+            // Sanitizer builds stay alive for seconds INSIDE exit() (LSan
+            // scan) AFTER the game destroyed its window, so poll for self-
+            // exit instead of a single-shot WNOHANG (task 12 ASan gate).
             int st = 0;
-            if (g_gamePid > 0 && waitpid(g_gamePid, &st, WNOHANG) == g_gamePid) {
+            bool reaped = false;
+            const double tGone = nowMs();
+            while (nowMs() - tGone < 20000.0) {
+                if (g_gamePid > 0 && waitpid(g_gamePid, &st, WNOHANG) == g_gamePid) {
+                    reaped = true;
+                    break;
+                }
+                sleepMs(cfg.pollMs);
+            }
+            if (reaped) {
                 stats.gameExited = true;
                 stats.gameExitRc = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
                 g_gamePid = -1;

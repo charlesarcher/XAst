@@ -1,4 +1,10 @@
 // utilities/rendering/renderingEngine.H — no backend includes allowed in this file
+// (Include guard added at task 12: windowSize.H and stage.H both include this
+// header, and the pre-guard file redefined its types on the second inclusion.
+// Guard-only change — every declaration below is still the task-11 verbatim
+// plan sketch.)
+#ifndef _RENDERINGENGINE_H
+#define _RENDERINGENGINE_H
 #include <cstdint>
 
 using TextureId = uint64_t;          // m20: not void*
@@ -112,3 +118,5 @@ public:
                                                                             // X11 rotation is the pre-computed-pixmap
                                                                             // mechanism (D14); there is no X11 stack
 };
+
+#endif

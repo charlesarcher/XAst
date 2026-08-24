@@ -13,6 +13,8 @@
 #include<X11/Xlib.h>
 #endif
 #include"../utilities/rendering/x11types.H"
+#include"../utilities/rendering/renderingEngine.H"
+#include"../utilities/rendering/windowSize.H"
 #include"options/button.H"
 #include"score.H"
 #include"shipYard.H"
@@ -43,7 +45,7 @@ class Stage
 
   public:
 
-    Stage();
+    Stage(RenderingEngine& engine);
     ~Stage();
 
     inline Stage& DrawScore();
@@ -51,6 +53,12 @@ class Stage
     inline Stage& DrawPlayingField();
     inline Stage& Refresh();
 
+    // TRANSITION members (D11 single-ownership-seam extension; DELETED at
+    // task 47): non-owning aliases onto X11Backend-owned resources (the D15
+    // map — exactly one owner, the backend). main() populates them from the
+    // concrete X11Backend it constructs. The first eight are the plan's
+    // durable set; the fonts/GCs below them are transient until task 14
+    // converts the raw HUD/blit bodies below to engine methods.
     Display* display;
     Window window;
 
@@ -66,13 +74,6 @@ class Stage
     XFontStruct* buttonInfo,
                * errorInfo;
 
-    static XColor windowBg,
-                  shipYardBg,
-                  buttonFg,
-                  buttonBg;
-
-  private:
-
     XFontStruct* titleInfo,
                * hiScoreInfo,
                * scoreInfo;
@@ -81,6 +82,13 @@ class Stage
        hiScoreGC,
        scoreGC,
        defaultGC;
+
+    static XColor windowBg,
+                  shipYardBg,
+                  buttonFg,
+                  buttonBg;
+
+  private:
 
     int windowWidth,
         windowHeight,
@@ -96,10 +104,6 @@ class Stage
         shipYardY,
         playAreaX,
         playAreaY;
-
-    struct sigaction action;
-
-    static void terminate(int i);
  };
 
 extern Stage* stage;
@@ -129,114 +133,68 @@ inline XColor Stage::windowBg={0,
                         46260,//180
                         DoRed|DoGreen|DoBlue};
 
-inline Stage::Stage()
+inline Stage::Stage(RenderingEngine& engine)
  {cout<<"XAsteroids is a Unix version of the original Atari Asteroids video game.  It features color, arbitrarily shaped drawables with interior decor, hidden line elimination, accurate collision detection, and dynamically selectable options including gravitation.  Game initialization requires a minute or two so please be patient.  If XAsteroids abnormally terminates the keyboard may no longer auto-repeat.  Auto-repeat can be reactivated by executing AutoRepeatOn."<<endl<<endl;
-  if (!(display=XOpenDisplay(NULL)))
-   {cout<<"Could not open display."<<endl;
-    exit(1);
-   }
-  titleInfo=XLoadQueryFont(display,"white_shadow-48");
-  buttonInfo=XLoadQueryFont(display,"-schumacher-clean-bold-r-normal--10-100-75-75-c-60-iso8859-1");
-  hiScoreInfo=XLoadQueryFont(display,"-ibm-ergonomic-bold-r-normal--20-140-100-100-c-120-iso8859-9");
-  scoreInfo=XLoadQueryFont(display,"-urw-courier-bold-r-normal--40-300-100-100-m-240-iso8859-9");
-  errorInfo=XLoadQueryFont(display,"-adobe-helvetica-bold-r-normal--14-100-100-100-p-82-iso8859-1");
-  if (!titleInfo||!buttonInfo||!hiScoreInfo||!scoreInfo||!errorInfo)
-   {cout<<"Could not find font white_shadow-48, -schumacher-clean-bold-r-normal--10-100-75-75-c-60-iso8859-1, -ibm-ergonomic-bold-r-normal--20-140-100-100-c-120-iso8859-9, -urw-courier-bold-r-normal--40-300-100-100-m-240-iso8859-9, and/or -adobe-helvetica-bold-r-normal--14-100-100-100-p-82-iso8859-1.  Please run XAstSetup and retry XAsteroids."<<endl;
-    exit(1);
-   }
-  int titleWidth=XTextWidth(titleInfo,"Asteroids",strlen("Asteroids"))
-                 +2*titleInfo->max_bounds.width,
-      hiScoreWidth=10*hiScoreInfo->max_bounds.width,
-      scoreWidth=10*scoreInfo->max_bounds.width,
-      headerWidth=titleWidth+2*(hiScoreWidth>scoreWidth
-                                ? hiScoreWidth
-                                : scoreWidth),
+  // The X11 creation block that used to live here (display/fonts/window/icon/
+  // GCs/KBState/signals — stage.H:130-221 pre-task-12) is now owned by
+  // X11Backend::initWindow (D15 map); main() constructs the backend FIRST and
+  // populates this class's non-owning transition members from it afterwards.
+  //
+  // Layout math kept (stage.H:143-181 pre-task-12) with metrics obtained
+  // through the engine (D15/D7). Every FontMetrics field is a small integer
+  // held exactly in float, so the (int) casts reproduce the original
+  // short/int arithmetic bit-for-bit; measureText on X11 performs the same
+  // font advance query the old :151 made directly.
+  FontMetrics titleFm,
+              hiScoreFm,
+              scoreFm;
+  engine.getFontMetrics(EngineFont_Title,titleFm);
+  engine.getFontMetrics(EngineFont_HiScore,hiScoreFm);
+  engine.getFontMetrics(EngineFont_Score,scoreFm);
+  int titleWidth=(int)engine.measureText("Asteroids",EngineFont_Title)
+                +2*(int)titleFm.max_bounds.width,
+      hiScoreWidth=10*(int)hiScoreFm.max_bounds.width,
+      scoreWidth=10*(int)scoreFm.max_bounds.width,
       headerHeight;
-  windowWidth=(headerWidth>PlayingField::playArea.Width()
-               ? headerWidth
-               : PlayingField::playArea.Width())+30;
-  headerHeight=2*(hiScoreInfo->max_bounds.ascent+hiScoreInfo->max_bounds.descent)+4;
-  if (titleInfo->max_bounds.ascent+titleInfo->max_bounds.descent>headerHeight)
-    headerHeight=titleInfo->max_bounds.ascent+titleInfo->max_bounds.descent;
-  if (scoreInfo->max_bounds.ascent+scoreInfo->max_bounds.descent>headerHeight)
-    headerHeight=scoreInfo->max_bounds.ascent+scoreInfo->max_bounds.descent;
-  windowHeight=headerHeight+2*shipGroup->maxIconHeight+PlayingField::playArea.Height()+60;
+  WindowSizeFormula::Compute(titleFm,hiScoreFm,scoreFm,
+                             (int)engine.measureText("Asteroids",EngineFont_Title),
+                             PlayingField::playArea.Width(),
+                             PlayingField::playArea.Height(),
+                             shipGroup->maxIconHeight,
+                             windowWidth,windowHeight);
+  headerHeight=2*((int)hiScoreFm.max_bounds.ascent+(int)hiScoreFm.max_bounds.descent)+4;
+  if ((int)titleFm.max_bounds.ascent+(int)titleFm.max_bounds.descent>headerHeight)
+    headerHeight=(int)titleFm.max_bounds.ascent+(int)titleFm.max_bounds.descent;
+  if ((int)scoreFm.max_bounds.ascent+(int)scoreFm.max_bounds.descent>headerHeight)
+    headerHeight=(int)scoreFm.max_bounds.ascent+(int)scoreFm.max_bounds.descent;
   int temp=(windowWidth-titleWidth)/2;
-  titleX=temp+titleInfo->max_bounds.width-titleInfo->max_bounds.lbearing;
-  titleY=titleInfo->max_bounds.ascent+15;
+  titleX=temp+(int)titleFm.max_bounds.width-(int)titleFm.lbearing;
+  titleY=(int)titleFm.max_bounds.ascent+15;
   buttonX=buttonY=2;
-  hiScoreUserX=(temp-hiScoreWidth)/2-hiScoreInfo->max_bounds.lbearing;
-  hiScoreUserY=hiScoreInfo->max_bounds.ascent+15;
+  hiScoreUserX=(temp-hiScoreWidth)/2-(int)hiScoreFm.lbearing;
+  hiScoreUserY=(int)hiScoreFm.max_bounds.ascent+15;
   hiScoreX=hiScoreUserX;
-  hiScoreY=hiScoreUserY+hiScoreInfo->max_bounds.ascent+hiScoreInfo->max_bounds.descent+4;
+  hiScoreY=hiScoreUserY+(int)hiScoreFm.max_bounds.ascent
+                       +(int)hiScoreFm.max_bounds.descent+4;
   scoreX=titleX+titleWidth
-         -titleInfo->max_bounds.width+titleInfo->max_bounds.lbearing
-         +(temp-scoreWidth)/2-scoreInfo->max_bounds.lbearing;
-  scoreY=scoreInfo->max_bounds.ascent+15;
+         -(int)titleFm.max_bounds.width+(int)titleFm.lbearing
+         +(temp-scoreWidth)/2-(int)scoreFm.lbearing;
+  scoreY=(int)scoreFm.max_bounds.ascent+15;
   shipYardX=15;
   shipYardY=headerHeight+25;
   shipYardWidth=windowWidth-30;
   shipYardHeight=2*shipGroup->maxIconHeight+10;
   playAreaX=(windowWidth-PlayingField::playArea.Width())/2;
   playAreaY=headerHeight+shipYardHeight+35;
-  int screen=DefaultScreen(display),
-      background=XAllocColor(display,DefaultColormap(display,screen),&windowBg)
-                ? windowBg.pixel
-                : WhitePixel(display,screen);
-  window=XCreateSimpleWindow(display,DefaultRootWindow(display),
-                             (DisplayWidth(display,screen)-windowWidth)/2,
-                             (DisplayHeight(display,screen)-windowHeight)/2,
-                             windowWidth,windowHeight,
-                             5, WhitePixel(display,screen),
-                             background);
-  icon=XCreateBitmapFromData(display,window,
-                              (const char * const)starDestroyerIcon_bits,
-                             starDestroyerIcon_width,starDestroyerIcon_height);
-  titleGC=XCreateGC(display,window,NULL,0);
-  XSetGraphicsExposures(display,titleGC,FALSE);
-  XSetFont(display,titleGC,titleInfo->fid);
-  XSetForeground(display,titleGC,BlackPixel(display,screen));
-  XSetBackground(display,titleGC,background);
-  hiScoreGC=XCreateGC(display,window,NULL,0);
-  XSetGraphicsExposures(display,hiScoreGC,FALSE);
-  XSetFont(display,hiScoreGC,hiScoreInfo->fid);
-  XSetForeground(display,hiScoreGC,BlackPixel(display,screen));
-  XSetBackground(display,hiScoreGC,background);
-  scoreGC=XCreateGC(display,window,NULL,0);
-  XSetGraphicsExposures(display,scoreGC,FALSE);
-  XSetFont(display,scoreGC,scoreInfo->fid);
-  XSetForeground(display,scoreGC,BlackPixel(display,screen));
-  XSetBackground(display,scoreGC,background);
-  defaultGC=XCreateGC(display,window,NULL,0);
-  XSetGraphicsExposures(display,defaultGC,FALSE);
-  XKeyboardState KBState;
-  XGetKeyboardControl(display,&KBState);
-  autoRepeatState=KBState.global_auto_repeat;
-  action.sa_handler=Stage::terminate;
-  *(unsigned int*)&action.sa_mask=0;
-  action.sa_flags=0;
-  sigaction(SIGINT,&action,NULL);
-  sigaction(SIGQUIT,&action,NULL);
-  sigaction(SIGABRT,&action,NULL);
-  sigaction(SIGTERM,&action,NULL);
   const char* seedEnv=getenv("XAST_SEED");
   srand(seedEnv ? (time_t)strtoul(seedEnv,0,10) : (time_t)time(NULL));
  }
 
 inline Stage::~Stage()
- {if (autoRepeatState==AutoRepeatModeOn)
-    XAutoRepeatOn(display);
-  XFreeGC(display,defaultGC);
-  XFreeGC(display,scoreGC);
-  XFreeGC(display,hiScoreGC);
-  XFreeGC(display,titleGC);
-  XFreePixmap(display,icon);
-  XDestroyWindow(display,window);
-  XFreeFont(display,scoreInfo);
-  XFreeFont(display,hiScoreInfo);
-  XFreeFont(display,buttonInfo);
-  XFreeFont(display,titleInfo);
-  XCloseDisplay(display);
+ {// DISARMED (task 12/D15/M4): every resource-freeing call that used to live
+   // here moved into X11Backend::shutdown, which also adds the missing fifth
+   // font free (errorInfo). Layout + logic only remain — i.e. nothing at all
+   // today.
  }
 
 inline Stage& Stage::DrawScore()
@@ -291,17 +249,6 @@ inline Stage& Stage::Refresh()
   button->DrawButton();
   DrawScore().DrawShipYard().DrawPlayingField();
   return *this;
- }
-
-void Stage::terminate(int i)
- {if (stage->autoRepeatState==AutoRepeatModeOn)
-    XAutoRepeatOn(stage->display);
-  struct sigaction action;
-  action.sa_handler=SIG_DFL;
-  *(unsigned int*)&action.sa_mask=0;
-  action.sa_flags=0;
-  sigaction(i,&action,NULL);
-  raise(i);
  }
 
 #endif
