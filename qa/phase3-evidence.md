@@ -162,3 +162,61 @@ either). O3 build restored afterwards.
 - `utilities/rendering/stbTruetypeImpl.C` (new), makefile (-DGL_BACKEND GL-leg
   only, stb TU rule, link list), XAsteroids.C (#elif GL_BACKEND paced stub
   loop; X11 branch byte-identical), vendor/fonts/* + PINNED.md rows.
+
+## Task 32 — GLBackend primitives
+
+**Executor note:** delegation outage persisted (trivial probes pass, real-work
+payloads fail upstream — pattern held through task 31); executed directly under
+the documented emergency exception.
+
+### Implementation
+
+- One color program (`#version 330 core`: vec2 pos + **vec3** color, MVP
+  uniform), compiled at initWindow via `initPrimitives()`; compile/link errors
+  surface at init through glGetShaderInfoLog/GetProgramInfoLog → false →
+  exit(1) (no mid-game first-use failures).
+- Vertex layout: interleaved [x,y,r,g,b] stride 5. VAO+VBO STREAM_DRAW.
+- `drawLine`: width 1 = GL_LINE_STRIP; width 3 = perpendicular-expanded quad in
+  LOGICAL space (SC8 — core-profile glLineWidth caps at 1; logical-space
+  expansion scales with the letterbox like the X11 canvas blit).
+- `drawPolygon` fill = ear-clipped triangles (orientation-normalized, O(n²)
+  ear test, fan fallback on degenerate input); outline = GL_LINE_LOOP.
+- `setScissorRect`: LOGICAL CLIENT coords → present-transform map + y-flip →
+  glScissor; nullptr disables (D8 HUD pass).
+- `setTransform/resetTransform`: model translate+rotate composed BEFORE the
+  present transform; semantic pinned as logical = R·local + t (object rotates
+  about its own origin, then translates — D2 rotator placement). Rotation sign
+  convention gets pinned against X11 at task 35's Q1 gate.
+- Alpha blending enabled (GL_SRC_ALPHA/ONE_MINUS_SRC_ALPHA) for the D8
+  canonical-order texture path landing at task 34.
+
+### Defects caught by the smoke gate (all fixed before commit)
+
+1. **vec4-color/stride-5 mismatch**: the fragment alpha read the NEXT vertex's
+   local-x, so interpolated alpha clipped whole halves of transformed quads and
+   rendered position-proportional gray gradients. Shader color changed to vec3;
+   FragColor = vec4(vColor,1).
+2. **earClip double-step emit**: `outPairs[2*out++]=…` incremented out between
+   the pair writes, leaving odd slots uninitialized (triangle vertices arrived
+   as {200,0,300,0,320,0}). Sequential writes fixed.
+3. **earClip return divisor**: returned floats/3 (=2 "triangles" for one);
+   corrected to floats/6.
+4. **Model-matrix composition**: rotation-about-point R(p−t)+t replaced by the
+   intended R·p+t placement semantic.
+5. Smoke scenes now redraw every frame (D8 clear+draw flow) — a draw-once
+   loop presents undefined back-buffer content on alternating swaps.
+
+### Acceptance legs (Xvfb :81, window 688x702, llvmpipe)
+
+| Assertion | Result |
+|---|---|
+| Thick line (w3) segment band px | **240** = exactly 3 rows × 80 cols; 0 px outside band |
+| Scissor clip: inside / outside px | **8100** (=90×90 exact) / **0** |
+| rot90 identity: lit bbox | x[175,224] y[125,174] — exactly the expected square |
+| Determinism (scene ×2 runs) | **0 diff bytes** |
+| Red triangle area | 7200 px = ½·120·120 exact |
+| ASan open/close cycle | exit 0, zero leaks; O3 build restored |
+| X11 no-drift | make BACKEND=X11 green; Q13 harness RESULT: PASS (AE=0 all) |
+
+Commit: `feat: GLBackend primitives — quads (thick lines), ear-clipped polygons,
+scissor clip (logical-client-coord in, backend-transformed), MVP transform`

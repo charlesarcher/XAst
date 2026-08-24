@@ -111,10 +111,42 @@ int main (int argc, char *argv[])
     timeval start,now;
     gettimeofday(&start,nullptr);
     const char* frameLog=getenv("XAST_FRAME_LOG");
+    const char* smoke=getenv("XAST_GL_SMOKE");  // task-32 acceptance scenes
+    const bool smokeOn=smoke&&smoke[0];
     for (int frame=0;frame<160;++frame)
      {engine.beginFrame();
-      if (frame==0)
-        engine.clear();
+      engine.clear();                       // D8 flow: clear every frame
+      if (smokeOn)
+       {if (!strcmp(smoke,"thick"))
+          engine.drawLine(100.0f,100.0f,200.0f,100.0f,1,1,1,3);
+        else if (!strcmp(smoke,"scissor"))
+         {const int rect[4]={50,50,100,100};
+          engine.setScissorRect(rect);
+          engine.drawRect(0.0f,0.0f,300.0f,300.0f,1,1,1,true);
+          engine.setScissorRect(nullptr);
+         }
+        else if (!strcmp(smoke,"rot90"))
+         {// A square rotated 90° about its center is pixel-identical to the
+          // unrotated square — the identity assertion for the MVP path.
+          engine.setTransform(200.0f,150.0f,1.5707963267948966f);
+          engine.drawRect(-25.0f,-25.0f,50.0f,50.0f,1,1,1,true);
+          engine.resetTransform();
+         }
+        else // "scene": determinism golden (fixed composition)
+         {engine.drawLine(80.0f,80.0f,300.0f,80.0f,1,1,1,1);
+          engine.drawLine(80.0f,120.0f,300.0f,120.0f,1,1,1,3);
+          const float tri[6]={200.0f,300.0f,320.0f,300.0f,260.0f,420.0f};
+          engine.drawPolygon(tri,3,1,0,0,true);
+          engine.drawRect(60.0f,350.0f,90.0f,60.0f,0,1,0,false);
+          const int rect[4]={400,60,200,200};
+          engine.setScissorRect(rect);
+          engine.drawRect(380.0f,40.0f,240.0f,240.0f,0,0,1,true);
+          engine.setScissorRect(nullptr);
+          engine.setTransform(500.0f,400.0f,0.7853981633974483f);
+          engine.drawRect(-30.0f,-5.0f,60.0f,10.0f,1,1,0,true);
+          engine.resetTransform();
+         }
+       }
       engine.endFrame();
       gettimeofday(&now,nullptr);
       long elapsed=(now.tv_sec-start.tv_sec)*1000000L+now.tv_usec-start.tv_usec;
