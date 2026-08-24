@@ -23,9 +23,10 @@ endif
 # object that compiles X11 code paths is not green). The domain headers carry
 # `#ifdef X11_BACKEND` body guards, so guards-closed compilation is the real
 # first mandatory-green (D-A A3). Vendor -I paths ride on these legs ONLY.
-# The two D14 .C units (rotatorDisplayData/compositePixmap) stay OFF the GPU
-# legs until task 27 supplies their engine `#else` branches; they are not in
-# the GL/VK link list either (XAsteroids.o-only link list).
+# Task 27 landed the D14 engine `#else` branches, so the two D14 .C units
+# (rotatorDisplayData/compositePixmap) now compile on EVERY leg: guards-closed
+# on GL/VK (engine-rotation data path + CPU compositing), macro'd on X11.
+# They are still not in the GL/VK link list (XAsteroids.o-only link list).
 ifneq ($(filter $(BACKEND),GL VK),)
 BACKEND_CXXFLAGS=$(VENDOR_INCS)
 endif
@@ -64,11 +65,10 @@ GL_OBJECTS=$(OBJDIR)/glad.o
 endif
 
 .PHONY: objects
-# X11 leg: all three game objects. GL/VK legs: XAsteroids.o only (+ the
-# backend-agnostic self-test/vendor units) — the D14 .C units rejoin at 27.
-ifeq ($(BACKEND),X11)
+# All three game objects on EVERY leg (task 27: the D14 units' #else engine
+# branches compile guards-closed on GL/VK, macro'd on X11) + the
+# backend-agnostic self-test/vendor units on the GPU legs.
 GAME_OBJECTS=$(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o
-endif
 objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS)
 
 $(OBJDIR):

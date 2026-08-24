@@ -81,7 +81,39 @@ class NonRotVectorData: public RotatorDisplayData
     Vector2d* vectors;
     Pixmap pixmap;
     int numVecs;
- };
+
+#ifndef X11_BACKEND
+    // D14 #else engine-rotation data path (task 27): constructor inputs
+    // captured for the rotation/texturing consumers (plan tasks 34/35).
+    // These members do not exist in the guarded configuration.
+    unsigned short decorRed,
+                   decorGreen,
+                   decorBlue;
+    const unsigned char* decorBits;
+    int decorWidth,
+        decorHeight;
+
+  public:
+    const unsigned char* DecorBits() const
+      {return decorBits;
+      }
+    int DecorWidth() const
+      {return decorWidth;
+      }
+    int DecorHeight() const
+      {return decorHeight;
+      }
+    unsigned short DecorRed() const
+      {return decorRed;
+      }
+    unsigned short DecorGreen() const
+      {return decorGreen;
+      }
+    unsigned short DecorBlue() const
+      {return decorBlue;
+      }
+#endif
+  };
 
 class RotVectorData: public RotatorDisplayData
  {public:
@@ -127,7 +159,37 @@ class RotVectorData: public RotatorDisplayData
     double incAngle;
     int numPix,
         numVecs;
-  };
+
+#ifndef X11_BACKEND
+    // D14 #else data capture (see the NonRotVectorData note above).
+    unsigned short decorRed,
+                   decorGreen,
+                   decorBlue;
+    const unsigned char* decorBits;
+    int decorWidth,
+        decorHeight;
+
+  public:
+    const unsigned char* DecorBits() const
+      {return decorBits;
+      }
+    int DecorWidth() const
+      {return decorWidth;
+      }
+    int DecorHeight() const
+      {return decorHeight;
+      }
+    unsigned short DecorRed() const
+      {return decorRed;
+      }
+    unsigned short DecorGreen() const
+      {return decorGreen;
+      }
+    unsigned short DecorBlue() const
+      {return decorBlue;
+      }
+#endif
+   };
 
 class MaskedRotVectorData: public RotatorDisplayData
  {public:
@@ -177,7 +239,37 @@ class MaskedRotVectorData: public RotatorDisplayData
     double incAngle;
     int numPix,
         numVecs;
-  };
+
+#ifndef X11_BACKEND
+    // D14 #else data capture (see the NonRotVectorData note above).
+    unsigned short decorRed,
+                   decorGreen,
+                   decorBlue;
+    const unsigned char* decorBits;
+    int decorWidth,
+        decorHeight;
+
+  public:
+    const unsigned char* DecorBits() const
+      {return decorBits;
+      }
+    int DecorWidth() const
+      {return decorWidth;
+      }
+    int DecorHeight() const
+      {return decorHeight;
+      }
+    unsigned short DecorRed() const
+      {return decorRed;
+      }
+    unsigned short DecorGreen() const
+      {return decorGreen;
+      }
+    unsigned short DecorBlue() const
+      {return decorBlue;
+      }
+#endif
+   };
 
 class RotPixmapData: public RotatorDisplayData
  {public:
@@ -196,7 +288,37 @@ class RotPixmapData: public RotatorDisplayData
     Pixmap* rotatedPix;
     double incAngle;
     int numPix;
-  };
+
+#ifndef X11_BACKEND
+    // D14 #else data capture (see the NonRotVectorData note above).
+    unsigned short decorRed,
+                   decorGreen,
+                   decorBlue;
+    const unsigned char* decorBits;
+    int decorWidth,
+        decorHeight;
+
+  public:
+    const unsigned char* DecorBits() const
+      {return decorBits;
+      }
+    int DecorWidth() const
+      {return decorWidth;
+      }
+    int DecorHeight() const
+      {return decorHeight;
+      }
+    unsigned short DecorRed() const
+      {return decorRed;
+      }
+    unsigned short DecorGreen() const
+      {return decorGreen;
+      }
+    unsigned short DecorBlue() const
+      {return decorBlue;
+      }
+#endif
+   };
 
 class MaskedRotPixmapData: public RotatorDisplayData
  {public:
@@ -219,7 +341,37 @@ class MaskedRotPixmapData: public RotatorDisplayData
     GC* maskGC;
     double incAngle;
     int numPix;
-  };
+
+#ifndef X11_BACKEND
+    // D14 #else data capture (see the NonRotVectorData note above).
+    unsigned short decorRed,
+                   decorGreen,
+                   decorBlue;
+    const unsigned char* decorBits;
+    int decorWidth,
+        decorHeight;
+
+  public:
+    const unsigned char* DecorBits() const
+      {return decorBits;
+      }
+    int DecorWidth() const
+      {return decorWidth;
+      }
+    int DecorHeight() const
+      {return decorHeight;
+      }
+    unsigned short DecorRed() const
+      {return decorRed;
+      }
+    unsigned short DecorGreen() const
+      {return decorGreen;
+      }
+    unsigned short DecorBlue() const
+      {return decorBlue;
+      }
+#endif
+   };
 
 inline const Box& RotatorDisplayData::GetBox() const
  {return box;
