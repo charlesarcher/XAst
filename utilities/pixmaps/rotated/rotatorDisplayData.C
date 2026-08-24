@@ -76,6 +76,12 @@ GC& RotatorDisplayData::GetGC(const double angle) const
   return *(GC*)NULL;
  }
 
+const Pixmap& RotatorDisplayData::GetMaskAtTime(const double angle) const
+ {cout<<endl<<"Reference made to nonexistent RotatorDislayData::GetMaskAtTime virtual function.  Execution terminated."<<endl;
+  abort();
+  return *(Pixmap*)NULL;
+ }
+
 NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
                                    XColor& color,
                                    const Vector2d* const vecs, const int nVecs): RotatorDisplayData(disp,vecs,nVecs),
@@ -617,6 +623,11 @@ GC& MaskedRotVectorData::GetGC(const double angle) const
                 /incAngle+.5)%numPix];
  }
 
+const Pixmap& MaskedRotVectorData::GetMaskAtTime(const double angle) const
+ {return clipMasks[int((fmod(angle,6.28318530717958)+6.28318530717958)
+                /incAngle+.5)%numPix];
+ }
+
 RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
                              XColor& color,
 			     const unsigned char* const bitmap, const int width , const int height):
@@ -842,5 +853,10 @@ const int MaskedRotPixmapData::GetNumPix() const
 
 GC& MaskedRotPixmapData::GetGC(const double angle) const
  {return maskGC[int((fmod(angle,6.28318530717958)+6.28318530717958)
+                /incAngle+.5)%numPix];
+ }
+
+const Pixmap& MaskedRotPixmapData::GetMaskAtTime(const double angle) const
+ {return clipMasks[int((fmod(angle,6.28318530717958)+6.28318530717958)
                 /incAngle+.5)%numPix];
  }

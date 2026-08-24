@@ -38,6 +38,8 @@ class Rotator
       GetPixAtTime(const double time) const;
     GC&
       GetMaskGCAtTime(const double time);
+    const Pixmap&
+      GetMaskAtTime(const double time) const;
     const Box&
       GetPixBox() const;
     const int
@@ -132,6 +134,11 @@ Rotator::GetPixAtTime(const double time) const
 inline GC&
 Rotator::GetMaskGCAtTime(const double time)
  {return rotData->GetGC(angle+angularVelocity.angularVelocity*time);
+ }
+
+inline const Pixmap&
+Rotator::GetMaskAtTime(const double time) const
+ {return rotData->GetMaskAtTime(angle+angularVelocity.angularVelocity*time);
  }
 
 inline const Box&

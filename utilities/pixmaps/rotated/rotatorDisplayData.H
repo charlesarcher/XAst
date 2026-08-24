@@ -21,6 +21,7 @@ class RotatorDisplayData
     virtual const Pixmap& GetPixmap(const double) const=0;
     virtual const int GetNumPix() const=0;
     virtual GC& GetGC(const double) const;
+    virtual const Pixmap& GetMaskAtTime(const double) const;
     const Box& GetBox() const;
     const double GetRadius() const;
     const double GetArea() const;
@@ -152,6 +153,7 @@ class MaskedRotVectorData: public RotatorDisplayData
     virtual const Pixmap& GetPixmap(const double) const;
     virtual const int GetNumPix() const;
     virtual GC& GetGC(const double) const;
+    virtual const Pixmap& GetMaskAtTime(const double) const;
 
   private:
     MaskedRotVectorData(const MaskedRotVectorData&);
@@ -205,6 +207,7 @@ class MaskedRotPixmapData: public RotatorDisplayData
     virtual const Pixmap& GetPixmap(const double) const;
     virtual const int GetNumPix() const;
     virtual GC& GetGC(const double) const;
+    const Pixmap& GetMaskAtTime(const double) const;
 
   private:
     MaskedRotPixmapData(const RotVectorData&);
