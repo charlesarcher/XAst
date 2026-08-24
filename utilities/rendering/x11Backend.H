@@ -283,14 +283,20 @@ class X11Backend : public RenderingEngine
       bool clickReleased=false,clickInWindow=true;
       int motionSlot=-1;
       for (;;)
-       {// Normal mode: NON-blocking drain (queue check first, exactly the
-        // old gate). Pause spin / click session: fall through to the
-        // blocking read — they waited for their terminating event no
-        // matter how quiet the queue got, and so does this.
-        if (!pauseSpin&&!clickSession)
-         {if (n>=maxCount||XEventsQueued(display,QueuedAfterReading)==0)
-            break;
-         }
+        {// Normal mode: NON-blocking drain — QueuedAfterFlush, not
+         // QueuedAfterReading: an empty queue must first FLUSH the output
+         // buffer (map+draw requests at init sit there unflushed; without
+         // the flush the server never maps the window and no Expose ever
+         // arrives — uniform-gray title). This is exactly when the old
+         // blocking read flushed before parking. In RunGame the buffer is
+         // already empty here (the frame-clock sync ran one statement
+         // earlier), so zero extra round trips. Pause spin / click session:
+         // fall through to the blocking read — they waited for their
+         // terminating event no matter how quiet the queue got.
+         if (!pauseSpin&&!clickSession)
+          {if (n>=maxCount||XEventsQueued(display,QueuedAfterFlush)==0)
+             break;
+          }
         XEvent e;
         XNextEvent(display,&e);
         GameEvent g={};
