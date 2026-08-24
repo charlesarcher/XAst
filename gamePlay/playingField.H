@@ -19,6 +19,7 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #include<X11/Xutil.h>
+#include"../utilities/rendering/x11Backend.H"
 #endif
 #include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
@@ -34,6 +35,11 @@ class PlayingField
   public:
     typedef int Boolean;
     enum {off, on};
+
+    // Transition member (T19/T21 pattern): the engine reference every
+    // migrated site draws through; DELETED at task 47 with the other
+    // transition aliases.
+    RenderingEngine& engine;
 
     PlayingField(RenderingEngine& engine);
     ~PlayingField();
@@ -84,8 +90,6 @@ class PlayingField
     timeval ResumePlay(Intersector&);
     void GenHelpScreen();
 
-    GC backgroundGC;
-
     int fontHeight,
         framesThisLevel,
         nextShipScore;
@@ -119,7 +123,12 @@ inline PlayingField::Boolean PlayingField::enemiesExist=PlayingField::on,
 
 inline const Box PlayingField::playArea(640,512,Vector2d(320+2*ROCK::scale,256+2*ROCK::scale));
 
-inline PlayingField::PlayingField(RenderingEngine&): lastHitFromAlly(off),
+inline PlayingField::PlayingField(RenderingEngine& eng): engine(eng),
+#ifdef X11_BACKEND
+                                     gc(static_cast<X11Backend&>(eng).gxorGC()),
+                                     pixmap(static_cast<X11Backend&>(eng).canvas()),
+#endif
+                                     lastHitFromAlly(off),
                                      lastHitScore(0),
 #ifdef X11_BACKEND
                                      fontHeight(stage->hiScoreInfo->ascent+stage->hiScoreInfo->descent+4),
@@ -133,8 +142,8 @@ inline PlayingField::PlayingField(RenderingEngine&): lastHitFromAlly(off),
                                      speedAdjust(uSecondsPerFrame/125E3),
                                      level(0),
 #ifdef X11_BACKEND
-                                     WM_PROTOCOLS(XInternAtom(stage->display,"WM_PROTOCOLS",FALSE)),
-                                     WM_DELETE_WINDOW(XInternAtom(stage->display,"WM_DELETE_WINDOW",FALSE)),
+                                     WM_PROTOCOLS(static_cast<X11Backend&>(eng).wmProtocolsAtom()),
+                                     WM_DELETE_WINDOW(static_cast<X11Backend&>(eng).wmDeleteWindowAtom()),
 #endif
                                      nonPermeableList(28),
                                      selfPermeableList(128),
@@ -143,34 +152,13 @@ inline PlayingField::PlayingField(RenderingEngine&): lastHitFromAlly(off),
                                      leftRotPending(off),
                                      rightRotPending(off),
                                      firing(off)
- {
-  #ifdef X11_BACKEND
-  int screen=DefaultScreen(stage->display),
-      blackPixel=BlackPixel(stage->display,screen);
-  pixmap=XCreatePixmap(stage->display,stage->window,
-		                   playArea.Width()+4*ROCK::scale,playArea.Height()+4*ROCK::scale,
-                       DefaultDepth(stage->display,screen));
-  gc=XCreateGC(stage->display,pixmap,0,NULL);
-  XSetGraphicsExposures(stage->display,gc,FALSE);
-  XSetFunction(stage->display,gc,GXor);
-  XSetFont(stage->display,gc,stage->hiScoreInfo->fid);
-  XSetForeground(stage->display,gc,WhitePixel(stage->display,screen));
-  XSetBackground(stage->display,gc,blackPixel);
-  backgroundGC=XCreateGC(stage->display,pixmap,0,NULL);
-  XSetGraphicsExposures(stage->display,backgroundGC,FALSE);
-  XSetForeground(stage->display,backgroundGC,blackPixel);
-  GenHelpScreen();
-  #endif
+ {GenHelpScreen();
  }
 
 inline PlayingField::~PlayingField()
- {
-  #ifdef X11_BACKEND
-   XFreeGC(stage->display,backgroundGC);
-   XFreeGC(stage->display,gc);
-   XFreePixmap(stage->display,pixmap);
-  #endif
- }
+ {// Disarmed at task 15 (D15): the canvas and both GCs are backend-owned
+  // now and are released in shutdown; this dtor keeps layout+logic only.
+  }
 
 inline PlayingField& PlayingField::AddShip()
  {if (!shipGroup->hyper.hyperspacing)
@@ -223,9 +211,9 @@ inline void PlayingField::DrawGame()
    }
    stage->DrawPlayingField();
   #ifdef X11_BACKEND
-   XFillRectangle(stage->display,pixmap,backgroundGC,
-                  playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
-                  playArea.Width(),playArea.Height());
+   engine.beginRenderTo((TextureId)pixmap);
+   engine.clear();
+   engine.endRenderTo();
   #endif
  }
 
@@ -340,9 +328,9 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   framesSinceEnemy=0;
   for (int i=0;i<initialShips;++i)
     shipYard->AddShip();
-  XFillRectangle(stage->display,pixmap,backgroundGC,
-                 playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
-                 playArea.Width(),playArea.Height());
+  engine.beginRenderTo((TextureId)pixmap);
+  engine.clear();
+  engine.endRenderTo();
   NewRocksAndEnemy();
   DrawGame();
   while(shipYard->NumShips())
@@ -550,20 +538,26 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
       yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+stage->hiScoreInfo->ascent,
       yPos=yPosSave;
   char str[23];
+  engine.beginRenderTo((TextureId)pixmap);
   for(int i=0;i<score->NumScores();++i)
    {const int nameWidth=12-(int)strlen(score->TopTenName(i));
     snprintf(str,sizeof(str),"%s%*s%10d",
              score->TopTenName(i),nameWidth>0?nameWidth:1,"",
              score->TopTenScore(i));
-    XDrawString(stage->display,pixmap,gc,xPos,yPos,str,strlen(str));
+    engine.drawStringTransparent(str,(float)xPos,(float)yPos,
+                                 EngineFont_HiScore,1.0f,1.0f,1.0f);
     yPos+=fontHeight;
    }
-  XDrawString(stage->display,pixmap,gc,xPos,yPos=yPosSave+12*fontHeight,
-              "        S -- start",strlen("        S -- start"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
-              "        Q -- quit",strlen("        Q -- quit"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
-              "        H -- help",strlen("        H -- help"));
+  engine.drawStringTransparent("        S -- start",(float)xPos,
+                               (float)(yPos=yPosSave+12*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        Q -- quit",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        H -- help",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.endRenderTo();
   stage->DrawPlayingField();
   return off;
   }
@@ -572,36 +566,11 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
 inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
  {
   #ifdef X11_BACKEND
-  XSizeHints* sizeHints=XAllocSizeHints();
-  sizeHints->min_width=sizeHints->max_width=sizeHints->base_width=stage->windowWidth;
-  sizeHints->min_height=sizeHints->max_height=sizeHints->base_height=stage->windowHeight;
-  sizeHints->width_inc=sizeHints->height_inc=0;
-  sizeHints->win_gravity=CenterGravity;
-  sizeHints->flags=PMinSize|PMaxSize|PResizeInc|PBaseSize|PWinGravity;
-  char gameName[10]="Asteroids",
-     * gameNameAddr=gameName;
-  XTextProperty textProperty;
-  XStringListToTextProperty(&gameNameAddr,1,&textProperty);
-  XWMHints* windowHints=XAllocWMHints();
-  windowHints->icon_pixmap=stage->icon;
-  windowHints->flags=IconPixmapHint;
-  XClassHint* classHint=XAllocClassHint();
-  XSetWMProperties(stage->display,stage->window,&textProperty,&textProperty,
-                   argv,argc,sizeHints,windowHints,classHint);
-  XFree((char*)classHint);
-  XFree((char*)windowHints);
-  XFree((char*)sizeHints);
-  XSetWMProtocols(stage->display,stage->window,&WM_DELETE_WINDOW,1);
-  XAutoRepeatOff(stage->display);
-  XSelectInput(stage->display,stage->window,EnterWindowMask|LeaveWindowMask
-                                          |StructureNotifyMask|ExposureMask
-                                          |KeyPressMask|KeyReleaseMask
-                                           |ButtonPressMask|ButtonReleaseMask
-                                           |Button1MotionMask);
-#ifdef X11_BACKEND
+  // The WM-hints block (naming, protocol registration, input selection,
+  // map-and-raise) relocated into the backend's pass-2 init at task 15
+  // (D-C C1); its two recorded deltas live there (argv/argc as NULL,0;
+  // map-and-raise at init). The size pin is dropped entirely (v6/S2/D15).
   Options options(argc,argv);
-#endif
-  XMapRaised(stage->display,stage->window);
   XEvent event;
   int localHighScore=0;
   Boolean pointerButtonReleased=on,
@@ -682,33 +651,42 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
 void PlayingField::GenHelpScreen()
  {
   #ifdef X11_BACKEND
-  XFillRectangle(stage->display,pixmap,backgroundGC,
-                 playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
-                 playArea.Width(),playArea.Height());
+  engine.beginRenderTo((TextureId)pixmap);
+  engine.clear();
+  engine.endRenderTo();
   int xPos=playArea.NorthWestCorner().x+(playArea.Width()
-                                         -XTextWidth(stage->hiScoreInfo,
-                                                     "        H -- help (this screen)",
-                                                     strlen("        H -- help (this screen)")))/2
+                                         -(int)engine.measureText("        H -- help (this screen)",
+                                                                  EngineFont_HiScore))/2
            -stage->hiScoreInfo->max_bounds.lbearing,
       yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+stage->hiScoreInfo->ascent;
-  XDrawString(stage->display,pixmap,gc,xPos,yPos,
-              "        S -- start",strlen("        S -- start"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
-              "        Q -- quit",strlen("        Q -- quit"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=2*fontHeight,
-              "        E -- rotate left",strlen("        E -- rotate left"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
-              "        R -- rotate right",strlen("        R -- rotate right"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
-              "        O -- thrust",strlen("        O -- thrust"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
-              "        P -- fire",strlen("        P -- fire"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=fontHeight,
-              "space bar -- hyperspace",strlen("space bar -- hyperspace"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=2*fontHeight,
-              "        N -- new game",strlen("        N -- new game"));
-  XDrawString(stage->display,pixmap,gc,xPos,yPos+=2*fontHeight,
-              "        H -- help (this screen)",strlen("        H -- help (this screen)"));
+  engine.beginRenderTo((TextureId)pixmap);
+  engine.drawStringTransparent("        S -- start",(float)xPos,(float)yPos,
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        Q -- quit",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        E -- rotate left",(float)xPos,
+                               (float)(yPos+=2*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        R -- rotate right",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        O -- thrust",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        P -- fire",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("space bar -- hyperspace",(float)xPos,
+                               (float)(yPos+=fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        N -- new game",(float)xPos,
+                               (float)(yPos+=2*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
+                               (float)(yPos+=2*fontHeight),
+                               EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.endRenderTo();
   #endif
  }
 

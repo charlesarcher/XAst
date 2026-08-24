@@ -44,6 +44,11 @@
 // |                                   |            | GCs (engine primitives / |
 // |                                   |            | clip-mask draws); not    |
 // |                                   |            | census sites             |
+// | Play-field canvas pixmap          | X11Backend | created in initWindow    |
+// |                                   |            | pass 2 (task 15), parent |
+// |                                   |            | window; freed in         |
+// |                                   |            | shutdown; NOT registered |
+// |                                   |            | in textureDims_          |
 // | Keyboard auto-repeat saved state  | X11Backend | XGetKeyboardControl in   |
 // | + SIGINT/SIGQUIT/SIGABRT/SIGTERM  |            | pass 2; restored in      |
 // | signal handler (stage.H:208-221/  |            | shutdown BEFORE frees;   |
@@ -55,9 +60,8 @@
 // | GL context, FBOs, VBOs, textures  | GLBackend/ | backend-owned; freed in  |
 // | window close on GL/VK             | VKBackend/ | shutdown; glfw close cb  |
 // |                                   | glfw cb    | routes to same sequence  |
-// | Extension rows: play-field canvas | (task 15)  | button faces (16),       |
-// | pixmap                            |            | shipyard icons (17),     |
-// |                                   |            | explosion frames (18)    |
+// | Extension rows: button faces (16), shipyard icons (17), explosion frames |
+// | (18)                                                                     |
 // // ===========================================================================
 //
 // Task-12 staging notes (what deliberately does NOT move yet):
@@ -68,11 +72,13 @@
 //    verbatim relocation; pollEvents() below is a typed NON-BLOCKING drain
 //    that nothing calls on X11 until then — no event dropped or double-
 //    handled (the domain loop remains the pre-25 authority).
-//  - The WM-hints block (XAllocSizeHints/XSetWMProperties/XSetWMProtocols/
-//    XSelectInput/XMapRaised, playingField.H:553-582) relocates at TASK 15
-//    with PSizeHints min/max UNSET (v6/S2 — no size pin anywhere). Until then
-//    PlayTheGame keeps applying its pin exactly as before, which is what Q13
-//    byte-identity requires. This file adds NO pin of its own.
+//  - The WM-hints block (naming/protocol-registration/input-selection/map-
+//    and-raise) RELOCATED here at task 15 (D-C C1), verbatim-order after the
+//    KBState save, with the size-pin hint structure dropped entirely
+//    (v6/S2/D15 — no pin anywhere). Two recorded deltas vs the old
+//    PlayTheGame site: argv/argc pass as NULL,0 (frozen initWindow signature;
+//    command-name property unset, pixel-inert) and the map-and-raise fires at
+//    init instead of first PlayTheGame entry.
 //  - ConfigureNotify-driven present-transform caching arrives with the event
 //    island (task 25): draining events from here NOW would steal them from
 //    the domain loop. getPresentTransform() therefore recomputes on demand
@@ -101,14 +107,18 @@ class X11Backend : public RenderingEngine
  {public:
     X11Backend()
       : display(nullptr),window(None),screen(0),
-        iconPixmap(None),
+        iconPixmap(None),canvasPixmap_(None),
         titleGC_(None),hiScoreGC_(None),scoreGC_(None),defaultGC_(None),
+        buttonGC_(None),
         backgroundGC_(None),gxorGC_(None),primitiveGC_(None),maskedGC_(None),
         currentTarget_(None),
+        wmProtocolsAtom_(None),wmDeleteWindowAtom_(None),
         autoRepeatState_(AutoRepeatModeOff),
         windowWidth_(0),windowHeight_(0),
         canonicalPlayAreaWidth_(0),canonicalPlayAreaHeight_(0),
         canonicalMaxIconHeight_(0),
+        canvasClearX_(0),canvasClearY_(0),
+        canvasClearW_(0),canvasClearH_(0),
         scissorActive_(false),
         scissorX_(0),scissorY_(0),scissorW_(0),scissorH_(0)
      {fonts_[0]=fonts_[1]=fonts_[2]=fonts_[3]=fonts_[4]=nullptr;
@@ -133,9 +143,9 @@ class X11Backend : public RenderingEngine
     // (1) Window lifecycle
     // ------------------------------------------------------------------
     virtual bool initWindow(const char* title) override
-     {(void)title;   // WM naming stays in PlayTheGame's XSetWMProperties site
-                     // until task 15 relocates it; nothing maps the window
-                     // here (XMapRaised stays in PlayTheGame until 15 too).
+     {(void)title;   // WM naming now lives in the pass-2 relocated block
+                     // (task 15); the title argument stays for the frozen
+                     // interface signature.
       if (!openDisplayAndFonts())                    // ---- pass 1 (D15)
         return false;
       return createWindowIconGCsAndHandlers();       // ---- pass 2 (D15)
@@ -151,12 +161,14 @@ class X11Backend : public RenderingEngine
       if (titleGC_)      XFreeGC(display,titleGC_);
       if (scoreGC_)      XFreeGC(display,scoreGC_);
       if (hiScoreGC_)    XFreeGC(display,hiScoreGC_);
+      if (buttonGC_)     XFreeGC(display,buttonGC_);
       if (defaultGC_)    XFreeGC(display,defaultGC_);
       if (backgroundGC_) XFreeGC(display,backgroundGC_);
       if (gxorGC_)       XFreeGC(display,gxorGC_);
       if (primitiveGC_)  XFreeGC(display,primitiveGC_);
       if (maskedGC_)     XFreeGC(display,maskedGC_);
       if (iconPixmap)    XFreePixmap(display,iconPixmap);
+      if (canvasPixmap_) XFreePixmap(display,canvasPixmap_);
       // ALL FIVE fonts incl. errorInfo — F4 named assertion (m18/U14 closed).
       for (int i=0;i<5;++i)
        {if (fonts_[i])
@@ -167,8 +179,8 @@ class X11Backend : public RenderingEngine
         XDestroyWindow(display,window);
       if (display)
         XCloseDisplay(display);
-      display=nullptr;window=None;iconPixmap=None;
-      titleGC_=hiScoreGC_=scoreGC_=defaultGC_=None;
+      display=nullptr;window=None;iconPixmap=None;canvasPixmap_=None;
+      titleGC_=hiScoreGC_=scoreGC_=defaultGC_=buttonGC_=None;
       backgroundGC_=gxorGC_=primitiveGC_=maskedGC_=None;
       currentTarget_=None;
       textureDims_.clear();
@@ -306,17 +318,18 @@ class X11Backend : public RenderingEngine
     // (4) Primitives
     // ------------------------------------------------------------------
     virtual void clear() override
-     {// SPECIFIED: XFillRectangle via backgroundGC_ (GXcopy — the GC default
-      // function, never changed — with black foreground; playingField.H:77/
-      // :149-151 semantics). The gxor GC is compositing-only (R4-M1).
+     {// The raw clears filled only the play-area SUB-RECT of the canvas
+      // (playingField.H :226/:343/:685 semantics): rect (80,80,W,H) inside
+      // the (W+4*40,H+4*40) canvas — NEVER the whole drawable (the canvas
+      // border ring survives). backgroundGC_ is GXcopy black (GC default
+      // function, never changed); the gxor GC is compositing-only (R4-M1).
+      // Callers bracket beginRenderTo(canvas)/clear()/endRenderTo().
       if (!display)
         return;
-      unsigned int w=0,h=0,bb=0,depth=0;
-      Window root;int wx,wy;
-      if (!XGetGeometry(display,currentTarget_,&root,&wx,&wy,&w,&h,&bb,&depth))
-        return;
       XSetForeground(display,backgroundGC_,BlackPixel(display,screen));
-      XFillRectangle(display,currentTarget_,backgroundGC_,0,0,w,h);
+      XFillRectangle(display,currentTarget_,backgroundGC_,
+                     canvasClearX_,canvasClearY_,
+                     (unsigned int)canvasClearW_,(unsigned int)canvasClearH_);
      }
 
     virtual void drawLine(float x1,float y1,float x2,float y2,
@@ -385,15 +398,25 @@ class X11Backend : public RenderingEngine
      }
 
     virtual void drawStringTransparent(const char* text,float x,float y,
-                                       int fontId,
-                                       float r,float g,float b) override
-     {if (!display||!validFont(fontId)||!text)
-        return;
-      GC gc=fontGC((EngineFontId)fontId);
-      XSetForeground(display,gc,pixelFor(r,g,b));
-      XDrawString(display,currentTarget_,gc,(int)x,(int)y,
-                  text,(int)strlen(text));
-     }
+                                        int fontId,
+                                        float r,float g,float b) override
+      {if (!display||!validFont(fontId)||!text)
+         return;
+       // Canvas route keeps the gxor GC VERBATIM (attributes untouched): the
+       // game-over score table XOR-composites over the surviving final frame
+       // (function bit load-bearing, D3); the help screen draws over fresh
+       // black where GXor ≡ GXcopy pixel-wise. Any other target uses the
+       // per-font GC + requested color (stage's title site needs GXcopy).
+       if (currentTarget_==(Drawable)canvasPixmap_)
+        {XDrawString(display,currentTarget_,gxorGC_,(int)x,(int)y,
+                     text,(int)strlen(text));
+         return;
+        }
+       GC gc=fontGC((EngineFontId)fontId);
+       XSetForeground(display,gc,pixelFor(r,g,b));
+       XDrawString(display,currentTarget_,gc,(int)x,(int)y,
+                   text,(int)strlen(text));
+      }
 
     virtual float measureText(const char* text,int fontId) override
      {if (!validFont(fontId)||!text)
@@ -442,12 +465,18 @@ class X11Backend : public RenderingEngine
 
     virtual void drawTexture(TextureId tex,float x,float y,float w,float h,
                              float alpha) override
-     {// XCopyArea pass-through; alpha ignored (core X11 has no blended copy —
-      // D14 pass-through preserves current behavior exactly).
+     {// Copy pass-through; alpha ignored (core X11 has no blended copy —
+      // D14 pass-through preserves current behavior exactly). Target routing
+      // (task 15, resolves the T19/T21 divergence): world sprites drew onto
+      // the canvas through THE gxor compositing GC (the single repo-wide
+      // function bit, D3 — XOR is load-bearing over prior frame content),
+      // while render-target faces copy GXcopy. One method, two required
+      // functions on X11 → route on the current target.
       (void)alpha;
       if (!display||!tex)
         return;
-      XCopyArea(display,(Drawable)tex,currentTarget_,defaultGC_,
+      GC gc=(currentTarget_==(Drawable)canvasPixmap_)?gxorGC_:defaultGC_;
+      XCopyArea(display,(Drawable)tex,currentTarget_,gc,
                 0,0,(unsigned int)w,(unsigned int)h,(int)x,(int)y);
      }
 
@@ -531,9 +560,33 @@ class X11Backend : public RenderingEngine
     inline GC hiScoreGC() const {return hiScoreGC_;}
     inline GC scoreGC() const {return scoreGC_;}
     inline GC defaultGC() const {return defaultGC_;}
+    // Task-15 accessors: canvas + gxor GC feed PlayingField's non-owning
+    // alias members (pixmap/gc survive until task 22 per D-C C3); the atom
+    // values are captured in pass 2 and read by PlayingField's ctor aliases
+    // (options.H readers compile unchanged until task 47).
+    inline Pixmap canvas() const {return canvasPixmap_;}
+    inline GC gxorGC() const {return gxorGC_;}
+    inline Atom wmProtocolsAtom() const {return wmProtocolsAtom_;}
+    inline Atom wmDeleteWindowAtom() const {return wmDeleteWindowAtom_;}
     inline int autoRepeatState() const {return autoRepeatState_;}
     inline int windowWidth() const {return windowWidth_;}
     inline int windowHeight() const {return windowHeight_;}
+    // Depth-1 bitmap creation for clip-mask consumers (D6): the generic texture
+    // path targets window depth; GC clip masks require depth 1.
+    inline TextureId createBitmapMask(const uint8_t* bits,int w,int h)
+     {if (!display) return 0;
+      Pixmap p=XCreateBitmapFromData(display,window,(const char*)bits,w,h);
+      return (TextureId)p;}
+    // First-character left bearing of text in the given font: the raw label
+    // placement consumed this from per-string extents; FontMetrics carries
+    // only the font-wide maximum, which differs for the button face label.
+    inline int textFirstCharLbearing(const char* text,int fontId)
+     {if (!validFont(fontId)||!text||!text[0])
+        return 0;
+      int direction,ascent,descent;
+      XCharStruct info;
+      XTextExtents(fonts_[fontId],text,1,&direction,&ascent,&descent,&info);
+      return info.lbearing;}
 
   private:
     // ---- pass 1 (D15): display + ALL FIVE fonts -------------------------
@@ -614,6 +667,7 @@ class X11Backend : public RenderingEngine
       titleGC_=makeFontGC(fonts_[EngineFont_Title],background);
       hiScoreGC_=makeFontGC(fonts_[EngineFont_HiScore],background);
       scoreGC_=makeFontGC(fonts_[EngineFont_Score],background);
+      buttonGC_=makeFontGC(fonts_[EngineFont_Button],background);
       defaultGC_=makeFontGC(nullptr,0);
       // backgroundGC: GXcopy (GC default), black fg — ALL clears
       // (playingField.H:77/:149-151 semantics; created here at task 12 ahead
@@ -635,6 +689,21 @@ class X11Backend : public RenderingEngine
       maskedGC_=XCreateGC(display,window,NULL,0);
       XSetGraphicsExposures(display,maskedGC_,False);
       XSetClipMask(display,maskedGC_,None);
+      // Play-field canvas pixmap (D15 row): created here at task 15 — owner
+      // = this backend, freed in shutdown — parented to the window (the same
+      // drawable argument the old PlayingField ctor site used). Geometry
+      // duplicates two domain constants because layering forbids gamePlay
+      // includes (windowBg-gray precedent): the rock scale is 40, so the
+      // canvas is play-area + 4*40 per side and the clear sub-rect sits at
+      // (2*40, 2*40). Deliberately NOT registered in textureDims_ (not
+      // caller-lifetime; prevents an accidental deleteTexture double-free).
+      canvasPixmap_=XCreatePixmap(display,window,
+                                  (unsigned int)(canonicalPlayAreaWidth_+4*40),
+                                  (unsigned int)(canonicalPlayAreaHeight_+4*40),
+                                  (unsigned int)DefaultDepth(display,screen));
+      canvasClearX_=2*40;canvasClearY_=2*40;
+      canvasClearW_=canonicalPlayAreaWidth_;
+      canvasClearH_=canonicalPlayAreaHeight_;
       // Saved keyboard auto-repeat state (stage.H:212-214 position: BEFORE
       // PlayTheGame's XAutoRepeatOff) + the terminate-path signal handler
       // (stage.H:215-221 verbatim registration; M7/N6 — the handler now
@@ -650,6 +719,39 @@ class X11Backend : public RenderingEngine
       sigaction(SIGQUIT,&action,NULL);
       sigaction(SIGABRT,&action,NULL);
       sigaction(SIGTERM,&action,NULL);
+      // ---- WM-hints block relocated VERBATIM-ORDER from PlayTheGame
+      // (playingField.H:581-604) at task 15 (D-C C1). Position is AFTER the
+      // KBState save so autoRepeatState_ captures the pre-off state (order
+      // trap: an earlier off would break exit-restore). Two recorded deltas:
+      // argv/argc pass as NULL,0 (frozen initWindow(const char*) signature;
+      // command-name property unset — pixel-inert) and map-and-raise fires
+      // at init instead of first PlayTheGame entry. The size-pin hint
+      // structure is dropped entirely per v6/S2/D15 (no pin anywhere): its
+      // allocation AND its free slot are gone; min/max UNSET. The pre-
+      // existing text-property leak below is PRESERVED (ASan baseline).
+      wmProtocolsAtom_=XInternAtom(display,"WM_PROTOCOLS",False);
+      wmDeleteWindowAtom_=XInternAtom(display,"WM_DELETE_WINDOW",False);
+      {char gameName[10]="Asteroids",
+         * gameNameAddr=gameName;
+       XTextProperty textProperty;
+       XStringListToTextProperty(&gameNameAddr,1,&textProperty);
+       XWMHints* windowHints=XAllocWMHints();
+       windowHints->icon_pixmap=iconPixmap;
+       windowHints->flags=IconPixmapHint;
+       XClassHint* classHint=XAllocClassHint();
+       XSetWMProperties(display,window,&textProperty,&textProperty,
+                        NULL,0,NULL,windowHints,classHint);
+       XFree((char*)classHint);
+       XFree((char*)windowHints);
+       XSetWMProtocols(display,window,&wmDeleteWindowAtom_,1);
+       XAutoRepeatOff(display);
+       XSelectInput(display,window,EnterWindowMask|LeaveWindowMask
+                                       |StructureNotifyMask|ExposureMask
+                                       |KeyPressMask|KeyReleaseMask
+                                        |ButtonPressMask|ButtonReleaseMask
+                                        |Button1MotionMask);
+       XMapRaised(display,window);
+      }
       s_activeBackend=this;
       return true;
      }
@@ -670,6 +772,7 @@ class X11Backend : public RenderingEngine
        {case EngineFont_Title:   return titleGC_;
         case EngineFont_HiScore: return hiScoreGC_;
         case EngineFont_Score:   return scoreGC_;
+        case EngineFont_Button:  return buttonGC_;
         default:                 return defaultGC_;
        }
      }
@@ -799,14 +902,18 @@ class X11Backend : public RenderingEngine
     Window window;
     int screen;
     Pixmap iconPixmap;
+    Pixmap canvasPixmap_;
     XFontStruct* fonts_[5];
     GC titleGC_,hiScoreGC_,scoreGC_,defaultGC_;
+    GC buttonGC_;
     GC backgroundGC_,gxorGC_,primitiveGC_,maskedGC_;
     Drawable currentTarget_;
+    Atom wmProtocolsAtom_,wmDeleteWindowAtom_;
     int autoRepeatState_;
     int windowWidth_,windowHeight_;
     int canonicalPlayAreaWidth_,canonicalPlayAreaHeight_,
         canonicalMaxIconHeight_;
+    int canvasClearX_,canvasClearY_,canvasClearW_,canvasClearH_;
     bool scissorActive_;
     int scissorX_,scissorY_,scissorW_,scissorH_;
     std::map<TextureId,std::pair<int,int> > textureDims_;

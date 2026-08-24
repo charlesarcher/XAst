@@ -1,12 +1,12 @@
 # .omo Artifact Index
 
-Updated: 2026-08-23 (rounds 9+10 closure)
+Updated: 2026-08-23 (v3 archive removed per USER decision after supersession audit)
 
 ## Map
 
 - `plans/` — execution plans (single source of truth for work sequencing)
   - `rendering-abstraction.md` — CURRENT plan, v6.4 FINAL (rounds-9/10 remediation incl. R9-M2 refutation record; USER GATE resolved: KEEP VULKAN; 48 contiguous tasks / 6 phases / Appendix wave schedule W0–W25; round-10 unit extraction lives in its receipt — 71 units, 23/17 waves). sha256 `ce059e6afc4ef1dee8f9e3a91dcf79e76a1600473e575fa71daea0c20ecbddfa` (1202 lines / 258817 bytes, 2026-08-23).
-  - `rendering-abstraction-v3-archived.md` — superseded v3, byte-identical archive.
+  - ~~`rendering-abstraction-v3-archived.md`~~ — REMOVED 2026-08-23 by USER decision ("If not, delete the archived plan") after full supersession audit: every v3 element (D1–D16, Phase 0–5 tasks, SC1–13, F1–F5, review-fix trail C/M/m/A) verified absorbed or deliberately reversed in the current plan (see §Scope Changes v5→v6 S1/S2, §D round-3 register). Historical references remain valid in frozen receipts and the draft session log.
 - `reviews/` — review receipts (frozen once cited; never edited post-citation)
   - `rendering-abstraction-high-accuracy-review.md` — round-2 evidence
   - `rendering-abstraction-hyperplan-review.md` — round-3 receipt
@@ -22,7 +22,7 @@ Updated: 2026-08-23 (rounds 9+10 closure)
 ## Retention rules
 
 1. Receipts are immutable once cited by a plan or ledger — corrections land as NEW documents or ledger annotations, never in-place edits.
-2. Archived plans stay byte-identical; old versions are never patched.
+2. Archived plans stay byte-identical while retained; old versions are never patched. Removal requires an explicit USER decision recorded here.
 3. `run-continuation/` JSONs with mtime older than the current working day are deletable after confirming no live session references them.
 4. Update this index at every plan version bump and review-round closure; a plan mutation always pairs with a fresh sha256 re-hash recorded in the draft ledger front-matter.
 
