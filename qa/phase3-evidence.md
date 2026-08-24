@@ -220,3 +220,42 @@ the documented emergency exception.
 
 Commit: `feat: GLBackend primitives — quads (thick lines), ear-clipped polygons,
 scissor clip (logical-client-coord in, backend-transformed), MVP transform`
+
+## Task 33 — GLBackend text (stb, 4 fonts, max_bounds)
+
+**Executor note:** delegation outage persisted; executed directly under the
+documented emergency exception.
+
+### Implementation
+
+- Coverage atlas (2048×512 GL_R8): ASCII 32..126 rasterized per slot via
+  stbtt_GetCodepointBitmap at the D12 pixel sizes (title 40 / button 10 /
+  hi-score 20 from DejaVuSans-Bold; score 40 from DejaVuSansMono-Bold);
+  shelf-packed with in-band wrap. UNPACK_ALIGNMENT=1.
+- Text program: pos+uv, uMVP + uColor tint, samples atlas .r →
+  FragColor=(color·a, a) so blending composites glyphs correctly.
+- `drawStringTransparent` = glyph quads only (XDrawString); `drawStringOpaque`
+  = background cell quad (measureText width × ascent+descent) then glyphs
+  (XDrawImageString). Pen y = BASELINE (X11 semantics).
+- `measureText`/`getFontMetrics` (landed at 31) supply total-width centering +
+  max_bounds — the D12/M5 policy. NO errorInfo slot exists on GL (m21).
+
+### Acceptance legs
+
+| Assertion | Result |
+|---|---|
+| Determinism (text scene ×2) | 0 diff bytes |
+| Title "Asteroids" glyphs | 1139 px, bbox x[58,419] y[74,101] (baseline 100, asc ≈26 above) |
+| Hi-score row glyphs | 314 px |
+| Score digits glyphs | 1111 px |
+| Opaque bg cell | yellow (255,255,0) behind black glyphs ✓ |
+| Metrics non-degenerate (4 slots) | asc/desc/maxw all >0: (31.9/8.1/37.9) (8.0/2.0/9.5) (15.9/4.1/19.0) (31.9/8.1/20.7) |
+| errorInfo font loaded | none — grep: GL leg has exactly 4 slots |
+| ASan open/close cycle | exit 0, zero leaks; O3 restored |
+| X11 no-drift | Q13 harness RESULT: PASS (AE=0 all) |
+
+The F2 font PIXEL gate (0 px outside text masks vs X11) executes at task 36
+with the full harness GL leg; this task's gates are the pre-harness subset.
+
+Commit: `feat: GLBackend text — stb 4 fonts, max_bounds metrics,
+opaque/transparent paths, pixel font gate prep`

@@ -132,6 +132,16 @@ int main (int argc, char *argv[])
           engine.drawRect(-25.0f,-25.0f,50.0f,50.0f,1,1,1,true);
           engine.resetTransform();
          }
+        else if (!strcmp(smoke,"text"))
+         {engine.drawStringTransparent("Asteroids",50.0f,100.0f,
+                                       EngineFont_Title,1,1,1);
+          engine.drawStringOpaque("Options",400.0f,100.0f,
+                                  EngineFont_Button,0,0,0,1,1,0);
+          engine.drawStringTransparent("HIGH SCORE",60.0f,300.0f,
+                                       EngineFont_HiScore,1,1,1);
+          engine.drawStringTransparent("0123456789",60.0f,380.0f,
+                                       EngineFont_Score,1,1,1);
+         }
         else // "scene": determinism golden (fixed composition)
          {engine.drawLine(80.0f,80.0f,300.0f,80.0f,1,1,1,1);
           engine.drawLine(80.0f,120.0f,300.0f,120.0f,1,1,1,3);

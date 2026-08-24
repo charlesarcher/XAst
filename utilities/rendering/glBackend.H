@@ -70,12 +70,18 @@ class GLBackend : public RenderingEngine
        presentDirty_(true),presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
        closeRequested_(false),shutdownDone_(false),glfwInitialized_(false),
        colorProgram_(0),mvpLocation_(-1),vao_(0),vbo_(0),
-       tx_(0.0f),ty_(0.0f),angle_(0.0f)
+       tx_(0.0f),ty_(0.0f),angle_(0.0f),
+       atlasTex_(0),textProgram_(0),
+       textMvpLocation_(-1),textColorLocation_(-1),textAtlasLocation_(-1),
+       textVao_(0),textVbo_(0)
      {for (int i=0;i<4;++i)
         {fontInfo_[i]=new stbtt_fontinfo;
          fontData_[i]=nullptr;fontDataLen_[i]=0;
          fontScale_[i]=0.0f;
          maxAsciiAdvance_[i]=0.0f;
+         slotShelfH_[i]=0;
+         for (int c=0;c<128;++c)
+           glyphs_[i][c].present=false;
         }
       s_instance=this;   // callbacks route here (exactly one engine exists)
      }
@@ -122,6 +128,15 @@ class GLBackend : public RenderingEngine
        }
       // GL objects: program/buffer/array first (need a current context —
       // glfwDestroyWindow below would strip it), then the window/library.
+      if (textVbo_)
+        glDeleteBuffers(1,&textVbo_);
+      if (textVao_)
+        glDeleteVertexArrays(1,&textVao_);
+      if (atlasTex_)
+        glDeleteTextures(1,&atlasTex_);
+      if (textProgram_)
+        glDeleteProgram(textProgram_);
+      textVbo_=0;textVao_=0;atlasTex_=0;textProgram_=0;
       if (vbo_)
         glDeleteBuffers(1,&vbo_);
       if (vao_)
@@ -332,16 +347,24 @@ class GLBackend : public RenderingEngine
     virtual void drawStringOpaque(const char* text,float x,float y,int fontId,
                                   float r,float g,float b,
                                   float bgR,float bgG,float bgB) override
-     {(void)text;(void)x;(void)y;(void)fontId;(void)r;(void)g;(void)b;
-      (void)bgR;(void)bgG;(void)bgB;
-      // TODO(task 33): glyph quads over a bg quad (XDrawImageString mapping).
+     {// XDrawImageString mapping (D12): cell background quad THEN glyphs.
+      if (!window||!validFont(fontId)||!text||!*text)
+        return;
+      float w=measureText(text,fontId);
+      FontMetrics fm;
+      getFontMetrics(fontId,fm);
+      drawRect(x,y-fm.max_bounds.ascent,w,
+               fm.max_bounds.ascent+fm.max_bounds.descent,bgR,bgG,bgB,true);
+      drawGlyphs(text,x,y,fontId,r,g,b);
      }
 
     virtual void drawStringTransparent(const char* text,float x,float y,
                                        int fontId,
                                        float r,float g,float b) override
-     {(void)text;(void)x;(void)y;(void)fontId;(void)r;(void)g;(void)b;
-      // TODO(task 33): glyph quads only (XDrawString mapping).
+     {// XDrawString mapping (D12): glyphs only, no background cell.
+      if (!window||!validFont(fontId)||!text||!*text)
+        return;
+      drawGlyphs(text,x,y,fontId,r,g,b);
      }
 
     virtual float measureText(const char* text,int fontId) override
@@ -772,6 +795,18 @@ class GLBackend : public RenderingEngine
        {shutdown();
         return false;
        }
+      if (!initText())
+       {shutdown();
+        return false;
+       }
+      if (getenv("XAST_FRAME_LOG"))
+        for (int i=0;i<4;++i)
+         {FontMetrics fm;
+          getFontMetrics(i,fm);
+          fprintf(stderr,"[metrics] slot=%d asc=%.1f desc=%.1f maxw=%.1f\n",
+                  i,fm.max_bounds.ascent,fm.max_bounds.descent,
+                  fm.max_bounds.width);
+         }
       return true;
      }
 
@@ -796,6 +831,180 @@ class GLBackend : public RenderingEngine
     bool validFont(int fontId) const
      {return fontId>=0&&fontId<=3&&fontInfo_[fontId]!=nullptr
              &&fontData_[fontId]!=nullptr;
+     }
+
+    // ------------------------------------------------------------------
+    // Text (task 33): shelf-packed coverage atlas + per-glyph quads.
+    // ------------------------------------------------------------------
+    struct GlyphInfo
+     {float u0,v0,u1,v1;      // atlas UVs (v flipped at draw time)
+      float w,h;              // bitmap size in logical px
+      float advance;          // x advance (logical px)
+      float bearingX,bearingY;// offset from pen to bitmap top-left
+      bool present;
+     };
+
+    bool initText()
+     {// Rasterize ASCII 32..126 for all four slots into ONE atlas texture.
+      // Shelf packing: one shelf per slot, glyphs left-to-right, wrap within
+      // the slot's band. Coverage is single-channel; the text shader reads .r.
+      const int AW=2048,AH=512;
+      uint8_t* atlas=new uint8_t[AW*AH]();
+      int shelfY[4];
+      int curX=0;
+      for (int s=0;s<4;++s)
+       {shelfY[s]=s==0?0:shelfY[s-1]+slotShelfH_[s-1];
+        curX=0;
+        slotShelfH_[s]=0;
+        for (int cp=32;cp<127;++cp)
+         {int w=0,h=0,xoff=0,yoff=0;
+          uint8_t* bmp=stbtt_GetCodepointBitmap(fontInfo_[s],fontScale_[s],
+                                                fontScale_[s],cp,
+                                                &w,&h,&xoff,&yoff);
+          if (w>0&&h>0)
+           {if (curX+w+1>=AW)                 // wrap inside the slot band
+             {curX=0;
+              shelfY[s]+=slotShelfH_[s]+1;
+              slotShelfH_[s]=0;
+             }
+            for (int row=0;row<h;++row)
+              memcpy(atlas+(shelfY[s]+row)*AW+curX,bmp+row*w,(size_t)w);
+            GlyphInfo& g=glyphs_[s][cp];
+            g.u0=(float)curX/AW;      g.v0=(float)shelfY[s]/AH;
+            g.u1=(float)(curX+w)/AW;  g.v1=(float)(shelfY[s]+h)/AH;
+            g.w=(float)w;g.h=(float)h;
+            g.bearingX=(float)xoff;g.bearingY=(float)yoff;
+            g.present=true;
+            if (h>slotShelfH_[s])
+              slotShelfH_[s]=h;
+            curX+=w+1;
+           }
+          stbtt_FreeBitmap(bmp,nullptr);
+          int adv=0,lsb=0;
+          stbtt_GetCodepointHMetrics(fontInfo_[s],cp,&adv,&lsb);
+          glyphs_[s][cp].advance=adv*fontScale_[s];
+         }
+       }
+      glGenTextures(1,&atlasTex_);
+      glBindTexture(GL_TEXTURE_2D,atlasTex_);
+      glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+      glTexImage2D(GL_TEXTURE_2D,0,GL_R8,AW,AH,0,GL_RED,GL_UNSIGNED_BYTE,atlas);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+      glBindTexture(GL_TEXTURE_2D,0);
+      delete[] atlas;
+      // Text program: pos(2)+uv(2) stride 4, tint uniform, samples atlas .r.
+      static const char* tvs=
+        "#version 330 core\n"
+        "layout(location=0) in vec2 aPos;\n"
+        "layout(location=1) in vec2 aUV;\n"
+        "uniform mat4 uMVP;\n"
+        "out vec2 vUV;\n"
+        "void main(){ gl_Position = uMVP * vec4(aPos, 0.0, 1.0);\n"
+        "             vUV = aUV; }\n";
+      static const char* tfs=
+        "#version 330 core\n"
+        "in vec2 vUV;\n"
+        "uniform vec3 uColor;\n"
+        "uniform sampler2D uAtlas;\n"
+        "out vec4 FragColor;\n"
+        "void main(){ float a = texture(uAtlas, vUV).r;\n"
+        "             FragColor = vec4(uColor * a, a); }\n";
+      GLuint vs=glCreateShader(GL_VERTEX_SHADER);
+      glShaderSource(vs,1,&tvs,nullptr);
+      glCompileShader(vs);
+      if (!shaderOk(vs,"text vertex"))
+        return false;
+      GLuint fs=glCreateShader(GL_FRAGMENT_SHADER);
+      glShaderSource(fs,1,&tfs,nullptr);
+      glCompileShader(fs);
+      if (!shaderOk(fs,"text fragment"))
+       {glDeleteShader(vs);
+        return false;
+       }
+      textProgram_=glCreateProgram();
+      glAttachShader(textProgram_,vs);
+      glAttachShader(textProgram_,fs);
+      glLinkProgram(textProgram_);
+      glDeleteShader(vs);
+      glDeleteShader(fs);
+      GLint linked=GL_FALSE;
+      glGetProgramiv(textProgram_,GL_LINK_STATUS,&linked);
+      if (!linked)
+       {char log[512];
+        GLsizei n=0;
+        glGetProgramInfoLog(textProgram_,512,&n,log);
+        fprintf(stderr,"glBackend: text program link failed: %.*s\n",(int)n,log);
+        return false;
+       }
+      textMvpLocation_=glGetUniformLocation(textProgram_,"uMVP");
+      textColorLocation_=glGetUniformLocation(textProgram_,"uColor");
+      textAtlasLocation_=glGetUniformLocation(textProgram_,"uAtlas");
+      glGenVertexArrays(1,&textVao_);
+      glGenBuffers(1,&textVbo_);
+      glBindVertexArray(textVao_);
+      glBindBuffer(GL_ARRAY_BUFFER,textVbo_);
+      glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,4*sizeof(float),(void*)0);
+      glEnableVertexAttribArray(0);
+      glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,4*sizeof(float),
+                            (void*)(2*sizeof(float)));
+      glEnableVertexAttribArray(1);
+      glBindVertexArray(0);
+      return true;
+     }
+
+    void drawGlyphs(const char* text,float x,float y,int fontId,
+                    float r,float g,float b)
+     {// Pen starts at (x, y) with y = BASELINE (X11 XDrawString semantics).
+      float scale=presentScale_;
+      int ox=presentOffX_,oy=presentOffY_;
+      if (presentDirty_)
+       {float s;int x2,y2;
+        getPresentTransform(s,x2,y2);
+        scale=s;ox=x2;oy=y2;
+       }
+      (void)scale;(void)ox;(void)oy;   // MVP carries the transform
+      float penX=x;
+      float verts[4*4*512];            // up to 512 quads per call
+      int quads=0;
+      for (const char* p=text;*p&&quads<512;++p)
+       {GlyphInfo& g=glyphs_[fontId][(unsigned char)*p];
+        if (g.present)
+         {float x0=penX+g.bearingX,y0=y+g.bearingY;   // bearingY is <=0 (above baseline)
+          float u[4]={g.u0,g.v0,g.u1,g.v1};
+          // quad corners: (x0,y0)-(x0+w,y0+h); UV v grows downward in atlas
+          const float fx[4]={x0,x0+g.w,x0+g.w,x0};
+          const float fy[4]={y0,y0,y0+g.h,y0+g.h};
+          const float fu[4]={u[0],u[2],u[2],u[0]};
+          const float fv[4]={u[1],u[1],u[3],u[3]};
+          static const int idx[6]={0,1,2,0,2,3};
+          for (int i=0;i<6;++i)
+           {float* v=verts+16*quads+4*i;
+            v[0]=fx[idx[i]];v[1]=fy[idx[i]];
+            v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+           }
+          ++quads;
+         }
+        penX+=g.advance;
+       }
+      if (!quads)
+        return;
+      glUseProgram(textProgram_);
+      glUniformMatrix4fv(textMvpLocation_,1,GL_FALSE,presentMVP());
+      glUniform3f(textColorLocation_,r,g,b);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D,atlasTex_);
+      glUniform1i(textAtlasLocation_,0);
+      glBindVertexArray(textVao_);
+      glBindBuffer(GL_ARRAY_BUFFER,textVbo_);
+      glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)(16*sizeof(float)*quads),
+                   verts,GL_STREAM_DRAW);
+      glDrawArrays(GL_TRIANGLES,0,6*quads);
+      glBindVertexArray(0);
+      glBindTexture(GL_TEXTURE_2D,0);
+      glUseProgram(0);
      }
 
     // ------------------------------------------------------------------
@@ -824,6 +1033,13 @@ class GLBackend : public RenderingEngine
     GLuint vao_,vbo_;
     float tx_,ty_,angle_;                    // model transform (m19)
     float mvp_[16];
+
+    GLuint atlasTex_;                        // task-33 text atlas
+    GLuint textProgram_;
+    GLint textMvpLocation_,textColorLocation_,textAtlasLocation_;
+    GLuint textVao_,textVbo_;
+    GlyphInfo glyphs_[4][128];
+    int slotShelfH_[4];
 
     static GLBackend* s_instance;            // callback routing (single instance)
  };
