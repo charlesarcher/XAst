@@ -49,6 +49,7 @@
 #include<math.h>
 #include<map>
 #include<utility>
+#include<initializer_list>
 
 #include<glad/glad.h>     // vendor/glad (4.5 core) — MUST precede GLFW include
 #include<GLFW/glfw3.h>    // system glfw3 3.5.1
@@ -73,7 +74,14 @@ class GLBackend : public RenderingEngine
        tx_(0.0f),ty_(0.0f),angle_(0.0f),
        atlasTex_(0),textProgram_(0),
        textMvpLocation_(-1),textColorLocation_(-1),textAtlasLocation_(-1),
-       textVao_(0),textVbo_(0)
+       textVao_(0),textVbo_(0),
+       nextTextureId_(1),
+       texProgram_(0),maskedProgram_(0),triProgram_(0),
+       texMvpLocation_(-1),texSamplerLocation_(-1),texAlphaLocation_(-1),
+       maskedMvpLocation_(-1),maskedContentLocation_(-1),maskedMaskLocation_(-1),
+       triMvpLocation_(-1),triTexLocation_(-1),
+       triVao_(0),triVbo_(0),
+       rtActive_(false),rtWidth_(0),rtHeight_(0)
      {for (int i=0;i<4;++i)
         {fontInfo_[i]=new stbtt_fontinfo;
          fontData_[i]=nullptr;fontDataLen_[i]=0;
@@ -137,6 +145,23 @@ class GLBackend : public RenderingEngine
       if (textProgram_)
         glDeleteProgram(textProgram_);
       textVbo_=0;textVao_=0;atlasTex_=0;textProgram_=0;
+      for (auto& kv:textures_)
+       {if (kv.second.fbo)
+          glDeleteFramebuffers(1,&kv.second.fbo);
+        glDeleteTextures(1,&kv.second.tex);
+       }
+      textures_.clear();
+      if (triVbo_)
+        glDeleteBuffers(1,&triVbo_);
+      if (triVao_)
+        glDeleteVertexArrays(1,&triVao_);
+      if (texProgram_)
+        glDeleteProgram(texProgram_);
+      if (maskedProgram_)
+        glDeleteProgram(maskedProgram_);
+      if (triProgram_)
+        glDeleteProgram(triProgram_);
+      texProgram_=maskedProgram_=triProgram_=0;
       if (vbo_)
         glDeleteBuffers(1,&vbo_);
       if (vao_)
@@ -217,13 +242,51 @@ class GLBackend : public RenderingEngine
      }
 
     virtual RenderTargetId createRenderTarget(int w,int h) override
-     {(void)w;(void)h;return 0;   // TODO(task 34): FBO (M1 render-target leg)
+     {// M1 render-target leg: off-screen FBO whose color attachment registers
+      // as a normal TextureId (RenderTargetId = TextureId per the API).
+      if (!window||w<=0||h<=0)
+        return 0;
+      GLuint t=0,fbo=0;
+      glGenTextures(1,&t);
+      glBindTexture(GL_TEXTURE_2D,t);
+      glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,
+                   nullptr);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+      glBindTexture(GL_TEXTURE_2D,0);
+      glGenFramebuffers(1,&fbo);
+      glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+      glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,
+                             GL_TEXTURE_2D,t,0);
+      GLenum status=glCheckFramebufferStatus(GL_FRAMEBUFFER);
+      glBindFramebuffer(GL_FRAMEBUFFER,0);
+      if (status!=GL_FRAMEBUFFER_COMPLETE)
+       {glDeleteFramebuffers(1,&fbo);
+        glDeleteTextures(1,&t);
+        return 0;
+       }
+      TextureId id=nextTextureId_++;
+      textures_[id]=TextureEntry{t,(GLuint)w,(GLuint)h,fbo};
+      return id;
      }
+
     virtual void beginRenderTo(RenderTargetId target) override
-     {(void)target;               // TODO(task 34)
+     {auto it=textures_.find(target);
+      if (!window||it==textures_.end()||!it->second.fbo)
+        return;
+      glBindFramebuffer(GL_FRAMEBUFFER,it->second.fbo);
+      glViewport(0,0,(GLsizei)it->second.w,(GLsizei)it->second.h);
+      rtActive_=true;
+      rtWidth_=it->second.w;
+      rtHeight_=it->second.h;
      }
+
     virtual void endRenderTo() override
-     {                            // TODO(task 34)
+     {if (!window)
+        return;
+      glBindFramebuffer(GL_FRAMEBUFFER,0);
+      glViewport(0,0,(GLsizei)fbWidth_,(GLsizei)fbHeight_);
+      rtActive_=false;
      }
 
     virtual void getPresentTransform(float& outScale,int& outOffsetX,
@@ -335,10 +398,25 @@ class GLBackend : public RenderingEngine
 
     virtual void drawTriangles(const float* verts,int count,
                                TextureId tex) override
-     {(void)verts;(void)count;(void)tex;
-      // TODO(task 34a): indexed triangle list, per-vertex color, WINDOW-space
-      // (the SOLE window-space method — v6.1 coordinate-space rule; consumed
-      // by the Dear ImGui adapter, task 44a).
+     {// D9 menu pair (R10-N3 home): interleaved [x y u v r g b]*count,
+      // WINDOW-space coords — the SOLE window-space method (v6.1 rule), so
+      // the MVP here is IDENTITY. Consumed by the Dear ImGui adapter (44a).
+      auto it=textures_.find(tex);
+      if (!window||!verts||count<3||it==textures_.end())
+        return;
+      glUseProgram(triProgram_);
+      glUniformMatrix4fv(triMvpLocation_,1,GL_FALSE,windowMVP());
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D,it->second.tex);
+      glUniform1i(triTexLocation_,0);
+      glBindVertexArray(triVao_);
+      glBindBuffer(GL_ARRAY_BUFFER,triVbo_);
+      glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)(7*sizeof(float)*count),
+                   verts,GL_STREAM_DRAW);
+      glDrawArrays(GL_TRIANGLES,0,(GLint)count);
+      glBindVertexArray(0);
+      glBindTexture(GL_TEXTURE_2D,0);
+      glUseProgram(0);
      }
 
     // ------------------------------------------------------------------
@@ -408,32 +486,90 @@ class GLBackend : public RenderingEngine
     // ------------------------------------------------------------------
     virtual TextureId createTextureFromBitmap(const uint8_t* data,int w,int h,
                                               int channels) override
-     {(void)data;(void)w;(void)h;(void)channels;
-      // TODO(task 34): R8 for channels==1 else RGB/RGBA; fed by xbmDecode (26).
-      return 0;
+     {// D13: the ONE texture entry point — callers feed xbmDecode output
+      // (channels=4 RGBA8 content, or channels=1 unpacked coverage for masks).
+      if (!window||!data||w<=0||h<=0||(channels!=1&&channels!=3&&channels!=4))
+        return 0;
+      GLuint t=0;
+      glGenTextures(1,&t);
+      glBindTexture(GL_TEXTURE_2D,t);
+      glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+      GLenum fmt=channels==1?GL_R8:(channels==3?GL_RGB8:GL_RGBA8);
+      glTexImage2D(GL_TEXTURE_2D,0,fmt,w,h,0,
+                   channels==1?GL_RED:(channels==3?GL_RGB:GL_RGBA),
+                   GL_UNSIGNED_BYTE,data);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+      glBindTexture(GL_TEXTURE_2D,0);
+      TextureId id=nextTextureId_++;
+      textures_[id]=TextureEntry{t,(GLuint)w,(GLuint)h};
+      return id;
      }
 
     virtual void drawTexture(TextureId tex,float x,float y,float w,float h,
                              float alpha) override
-     {(void)tex;(void)x;(void)y;(void)w;(void)h;(void)alpha;
-      // TODO(task 34): textured quad, alpha blend in the D8 canonical order.
+     {// Textured quad, alpha-blended (D8 canonical order governs call order).
+      auto it=textures_.find(tex);
+      if (!window||it==textures_.end())
+        return;
+      float uv[4]={0.0f,0.0f,1.0f,1.0f};
+      drawTexturedQuad(it->second.tex,x,y,w,h,uv,alpha);
      }
 
     virtual void drawTextureMasked(TextureId content,TextureId mask,
                                    float x,float y,float w,float h) override
-     {(void)content;(void)mask;(void)x;(void)y;(void)w;(void)h;
-      // TODO(task 34): content quad + R8 mask texture, fragment discard (D6).
+     {// D6 GL leg: content quad discarded where the R8 mask is off (<0.5).
+      auto c=textures_.find(content);
+      auto m=textures_.find(mask);
+      if (!window||c==textures_.end()||m==textures_.end())
+        return;
+      glUseProgram(maskedProgram_);
+      glUniformMatrix4fv(maskedMvpLocation_,1,GL_FALSE,presentMVP());
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D,c->second.tex);
+      glUniform1i(maskedContentLocation_,0);
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D,m->second.tex);
+      glUniform1i(maskedMaskLocation_,1);
+      float uv[4]={0,0,1,1};
+      float verts[24];
+      static const int idx[6]={0,1,2,0,2,3};
+      const float fx[4]={x,x+w,x+w,x};
+      const float fy[4]={y,y,y+h,y+h};
+      const float fu[4]={uv[0],uv[2],uv[2],uv[0]};
+      const float fv[4]={uv[1],uv[1],uv[3],uv[3]};
+      for (int i=0;i<6;++i)
+       {float* v=verts+4*i;
+        v[0]=fx[idx[i]];v[1]=fy[idx[i]];v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+       }
+      glBindVertexArray(textVao_);
+      glBindBuffer(GL_ARRAY_BUFFER,textVbo_);
+      glBufferData(GL_ARRAY_BUFFER,sizeof verts,verts,GL_STREAM_DRAW);
+      glDrawArrays(GL_TRIANGLES,0,6);
+      glBindVertexArray(0);
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D,0);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D,0);
+      glUseProgram(0);
      }
 
     virtual void deleteTexture(TextureId tex) override
-     {(void)tex;                  // TODO(task 34)
+     {auto it=textures_.find(tex);
+      if (it==textures_.end())
+        return;
+      if (it->second.fbo)
+        glDeleteFramebuffers(1,&it->second.fbo);
+      glDeleteTextures(1,&it->second.tex);
+      textures_.erase(it);
      }
 
     virtual TextureId createTextureFromRGBA32(const uint8_t* pixels,int w,
                                               int h) override
-     {(void)pixels;(void)w;(void)h;
-      // TODO(task 34a): RGBA8888 upload (Dear ImGui font atlas / UI textures).
-      return 0;
+     {// D9 menu pair: Dear ImGui font atlas / UI textures (RGBA8888).
+      return createTextureFromBitmap(pixels,w,h,4);
      }
 
     // ------------------------------------------------------------------
@@ -571,6 +707,20 @@ class GLBackend : public RenderingEngine
      {// Affine compose: model (translate tx,ty + rotate angle) THEN present
       // (uniform scale s + offset ox,oy + y-flip to GL's bottom-up NDC).
       // Logical client space is y-DOWN like X11; ndc_y = 1 - 2*(y*s+oy)/fbH.
+      if (rtActive_)
+       {// Rendering INTO a render target: logical (0,0)-top-left maps 1:1
+        // onto the target surface (Button face geometry is target-local).
+        float a=2.0f/(float)rtWidth_;
+        float b=-2.0f/(float)rtHeight_;
+        float cs=cosf(angle_),sn=sinf(angle_);
+        float ma=cs,mb=-sn,mc=tx_;
+        float md=sn,me=cs,mf=ty_;
+        mvp_[0]=a*ma; mvp_[1]=b*md; mvp_[2]=0.0f; mvp_[3]=0.0f;
+        mvp_[4]=a*mb; mvp_[5]=b*me; mvp_[6]=0.0f; mvp_[7]=0.0f;
+        mvp_[8]=0.0f; mvp_[9]=0.0f; mvp_[10]=1.0f;mvp_[11]=0.0f;
+        mvp_[12]=a*mc-1.0f;mvp_[13]=b*mf+1.0f;mvp_[14]=0.0f;mvp_[15]=1.0f;
+        return mvp_;
+       }
       float scale=presentScale_;
       int ox=presentOffX_,oy=presentOffY_;
       if (presentDirty_)
@@ -595,6 +745,162 @@ class GLBackend : public RenderingEngine
       mvp_[8]=0.0f;mvp_[9]=0.0f;mvp_[10]=1.0f;mvp_[11]=0.0f;// column 2
       mvp_[12]=lc;mvp_[13]=lf;mvp_[14]=0.0f;mvp_[15]=1.0f;  // column 3
       return mvp_;
+     }
+
+    void drawTexturedQuad(GLuint tex,float x,float y,float w,float h,
+                          const float* uv,float alpha)
+     {glUseProgram(texProgram_);
+      glUniformMatrix4fv(texMvpLocation_,1,GL_FALSE,presentMVP());
+      glUniform1f(texAlphaLocation_,alpha);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D,tex);
+      glUniform1i(texSamplerLocation_,0);
+      float verts[24];
+      static const int idx[6]={0,1,2,0,2,3};
+      const float fx[4]={x,x+w,x+w,x};
+      const float fy[4]={y,y,y+h,y+h};
+      const float fu[4]={uv[0],uv[2],uv[2],uv[0]};
+      const float fv[4]={uv[1],uv[1],uv[3],uv[3]};
+      for (int i=0;i<6;++i)
+       {float* v=verts+4*i;
+        v[0]=fx[idx[i]];v[1]=fy[idx[i]];v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+       }
+      glBindVertexArray(textVao_);
+      glBindBuffer(GL_ARRAY_BUFFER,textVbo_);
+      glBufferData(GL_ARRAY_BUFFER,sizeof verts,verts,GL_STREAM_DRAW);
+      glDrawArrays(GL_TRIANGLES,0,6);
+      glBindVertexArray(0);
+      glBindTexture(GL_TEXTURE_2D,0);
+      glUseProgram(0);
+     }
+
+    const float* windowMVP()
+     {// Window-space pixel coords -> NDC (y-DOWN top-left origin, matching
+      // the ImGui vertex convention the adapter feeds in). Recomputed per
+      // call so resizes are honored.
+      float a=2.0f/(float)fbWidth_;
+      float b=-2.0f/(float)fbHeight_;
+      winMvp_[0]=a; winMvp_[1]=0.0f; winMvp_[2]=0.0f; winMvp_[3]=0.0f;
+      winMvp_[4]=0.0f; winMvp_[5]=b; winMvp_[6]=0.0f; winMvp_[7]=0.0f;
+      winMvp_[8]=0.0f; winMvp_[9]=0.0f; winMvp_[10]=1.0f; winMvp_[11]=0.0f;
+      winMvp_[12]=-1.0f; winMvp_[13]=1.0f; winMvp_[14]=0.0f; winMvp_[15]=1.0f;
+      return winMvp_;
+     }
+
+    bool initTexturePrograms()
+     {// Task 34: textured-quad + masked + menu-triangle programs. All share
+      // compile-at-init error reporting (no mid-game first-use failures).
+      static const char* tvs=
+        "#version 330 core\n"
+        "layout(location=0) in vec2 aPos;\n"
+        "layout(location=1) in vec2 aUV;\n"
+        "uniform mat4 uMVP;\n"
+        "out vec2 vUV;\n"
+        "void main(){ gl_Position = uMVP * vec4(aPos, 0.0, 1.0);\n"
+        "             vUV = aUV; }\n";
+      static const char* tfs=
+        "#version 330 core\n"
+        "in vec2 vUV;\n"
+        "uniform sampler2D uTex;\n"
+        "uniform float uAlpha;\n"
+        "out vec4 FragColor;\n"
+        "void main(){ vec4 c = texture(uTex, vUV);\n"
+        "             FragColor = vec4(c.rgb, c.a * uAlpha); }\n";
+      static const char* mfs=
+        "#version 330 core\n"
+        "in vec2 vUV;\n"
+        "uniform sampler2D uContent;\n"
+        "uniform sampler2D uMask;\n"
+        "out vec4 FragColor;\n"
+        "void main(){ if (texture(uMask, vUV).r < 0.5) discard;\n"
+        "             FragColor = texture(uContent, vUV); }\n";
+      static const char* xvs=
+        "#version 330 core\n"
+        "layout(location=0) in vec2 aPos;\n"
+        "layout(location=1) in vec2 aUV;\n"
+        "layout(location=2) in vec4 aColor;\n"
+        "uniform mat4 uMVP;\n"
+        "out vec2 vUV; out vec4 vColor;\n"
+        "void main(){ gl_Position = uMVP * vec4(aPos, 0.0, 1.0);\n"
+        "             vUV = aUV; vColor = aColor; }\n";
+      static const char* xfs=
+        "#version 330 core\n"
+        "in vec2 vUV; in vec4 vColor;\n"
+        "uniform sampler2D uTex;\n"
+        "out vec4 FragColor;\n"
+        "void main(){ FragColor = texture(uTex, vUV) * vColor; }\n";
+      if (!buildProgram(texProgram_,texMvpLocation_,tvs,tfs,
+                        {"uMVP","uTex","uAlpha"},
+                        &texSamplerLocation_,&texAlphaLocation_))
+        return false;
+      if (!buildProgram(maskedProgram_,maskedMvpLocation_,tvs,mfs,
+                        {"uMVP","uContent","uMask"},
+                        &maskedContentLocation_,&maskedMaskLocation_))
+        return false;
+      if (!buildProgram(triProgram_,triMvpLocation_,xvs,xfs,
+                        {"uMVP","uTex"},&triTexLocation_,nullptr))
+        return false;
+      // triVao_: pos(2)+uv(2)+color(4), stride 7 floats.
+      glGenVertexArrays(1,&triVao_);
+      glGenBuffers(1,&triVbo_);
+      glBindVertexArray(triVao_);
+      glBindBuffer(GL_ARRAY_BUFFER,triVbo_);
+      glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,7*sizeof(float),(void*)0);
+      glEnableVertexAttribArray(0);
+      glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,7*sizeof(float),
+                            (void*)(2*sizeof(float)));
+      glEnableVertexAttribArray(1);
+      glVertexAttribPointer(2,4,GL_FLOAT,GL_FALSE,7*sizeof(float),
+                            (void*)(4*sizeof(float)));
+      glEnableVertexAttribArray(2);
+      glBindVertexArray(0);
+      return true;
+     }
+
+    bool buildProgram(GLuint& prog,GLint& mvpLoc,const char* vsSrc,
+                      const char* fsSrc,
+                      std::initializer_list<const char*> uniforms,
+                      GLint* u0=nullptr,GLint* u1=nullptr)
+     {GLuint vs=glCreateShader(GL_VERTEX_SHADER);
+      glShaderSource(vs,1,&vsSrc,nullptr);
+      glCompileShader(vs);
+      if (!shaderOk(vs,"vertex"))
+       {glDeleteShader(vs);
+        return false;
+       }
+      GLuint fs=glCreateShader(GL_FRAGMENT_SHADER);
+      glShaderSource(fs,1,&fsSrc,nullptr);
+      glCompileShader(fs);
+      if (!shaderOk(fs,"fragment"))
+       {glDeleteShader(vs);glDeleteShader(fs);
+        return false;
+       }
+      prog=glCreateProgram();
+      glAttachShader(prog,vs);
+      glAttachShader(prog,fs);
+      glLinkProgram(prog);
+      glDeleteShader(vs);
+      glDeleteShader(fs);
+      GLint linked=GL_FALSE;
+      glGetProgramiv(prog,GL_LINK_STATUS,&linked);
+      if (!linked)
+       {char log[512];
+        GLsizei n=0;
+        glGetProgramInfoLog(prog,512,&n,log);
+        fprintf(stderr,"glBackend: program link failed: %.*s\n",(int)n,log);
+        return false;
+       }
+      mvpLoc=glGetUniformLocation(prog,"uMVP");
+      int slot=0;
+      for (const char* u:uniforms)
+       {GLint loc=glGetUniformLocation(prog,u);
+        if (slot==1&&u0)
+          *u0=loc;
+        if (slot==2&&u1)
+          *u1=loc;
+        ++slot;
+       }
+      return true;
      }
 
     static bool pointInTri(float px,float py,
@@ -796,6 +1102,10 @@ class GLBackend : public RenderingEngine
         return false;
        }
       if (!initText())
+       {shutdown();
+        return false;
+       }
+      if (!initTexturePrograms())
        {shutdown();
         return false;
        }
@@ -1033,6 +1343,7 @@ class GLBackend : public RenderingEngine
     GLuint vao_,vbo_;
     float tx_,ty_,angle_;                    // model transform (m19)
     float mvp_[16];
+    float winMvp_[16];
 
     GLuint atlasTex_;                        // task-33 text atlas
     GLuint textProgram_;
@@ -1040,6 +1351,21 @@ class GLBackend : public RenderingEngine
     GLuint textVao_,textVbo_;
     GlyphInfo glyphs_[4][128];
     int slotShelfH_[4];
+
+    struct TextureEntry                      // task-34 texture registry
+     {GLuint tex;
+      GLuint w,h;
+      GLuint fbo;                            // 0 = plain texture (M1 targets)
+     };
+    std::map<TextureId,TextureEntry> textures_;
+    TextureId nextTextureId_=1;
+    GLuint texProgram_,maskedProgram_,triProgram_;
+    GLint texMvpLocation_,texSamplerLocation_,texAlphaLocation_;
+    GLint maskedMvpLocation_,maskedContentLocation_,maskedMaskLocation_;
+    GLint triMvpLocation_,triTexLocation_;
+    GLuint triVao_,triVbo_;
+    bool rtActive_=false;
+    int rtWidth_=0,rtHeight_=0;
 
     static GLBackend* s_instance;            // callback routing (single instance)
  };

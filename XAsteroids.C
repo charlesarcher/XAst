@@ -8,6 +8,7 @@
 #include"utilities/rendering/x11Backend.H"
 #elif defined(GL_BACKEND)
 #include"utilities/rendering/glBackend.H"
+#include"utilities/pixmaps/xbmDecode.H"
 #endif
 #include"gamePlay/stage.H"
 #include"gamePlay/score.H"
@@ -141,6 +142,51 @@ int main (int argc, char *argv[])
                                        EngineFont_HiScore,1,1,1);
           engine.drawStringTransparent("0123456789",60.0f,380.0f,
                                        EngineFont_Score,1,1,1);
+         }
+        else if (!strcmp(smoke,"tex"))
+         {// Task-34 acceptance: real XBM -> createTextureFromBitmap ->
+          // drawTexture; R8 mask discard; FBO round-trip; menu triangles.
+          DecodedXBM dec=decodeXBM(ENEMYDecor_bits,
+                                   ENEMYDecor_width,ENEMYDecor_height);
+          TextureId content=engine.createTextureFromBitmap(
+              dec.rgba8.data(),dec.w,dec.h,4);
+          engine.drawTexture(content,60.0f,80.0f,
+                             (float)dec.w,(float)dec.h,1.0f);
+          // half-plane mask: left half on, right half off
+          const int mw=32,mh=32;
+          static uint8_t mask[mw*mh];
+          static uint8_t solid[mw*mh*4];
+          for (int yy=0;yy<mh;++yy)
+           {for (int xx=0;xx<mw;++xx)
+             {mask[yy*mw+xx]=xx<16?255:0;
+              solid[(yy*mw+xx)*4+0]=255;
+              solid[(yy*mw+xx)*4+1]=255;
+              solid[(yy*mw+xx)*4+2]=255;
+              solid[(yy*mw+xx)*4+3]=255;
+             }
+           }
+          TextureId m=engine.createTextureFromBitmap(mask,mw,mh,1);
+          engine.drawTextureMasked(engine.createTextureFromBitmap(solid,mw,mh,4),
+                                   m,200.0f,80.0f,(float)mw,(float)mh);
+          // FBO round-trip: red square rendered off-screen, blitted to window
+          RenderTargetId rt=engine.createRenderTarget(64,64);
+          engine.beginRenderTo(rt);
+          engine.clear();
+          engine.drawRect(16.0f,16.0f,32.0f,32.0f,1,0,0,true);
+          engine.endRenderTo();
+          engine.drawTexture(rt,300.0f,80.0f,64.0f,64.0f,1.0f);
+          // menu pair: RGBA32 texture + window-space triangles
+          uint8_t blue[2*2*4]={0,0,255,255, 0,0,255,255, 0,0,255,255, 0,0,255,255};
+          TextureId bt=engine.createTextureFromRGBA32(blue,2,2);
+          const float tris[3*7*2]={
+            // quad at window px (420..484, 80..144) as two triangles
+            420.0f, 80.0f, 0.0f,0.0f, 1,1,1,
+            484.0f, 80.0f, 1.0f,0.0f, 1,1,1,
+            484.0f,144.0f, 1.0f,1.0f, 1,1,1,
+            420.0f, 80.0f, 0.0f,0.0f, 1,1,1,
+            484.0f,144.0f, 1.0f,1.0f, 1,1,1,
+            420.0f,144.0f, 0.0f,1.0f, 1,1,1};
+          engine.drawTriangles(tris,6,bt);
          }
         else // "scene": determinism golden (fixed composition)
          {engine.drawLine(80.0f,80.0f,300.0f,80.0f,1,1,1,1);

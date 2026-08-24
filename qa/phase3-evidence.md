@@ -259,3 +259,49 @@ with the full harness GL leg; this task's gates are the pre-harness subset.
 
 Commit: `feat: GLBackend text — stb 4 fonts, max_bounds metrics,
 opaque/transparent paths, pixel font gate prep`
+
+## Task 34 — GLBackend textures + R8 masks + render-target FBO (+ menu pair)
+
+**Executor note:** delegation outage persisted; executed directly under the
+documented emergency exception.
+
+### Implementation
+
+- `createTextureFromBitmap`: GL_R8 (channels=1) / RGB8 / RGBA8 uploads; texture
+  registry (`textures_`) with one-owner deleteTexture; feeds from xbmDecode.
+- `drawTexture`: textured quad, uAlpha; `drawTextureMasked`: content + R8 mask,
+  fragment `discard` < 0.5 (D6 GL leg); `createRenderTarget/beginRenderTo/
+  endRenderTo`: FBO with RGBA8 color attachment registered as a TextureId
+  (M1); target-local 1:1 MVP while rendering into targets.
+- Menu pair home (R10-N3): `createTextureFromRGBA32` + `drawTriangles`
+  ([x y u v r g b]*N, WINDOW-space via a dedicated window→NDC projection —
+  the v6.1 sole-window-space method).
+- Three new programs built through a shared compile-at-init helper.
+
+### Defects caught by the smoke gate (all fixed before commit)
+
+1. **Masked-program uniform list missing "uMVP"**: slot mapping shifted —
+   maskedContentLocation_ captured uMask's location and uMask stayed unset(-1),
+   so both samplers read unit 0 (white content) and discard never fired.
+2. **Render-target MVP missing NDC offset terms** (c=-1,d=+1): target-local
+   geometry projected 2× too large, landing outside the attachment.
+3. **drawTriangles used an identity MVP**: window-pixel coords clipped away;
+   replaced with the window→NDC projection.
+
+### Acceptance legs
+
+| Assertion | Result |
+|---|---|
+| Determinism (tex scene ×2) | 0 diff bytes |
+| Real XBM (ENEMYDecor 13×5) upload+render | lit pixels present in region |
+| Masked draw: left half / right half | white / **black** (discard proven) |
+| FBO round-trip: inner red square | red at blit position, black corner |
+| Menu triangles (RGBA32 + window-space) | blue quad rendered |
+| ASan open/close cycle | exit 0, zero leaks; O3 restored |
+| X11 no-drift | Q13 harness RESULT: PASS (AE=0 all) |
+
+The 21-dataset full upload sweep + Q3/Q8 goldens execute with the harness GL
+leg at task 36; this task gates the engine methods themselves.
+
+Commit: `feat: GLBackend textures (R8/RGB), R8 discard masks, 5 explosion frame
+textures, render-target FBO, menu pair (D6/D13/M1)`
