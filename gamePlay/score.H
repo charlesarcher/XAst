@@ -3,6 +3,7 @@
 
 #include<fstream>
 #include<string.h>
+#include<stdlib.h>
 #include<sys/types.h>
 #include<pwd.h>
 #include<unistd.h>
@@ -39,17 +40,20 @@ class Score
        * fileName;
  };
 
+// Extracts one name token into s (max 8 chars + terminator). Accepts BOTH
+// encodings: the native NUL-delimited format this class writes (operator<<)
+// and plain whitespace-delimited text. The delimiter (NUL or whitespace) is
+// consumed; extraction of zero characters leaves the stream failed so callers
+// counting successful extractions terminate on the first incomplete entry.
 inline ifstream& operator>>(ifstream& f, char* const s)
  {int i=0;
-  if (!f.eof())
-   {char ch;
-    while (!f.get(ch).eof()&&(ch=='\n'||ch=='\t'||ch==' '));
-    if (!f.eof()&&ch!='\0')
-     {s[i++]=ch;
-      while (!f.get(ch).eof()&&ch!='\0'&&i<8)
-        s[i++]=ch;
-      while(ch!='\0'&&!f.get(ch).eof());
-     }
+  char ch;
+  while (f.get(ch)&&(ch=='\n'||ch=='\t'||ch==' '));
+  if (f&&ch!='\0')
+   {s[i++]=ch;
+    while (i<8&&f.get(ch)&&ch!='\0'&&ch!='\n'&&ch!='\t'&&ch!=' ')
+      s[i++]=ch;
+    while (ch!='\0'&&ch!='\n'&&ch!='\t'&&ch!=' '&&f.get(ch));
    }
   s[i]='\0';
   return f;
@@ -66,48 +70,33 @@ inline Score::Score(): currentScore(0),
                        numScores(0),
                        scoreUpdated(off)
  {passwd* userData=getpwuid(geteuid());
-  strncpy(currentName,userData->pw_name,8)[8]='\0';
+  const char* login=userData?userData->pw_name:getenv("USER");
+  strncpy(currentName,login?login:"unknown",8)[8]='\0';
   char* cwd=getcwd(new char[3000],3000);
-  int fnLen1=strlen("/Volumes/XAsteroids/XAst/hiScore.data"),
-      fnLen2=strlen(userData->pw_dir)
+  int fnLen2=strlen(userData?userData->pw_dir:"")
              +strlen("/XAsteroids/hiScore.data"),
       fnLen3=strlen(cwd)
              +strlen("/XAsteroids/hiScore.data"),
       fnLen4=strlen(cwd)
              +strlen("/hiScore.data");
-  fileName=new char[(fnLen1>(fnLen2=fnLen2>(fnLen3=fnLen3>fnLen4
-                                                   ? fnLen3
-                                                   : fnLen4)
-                                    ? fnLen2
-                                    : fnLen3)
-                     ? fnLen1
-		             : fnLen2)+1];
-  strcpy(fileName,"/Volumes/XAsteroids/XAst/hiScore.data");
+  fileName=new char[(fnLen2>(fnLen3=fnLen3>fnLen4
+                                                    ? fnLen3
+                                                    : fnLen4)
+                                     ? fnLen2
+                                     : fnLen3)+1];
+  *fileName='\0';
+  if (userData)
+    strcat(strcpy(fileName,userData->pw_dir),"/XAsteroids/hiScore.data");
+  if (!*fileName||access(fileName,F_OK))
+    strcat(strcpy(fileName,cwd),"/XAsteroids/hiScore.data");
+  if (access(fileName,F_OK))
+    strcat(strcpy(fileName,cwd),"/hiScore.data");
+  delete [] cwd;
   ifstream file(fileName,ios::in);
   if (!file)
-   {file.open(strcat(strcpy(fileName,userData->pw_dir),
-                            "/XAsteroids/hiScore.data"),
-              ios::in);
-    if (!file)
-     {file.open(strcat(strcpy(fileName,cwd),
-                              "/XAsteroids/hiScore.data"),
-                ios::in);
-
-      if (!file)
-       {file.open(strcat(strcpy(fileName,cwd),
-                              "/hiScore.data"),
-                  ios::in);
-        if (!file)
-         {delete [] cwd;
-          return;
-         }
-       }
-     }
-   }
-  delete [] cwd;
-  do
-    file>>name[numScores]>>score[numScores];
-  while(++numScores<sizeof(score)/sizeof(int)&&!file.eof());
+    return;
+  while (numScores<10&&(file>>name[numScores]>>score[numScores]))
+    ++numScores;
  }
 
 inline void Score::UpdateScoreArray()
@@ -134,9 +123,8 @@ inline Score& Score::UpdateTopTen()
    {ifstream ifile(fileName,ios::in);
     if (ifile)
      {numScores=0;
-      do
-        ifile>>name[numScores]>>score[numScores];
-      while(++numScores<sizeof(score)/sizeof(int)&&!ifile.eof());
+      while (numScores<10&&(ifile>>name[numScores]>>score[numScores]))
+        ++numScores;
      }
     UpdateScoreArray();
     ofstream ofile(fileName,ios::out);
