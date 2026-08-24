@@ -56,6 +56,10 @@ class ShipBulletGroup
     inline void ResetBulletDuration(const int newDuration);
     inline void AdjustFramesPerSec(const double frameRatio);
 
+    // Transition alias: consumed by ShipBullet bodies as
+    // shipBulletGroup->engine.; deleted at task 47.
+    RenderingEngine& engine;
+
     Boolean fireThisFrame;
 
     static Boolean autoFire;
@@ -134,17 +138,16 @@ void ShipBullet::MissScript(Intersector& intersector, const double createTime,
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    XCopyArea(stage->display,
-              rotator->GetPixAtTime(0),
-              playingField->pixmap,
-              playingField->gc,
-              0,0,
-              rotator->PixWidth(),
-              rotator->PixHeight(),
-              CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                         ObjectLiner().Velocity())
-                          .NorthWestCorner().x+.5,
-              CurrentBox().NorthWestCorner().y+.5);
+    shipBulletGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+    shipBulletGroup->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
+                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                              ObjectLiner().Velocity())
+                                               .NorthWestCorner().x+.5,
+                                   CurrentBox().NorthWestCorner().y+.5,
+                                   rotator->PixWidth(),
+                                   rotator->PixHeight(),
+                                   1.0f);
+    shipBulletGroup->engine.endRenderTo();
     #endif
    }
  }
@@ -179,17 +182,16 @@ inline void ShipBullet::PositionBullet(Intersector& intersector,
   inactive=off;
   intersector.AddNonPermeable(this,creationTime);
   #ifdef X11_BACKEND
-  XCopyArea(stage->display,
-            rotator->GetPixAtTime(0),
-            playingField->pixmap,
-            playingField->gc,
-            0,0,
-            rotator->PixWidth(),
-            rotator->PixHeight(),
-            CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                       ObjectLiner().Velocity())
-                        .NorthWestCorner().x+.5,
-            CurrentBox().NorthWestCorner().y+.5);
+  shipBulletGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+  shipBulletGroup->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
+                                 CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                            ObjectLiner().Velocity())
+                                             .NorthWestCorner().x+.5,
+                                 CurrentBox().NorthWestCorner().y+.5,
+                                 rotator->PixWidth(),
+                                 rotator->PixHeight(),
+                                 1.0f);
+  shipBulletGroup->engine.endRenderTo();
   #endif
   frameTimer.Reset().TimerAlarm();
  }
@@ -209,7 +211,7 @@ inline XColor ShipBulletGroup::color={0,
                                0,
                                DoRed|DoGreen|DoBlue};
 
-inline ShipBulletGroup::ShipBulletGroup(RenderingEngine&): fireThisFrame(off),
+inline ShipBulletGroup::ShipBulletGroup(RenderingEngine& eng): engine(eng), fireThisFrame(off),
                                            graphic(stage->display,stage->window,color,
                                                    vectors,sizeof(vectors)/sizeof(Vector2d),
                                                    shipBulletDecor_bits,

@@ -82,17 +82,16 @@ void Bullet::MissScript(Intersector& intersector, const double createTime,
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    XCopyArea(stage->display,
-              rotator->GetPixAtTime(0),
-              playingField->pixmap,
-              playingField->gc,
-              0,0,
-              rotator->PixWidth(),
-              rotator->PixHeight(),
-              CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                         ObjectLiner().Velocity())
-                          .NorthWestCorner().x+.5,
-              CurrentBox().NorthWestCorner().y+.5);
+    explosionGraphic->engine.beginRenderTo((TextureId)playingField->pixmap);
+    explosionGraphic->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
+                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                              ObjectLiner().Velocity())
+                                               .NorthWestCorner().x+.5,
+                                   CurrentBox().NorthWestCorner().y+.5,
+                                   rotator->PixWidth(),
+                                   rotator->PixHeight(),
+                                   1.0f);
+    explosionGraphic->engine.endRenderTo();
     #endif
    }
  }
@@ -106,16 +105,15 @@ inline void BulletExplosion::DisplayFrame()
   #ifdef X11_BACKEND
   int destX=CurrentBox().NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
-  GC& gc=explosionGraphic->gc[frameList.GetFrameNumber()];
-  XSetClipOrigin(stage->display,gc,destX,destY);
-  XCopyArea(stage->display,
-            frameList.GetFrame(),
-            playingField->pixmap,
-            gc,
-            0,0,
-            frameList.PixWidth(),
-            frameList.PixHeight(),
-	    destX,destY);
+  // Per-frame clip-origin + masked copy absorbed into the engine's masked
+  // draw (D6); MaskId maps frame number to its original per-frame mask.
+  explosionGraphic->engine.beginRenderTo((TextureId)playingField->pixmap);
+  explosionGraphic->engine.drawTextureMasked(frameList.GetFrame(),
+                                   explosionGraphic->MaskId(frameList.GetFrameNumber()),
+                                   destX,destY,
+                                   frameList.PixWidth(),
+                                   frameList.PixHeight());
+  explosionGraphic->engine.endRenderTo();
   #endif
  }
 
