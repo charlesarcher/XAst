@@ -59,7 +59,10 @@ class Stage
     // map — exactly one owner, the backend). The Stage ctor populates them
     // from the engine it is injected with (task 13 DI). Shim-typed members
     // stay outside the guards; XFontStruct* has no shim stand-in (x11types.H),
-    // so those declarations are guarded with their readers.
+    // so those declarations are guarded with their readers. The engine
+    // reference is the task-14 addition (the draw methods consume it —
+    // T19/T21 group pattern).
+    RenderingEngine& engine;
     Display* display;
     Window window;
 
@@ -140,7 +143,7 @@ inline XColor Stage::windowBg={0,
                         DoRed|DoGreen|DoBlue};
 #endif
 
-inline Stage::Stage(RenderingEngine& engine)
+inline Stage::Stage(RenderingEngine& engine): engine(engine)
  {cout<<"XAsteroids is a Unix version of the original Atari Asteroids video game.  It features color, arbitrarily shaped drawables with interior decor, hidden line elimination, accurate collision detection, and dynamically selectable options including gravitation.  Game initialization requires a minute or two so please be patient.  If XAsteroids abnormally terminates the keyboard may no longer auto-repeat.  Auto-repeat can be reactivated by executing AutoRepeatOn."<<endl<<endl;
   // The X11 creation block that used to live here (display/fonts/window/icon/
   // GCs/KBState/signals — stage.H:130-221 pre-task-12) is now owned by
@@ -216,11 +219,18 @@ inline Stage::Stage(RenderingEngine& engine)
   hiScoreGC=backend.hiScoreGC();
   scoreGC=backend.scoreGC();
   defaultGC=backend.defaultGC();
+  // Task-14: publish the two present regions this ctor computed so the
+  // backend's frame-end replay copies them to the coordinates the raw pair
+  // used; the yard texture publishes per draw (it re-creates on icon
+  // changes).
+  backend.setFrameGeometry(shipYardX,shipYardY,shipYardWidth,shipYardHeight,
+                           playAreaX,playAreaY);
   // shipYardBg.pixel must stay valid for its one external reader
-  // (options.H's yard-icon background); allocating it here keeps that
-  // invariant now that ShipYard's ctor no longer receives the XColor&.
-  XAllocColor(display,DefaultColormap(display,DefaultScreen(display)),
-              &shipYardBg);
+  // (options.H's yard-icon background); allocating through the backend seam
+  // keeps that invariant now that the raw allocation left this header.
+  shipYardBg.pixel=backend.allocateColor(28527.0f/65535.0f,
+                                         28527.0f/65535.0f,
+                                         28527.0f/65535.0f);
 #endif
  }
 
@@ -236,20 +246,29 @@ inline Stage& Stage::DrawScore()
   if (score->CurrentScore()>=score->TopTenScore(0))
    {snprintf(str,sizeof(str),"%10.10s",score->CurrentName());
 #ifdef X11_BACKEND
-    XDrawImageString(display,window,hiScoreGC,
-                     hiScoreUserX,hiScoreUserY,str,10);
+    engine.drawStringOpaque(str,(float)hiScoreUserX,(float)hiScoreUserY,
+                            EngineFont_HiScore,
+                            0.0f,0.0f,0.0f,
+                            46260.0f/65535.0f,46260.0f/65535.0f,
+                            46260.0f/65535.0f);
 #endif
     snprintf(str,sizeof(str),"%10d",score->CurrentScore());
 #ifdef X11_BACKEND
-    XDrawImageString(display,window,hiScoreGC,
-                     hiScoreX,hiScoreY,str,10);
+    engine.drawStringOpaque(str,(float)hiScoreX,(float)hiScoreY,
+                            EngineFont_HiScore,
+                            0.0f,0.0f,0.0f,
+                            46260.0f/65535.0f,46260.0f/65535.0f,
+                            46260.0f/65535.0f);
 #endif
    }
   else
     snprintf(str,sizeof(str),"%10d",score->CurrentScore());
 #ifdef X11_BACKEND
-  XDrawImageString(display,window,scoreGC,
-                   scoreX,scoreY,str,10);
+  engine.drawStringOpaque(str,(float)scoreX,(float)scoreY,
+                          EngineFont_Score,
+                          0.0f,0.0f,0.0f,
+                          46260.0f/65535.0f,46260.0f/65535.0f,
+                          46260.0f/65535.0f);
 #endif
   return *this;
  }
@@ -257,13 +276,8 @@ inline Stage& Stage::DrawScore()
 inline Stage& Stage::DrawShipYard()
  {
   #ifdef X11_BACKEND
-  XCopyArea(display,
-            shipYard->GetYard(),
-            window,
-            defaultGC,
-            0,0,
-            shipYardWidth,shipYardHeight,
-            shipYardX,shipYardY);
+  static_cast<X11Backend&>(engine).setFrameYardTexture(shipYard->GetYard());
+  engine.endFrame();
   #endif
   return *this;
  }
@@ -271,13 +285,8 @@ inline Stage& Stage::DrawShipYard()
 inline Stage& Stage::DrawPlayingField()
  {
   #ifdef X11_BACKEND
-  XCopyArea(display,
-            playingField->pixmap,
-            window,
-            defaultGC,
-	    PlayingField::playArea.NorthWestCorner().x,PlayingField::playArea.NorthWestCorner().y,
-	    PlayingField::playArea.Width(),PlayingField::playArea.Height(),
-            playAreaX,playAreaY);
+  static_cast<X11Backend&>(engine).requestFieldPresent();
+  engine.endFrame();
   #endif
   return *this;
  }
@@ -285,15 +294,21 @@ inline Stage& Stage::DrawPlayingField()
 inline Stage& Stage::Refresh()
  {
   #ifdef X11_BACKEND
-  XDrawString(display,window,titleGC,
-              titleX,titleY,"Asteroids",strlen("Asteroids"));
+  engine.drawStringTransparent("Asteroids",(float)titleX,(float)titleY,
+                               EngineFont_Title,0.0f,0.0f,0.0f);
   char str[12];
   snprintf(str,sizeof(str),"%10.10s",score->TopTenName(0));
-  XDrawImageString(display,window,hiScoreGC,
-                   hiScoreUserX,hiScoreUserY,str,10);
+  engine.drawStringOpaque(str,(float)hiScoreUserX,(float)hiScoreUserY,
+                          EngineFont_HiScore,
+                          0.0f,0.0f,0.0f,
+                          46260.0f/65535.0f,46260.0f/65535.0f,
+                          46260.0f/65535.0f);
   snprintf(str,sizeof(str),"%10d",score->TopTenScore(0));
-  XDrawImageString(display,window,hiScoreGC,
-                   hiScoreX,hiScoreY,str,10);
+  engine.drawStringOpaque(str,(float)hiScoreX,(float)hiScoreY,
+                          EngineFont_HiScore,
+                          0.0f,0.0f,0.0f,
+                          46260.0f/65535.0f,46260.0f/65535.0f,
+                          46260.0f/65535.0f);
   #endif
   button->DrawButton();
   DrawScore().DrawShipYard().DrawPlayingField();

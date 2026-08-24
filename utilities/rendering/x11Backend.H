@@ -65,9 +65,15 @@
 // // ===========================================================================
 //
 // Task-12 staging notes (what deliberately does NOT move yet):
-//  - The blit pair stage.H:258/:269 stays called by Stage until task 14; this
-//    class's endFrame() is therefore XSync-bound bookkeeping ONLY (no blit,
-//    no double-blit).
+//  - The Stage window-blit pair was absorbed into endFrame() at task 14:
+//    each call replays the yard-region copy and the play-area copy, each
+//    when its region was requested. The play-area leg is request-gated
+//    because the standalone yard-refresh call points run while the canvas
+//    holds its post-present cleared state — publishing it there would
+//    flash the play area black (visible divergence). endFrame adds NO
+//    sync of its own: the domain loops flush at their frame boundaries,
+//    and an extra round trip inside the draw sequence deterministically
+//    perturbs the sampled visible-frame sequence (Q13 red).
 //  - Event HANDLING stays in RunGame (playingField.H island) until task 25's
 //    verbatim relocation; pollEvents() below is a typed NON-BLOCKING drain
 //    that nothing calls on X11 until then — no event dropped or double-
@@ -119,6 +125,10 @@ class X11Backend : public RenderingEngine
         canonicalMaxIconHeight_(0),
         canvasClearX_(0),canvasClearY_(0),
         canvasClearW_(0),canvasClearH_(0),
+        frameYardTex_(0),
+        frameYardX_(0),frameYardY_(0),frameYardW_(0),frameYardH_(0),
+        frameFieldDstX_(0),frameFieldDstY_(0),
+        frameYardPending_(false),frameFieldPending_(false),
         scissorActive_(false),
         scissorX_(0),scissorY_(0),scissorW_(0),scissorH_(0)
      {fonts_[0]=fonts_[1]=fonts_[2]=fonts_[3]=fonts_[4]=nullptr;
@@ -202,12 +212,33 @@ class X11Backend : public RenderingEngine
      }
 
     virtual void endFrame() override
-     {// XSync-bound bookkeeping ONLY at task 12: the canvas->window blit pair
-      // (stage.H:258/:269) is still called by Stage until task 14 — moving or
-      // duplicating it here would double-blit. XSync mirrors the frame-bound
-      // sync the domain loops perform (:296/:329); harmless while uncalled.
-      if (display)
-        XSync(display,False);
+     {// Task-14 frame present: replays the two region copies Stage used to
+      // issue raw (yard region, then play-area region) with identical source
+      // rects, destination coordinates, order, and default-GC copy semantics.
+      // Each leg fires only when its region was requested since the last
+      // frame end (see the file-header note): the standalone yard-refresh
+      // call points must not publish the cleared canvas.
+      // NO internal sync here (Q13-proven): the domain loops already flush
+      // at their own frame boundaries, and an extra mid-draw-sequence round
+      // trip deterministically perturbs the visible-frame sequence the
+      // harness samples (start/gp1-gp5 diverge, AE 1675.73 signature). The
+      // once-per-frame sync belongs to the future engine-owned loop (task
+      // 25), which calls this exactly once per frame.
+      if (!display)
+        return;
+      if (frameYardTex_&&frameYardPending_)
+       {XCopyArea(display,(Drawable)frameYardTex_,window,defaultGC_,
+                  0,0,(unsigned int)frameYardW_,(unsigned int)frameYardH_,
+                  frameYardX_,frameYardY_);
+        frameYardPending_=false;
+       }
+      if (frameFieldPending_)
+       {XCopyArea(display,canvasPixmap_,window,defaultGC_,
+                  canvasClearX_,canvasClearY_,
+                  (unsigned int)canvasClearW_,(unsigned int)canvasClearH_,
+                  frameFieldDstX_,frameFieldDstY_);
+        frameFieldPending_=false;
+       }
      }
 
     // ------------------------------------------------------------------
@@ -571,6 +602,27 @@ class X11Backend : public RenderingEngine
     inline int autoRepeatState() const {return autoRepeatState_;}
     inline int windowWidth() const {return windowWidth_;}
     inline int windowHeight() const {return windowHeight_;}
+    // Task-14 frame-present plumbing (transition alias class — DELETED at
+    // task 47): Stage publishes the two present regions it computes in its
+    // constructor plus the live yard texture (the yard re-creates itself on
+    // icon changes), and declares which region a frame refresh covers.
+    inline void setFrameGeometry(int yardX,int yardY,int yardW,int yardH,
+                                 int fieldDstX,int fieldDstY)
+     {frameYardX_=yardX;frameYardY_=yardY;
+      frameYardW_=yardW;frameYardH_=yardH;
+      frameFieldDstX_=fieldDstX;frameFieldDstY_=fieldDstY;
+     }
+    inline void setFrameYardTexture(TextureId tex)
+     {frameYardTex_=tex;
+      frameYardPending_=true;
+     }
+    inline void requestFieldPresent()
+     {frameFieldPending_=true;}
+    // Color-allocation seam (the T17/T20 closure path): domain code that
+    // must hand a live colormap pixel to a non-engine consumer gets it from
+    // here instead of allocating directly.
+    inline unsigned long allocateColor(float r,float g,float b)
+     {return pixelFor(r,g,b);}
     // Depth-1 bitmap creation for clip-mask consumers (D6): the generic texture
     // path targets window depth; GC clip masks require depth 1.
     inline TextureId createBitmapMask(const uint8_t* bits,int w,int h)
@@ -914,6 +966,10 @@ class X11Backend : public RenderingEngine
     int canonicalPlayAreaWidth_,canonicalPlayAreaHeight_,
         canonicalMaxIconHeight_;
     int canvasClearX_,canvasClearY_,canvasClearW_,canvasClearH_;
+    TextureId frameYardTex_;
+    int frameYardX_,frameYardY_,frameYardW_,frameYardH_;
+    int frameFieldDstX_,frameFieldDstY_;
+    bool frameYardPending_,frameFieldPending_;
     bool scissorActive_;
     int scissorX_,scissorY_,scissorW_,scissorH_;
     std::map<TextureId,std::pair<int,int> > textureDims_;
