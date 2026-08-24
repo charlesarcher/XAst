@@ -1,0 +1,40 @@
+# q12-fire.script — Q12 event-parity fixture: 'p' fire latch
+#
+# D16 rows exercised (see test/harness/d16-state-machine.md):
+#   - KeyDown 'p': fireThisFrame=on + firing latch=on.
+#   - KeyUp 'p': fireThisFrame=off + latch=off.
+#   - The autofire path: with ShipBulletGroup::autoFire on, the frame-head
+#     latch check fires every frame while the latch is held (hold = stream
+#     of bullets at frame rate, NOT per repeat event).
+#   - Same-drain cancel (negative): a press+release consumed by ONE drain
+#     fires nothing — the down/up pair below at boundaries 200/201 is
+#     INTENTIONALLY inside one frame period to encode that contract.
+#
+# Pass criteria (Q12): identical bullet counts/state at checkpoints across
+# backends; the same-drain pair produces zero bullets on every backend.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/q12-fire.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture q12_help
+
+3    keydown s
+6    keyup s
+40   capture q12_start
+
+50   keydown p
+54   capture q12_fire_first    # single shot in flight
+62   keyup p
+
+80   keydown p                 # hold: autofire latch emits per frame
+120  keyup p
+126  capture q12_fire_volley   # multiple bullets, deterministic count
+
+# negative control: press+release within one drain cancels
+200  keydown p
+201  keyup p
+230  capture q12_no_fire       # must equal q12_fire_volley state + aging only
+
+250  keydown q
+254  keyup q

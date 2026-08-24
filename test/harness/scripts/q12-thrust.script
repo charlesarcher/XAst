@@ -1,0 +1,29 @@
+# q12-thrust.script — Q12 event-parity fixture: 'o' thrust on/off
+#
+# D16 rows exercised (see test/harness/d16-state-machine.md):
+#   - KeyDown 'o': NewThrust + thrusting=on + AddPermeable(thrust).
+#   - KeyUp 'o': RemovePermeable(thrust) + Acceleration zeroed + thrusting=off.
+#   - GLFW_REPEAT-drop proof: a hold produces exactly ONE NewThrust (one
+#     flame object, one RNG-free action) — repeats would re-fire NewThrust.
+#
+# Pass criteria (Q12): identical object state at every checkpoint across
+# backends; exactly one thrust object exists while held, none after release.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/q12-thrust.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture q12_help
+
+3    keydown s
+6    keyup s
+40   capture q12_start
+
+50   keydown o
+54   capture q12_thrust_on     # flame visible, accelerating
+90   capture q12_thrust_still  # still held: ONE thrust object, no re-fires
+130  keyup o
+138  capture q12_thrust_off    # flame gone, acceleration zeroed
+
+150  keydown q
+154  keyup q

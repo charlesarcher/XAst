@@ -19,6 +19,7 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #include<X11/Xutil.h>
+#include<unistd.h>
 #include"../utilities/rendering/x11Backend.H"
 #endif
 #include"../utilities/rendering/x11types.H"
@@ -387,10 +388,10 @@ inline void PlayingField::SetGravityAcceleration()
  }
 
 inline timeval PlayingField::ResumePlay(Intersector& intersector)
- {
-  #ifdef X11_BACKEND
-  XRaiseWindow(stage->display,stage->window);
-  #endif
+ {// Task 25: the window-raise and frame-clock flush that used to bracket
+  // this function fire inside the backend's pollEvents at the exact resume
+  // transitions (pause-spin exit, click-session end); the clock read and
+  // the pause-state resets stay here untouched.
   timeval time;
   gettimeofday(&time,NULL);
   leftRotPending=rightRotPending=firing=off;
@@ -400,15 +401,13 @@ inline timeval PlayingField::ResumePlay(Intersector& intersector)
     shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
     shipGroup->thrust->thrusting=Thrust::off;
    }
-  #ifdef X11_BACKEND
-  XSync(stage->display,False);
-  #endif
   return time;
  }
 
 #ifdef X11_BACKEND
 inline PlayingField::Boolean PlayingField::RunGame(Options& options)
- {XRaiseWindow(stage->display,stage->window);
+ {// latched here, performed at the next drain head
+  static_cast<X11Backend&>(engine).requestRaise();
   nonPermeableList.Reset();
   selfPermeableList.Reset();
   permeableList.Reset();
@@ -423,6 +422,12 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   NewRocksAndEnemy();
   // The old init-time canvas clear folds into the frame structure below.
   PresentFrame();
+  // One typed-event drain per frame (cadence invariant: every queued event
+  // is consumed and applied in order within its frame; a press+release pair
+  // landing in the same drain cancels). Generous bound — session motion is
+  // compressed to one slot backend-side, so overflow is unreachable in
+  // practice; overflowed normals simply ride the next drain.
+  GameEvent events[256];
   while(shipYard->NumShips())
    {shipYard->RemoveShip();
     stage->DrawShipYard();
@@ -435,177 +440,145 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
       NewRocksAndEnemy();
       if (ShipBulletGroup::autoFire&&firing)
         shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
-      XSync(stage->display,False);
-      XEvent event;
-      char keyText[2];
-      while(XEventsQueued(stage->display,QueuedAfterReading))
-       {XNextEvent(stage->display,&event);
+      static_cast<X11Backend&>(engine).frameClockSync();
+      int numEvents=engine.pollEvents(events,256);
+      // Click-session state for THIS drain's batch (the backend never
+      // spans drains with a session): press → hover stream → qualifying
+      // release or release-then-reenter ends it with the clock re-arm.
+      Boolean clickSession=off,
+              clickReleased=off,
+              clickInWindow=on;
+      if (static_cast<X11Backend&>(engine).takeCloseRequest())
+        return on;
+      if (static_cast<X11Backend&>(engine).takeRefreshRequest())
+        stage->Refresh();
+      for (int i=0;i<numEvents;++i)
+       {const GameEvent& event=events[i];
         switch(event.type)
-         {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
-                                break;
-	        case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
-	                                XAutoRepeatOn(stage->display);
-                                for(;;)
-	                               {XNextEvent(stage->display,&event);
-                                  if (event.type==EnterNotify)
-				                           {XAutoRepeatOff(stage->display);
-                                    startTime=ResumePlay(intersector);
-                                    break;
-                                   }
-                                  else
-				                            switch (event.type)
-				                             {case MappingNotify: XRefreshKeyboardMapping((XMappingEvent*)&event);
-                                                          break;
-                                      case Expose:
-                                      case MapNotify:     stage->Refresh();
-                                                          break;
-                                     }
-	                               }
-                                break;
-	        case Expose:
-	        case ConfigureNotify: stage->Refresh();
-                                break;
-          case KeyPress:        if (XLookupString((XKeyEvent*)&event,keyText,2,NULL,NULL)==1)
-                                  if (!shipGroup->hyper.hyperspacing)
-                                    switch(keyText[0])
-                                     {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity())
-                                                  leftRotPending=True;
-                                                else
-				                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
-                                                    -shipGroup->ship->angularVelocity;
-                                                  if (shipGroup->thrust->thrusting)
-                                                    shipGroup->thrust->ObjectRotator().AngularVelocity()=
-                                                      -shipGroup->ship->angularVelocity;
-				                                         }
-                                                break;
-				                              case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity())
-                                                  rightRotPending=True;
-                                                else
-                        				                 {shipGroup->ship->ObjectRotator().AngularVelocity()=
-                                                    shipGroup->ship->angularVelocity;
-                                                  if (shipGroup->thrust->thrusting)
-                                                    shipGroup->thrust->ObjectRotator().AngularVelocity()=
-                                                      shipGroup->ship->angularVelocity;
-				                 }
-                                                break;
-                                      case 'o': shipGroup->NewThrust();
-                                                shipGroup->thrust->thrusting=Thrust::on;
-                                                intersector.AddPermeable(shipGroup->thrust,0);
-                                                break;
-                                      case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
-                                                firing=on;
-                                                break;
-                                      case ' ': RemoveShip();
-                                                shipGroup->NewHyper();
-                                                break;
-	                                    case 'q': return on;
-                                                break;
-                                      case 'n':
-                                      case 'h': goto ResetGameUpdateScoreAndReturn;
-                                     }
-                                  else
-                                    switch(keyText[0])
-                                     {case 'q': return on;
-                                                break;
-                                      case 'n':
-                                      case 'h': goto ResetGameUpdateScoreAndReturn;
-				                             }
-                                break;
-          case KeyRelease:      if (!shipGroup->hyper.hyperspacing)
-                                  if (XLookupString((XKeyEvent*)&event,keyText,2,NULL,NULL)==1)
-                                    switch (keyText[0])
-                                     {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity()<0)
-                                                  if (rightRotPending)
-                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=
-                                                      shipGroup->ship->angularVelocity;
-                                                    if (shipGroup->thrust->thrusting)
-                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=
-                                                        shipGroup->ship->angularVelocity;
-                                                   }
-                                                  else
-                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
-                                                    if (shipGroup->thrust->thrusting)
-                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
-                                                   }
-                                                leftRotPending=False;
-                                                break;
-                                      case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity()>0)
-                                                  if (leftRotPending)
-                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=
-                                                      -shipGroup->ship->angularVelocity;
-                                                    if (shipGroup->thrust->thrusting)
-                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=
-                                                        -shipGroup->ship->angularVelocity;
-                                                   }
-                                                  else
-                                                   {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
-                                                    if (shipGroup->thrust->thrusting)
-                                                      shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
-                                                   }
-                                                rightRotPending=False;
-                                                break;
-                                      case 'o': intersector.RemovePermeable(shipGroup->thrust);
-                                                shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
-                                                shipGroup->thrust->thrusting=Thrust::off;
-                                                break;
-                                      case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::off;
-                                                firing=off;
-                                                break;
-                                     }
-                                break;
-          case ButtonPress:     if (((XButtonPressedEvent*)&event)->button==Button1)
-                                 {Boolean pointerButtonReleased=off,
-                                          pointerInWindow=on;
-                                  if (button->PointerOnButton(*(XButtonEvent*)&event))
-	                                  button->PressButton();
-                                  for (;;)
-                                   {XNextEvent(stage->display,&event);
-                                    if (event.type==ButtonRelease)
-                                     {if (((XButtonReleasedEvent*)&event)->button==Button1)
-                                       {if (button->PointerOnButton(*(XButtonEvent*)&event))
-                                          {
-#ifdef X11_BACKEND
-                                           options.RealizeWindow();
-#endif
-                                           button->ReleaseButton();
-                                          }
-                                        pointerButtonReleased=on;
-                                        if (pointerInWindow)
-                                          break;
-                                       }
-                                     }
-                                    else
-                                      if (event.type==EnterNotify)
-                                       {pointerInWindow=on;
-                                        XAutoRepeatOff(stage->display);
-                                        if (pointerButtonReleased)
-                                          break;
-                                       }
-                                      else
-                                        switch (event.type)
-                                         {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
-                                                                break;
-                                          case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
-                                                                  XAutoRepeatOn(stage->display);
-                                                                pointerInWindow=off;
-                                                                break;
-                                          case Expose:
-                                          case MapNotify:       stage->Refresh();
-                                                                break;
-                                          case MotionNotify:    if (button->PointerOnButton(*(XPointerMovedEvent*)&event))
-                                                                  button->PressButton();
-                                                                else
-                                                                  button->ReleaseButton();
-                                                                break;
+         {case GameEvent::CursorEnter:  if (clickSession)
+                                         {if (clickReleased)
+                                           {clickSession=off;
+                                            startTime=ResumePlay(intersector);
+                                           }
                                          }
-                                   }
-                                  startTime=ResumePlay(intersector);
-                                 }
-                                break;
-          case ClientMessage:   if (((XClientMessageEvent*)&event)->message_type==WM_PROTOCOLS&&
-                                    ((XClientMessageEvent*)&event)->data.l[0]==WM_DELETE_WINDOW)
-                                  return on;
-                                break;
+                                        else
+                                          startTime=ResumePlay(intersector);
+                                        break;
+          case GameEvent::CursorLeave:  if (clickSession)
+                                          clickInWindow=off;
+                                        break;
+          case GameEvent::MouseDown:    if (event.key==1/*Button1*/)
+                                         {if (button->PointerOnButton(event.x,event.y))
+                                            button->PressButton();
+                                          clickSession=on;
+                                         }
+                                        break;
+          case GameEvent::MouseMove:    if (clickSession)
+                                         {if (button->PointerOnButton(event.x,event.y))
+                                            button->PressButton();
+                                          else
+                                            button->ReleaseButton();
+                                         }
+                                        break;
+          case GameEvent::MouseUp:      if (clickSession&&event.key==1)
+                                         {if (button->PointerOnButton(event.x,event.y))
+                                           {options.RealizeWindow();
+                                            button->ReleaseButton();
+                                           }
+                                          clickReleased=on;
+                                          if (clickInWindow)
+                                           {clickSession=off;
+                                            startTime=ResumePlay(intersector);
+                                           }
+                                         }
+                                        break;
+          case GameEvent::KeyDown:      if (!shipGroup->hyper.hyperspacing)
+                                          switch(event.character)
+                                           {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity())
+                                                        leftRotPending=True;
+                                                      else
+				                                 {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                          -shipGroup->ship->angularVelocity;
+                                                      if (shipGroup->thrust->thrusting)
+                                                        shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                          -shipGroup->ship->angularVelocity;
+				                                 }
+                                                      break;
+				                              case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity())
+                                                        rightRotPending=True;
+                                                      else
+                        				                 {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                          shipGroup->ship->angularVelocity;
+                                                      if (shipGroup->thrust->thrusting)
+                                                        shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                          shipGroup->ship->angularVelocity;
+				                 }
+                                                      break;
+                                              case 'o': shipGroup->NewThrust();
+                                                        shipGroup->thrust->thrusting=Thrust::on;
+                                                        intersector.AddPermeable(shipGroup->thrust,0);
+                                                        break;
+                                              case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
+                                                        firing=on;
+                                                        break;
+                                              case ' ': RemoveShip();
+                                                        shipGroup->NewHyper();
+                                                        break;
+	                                    case 'q': return on;
+                                                      break;
+                                              case 'n':
+                                              case 'h': goto ResetGameUpdateScoreAndReturn;
+                                             }
+                                        else
+                                          switch(event.character)
+                                           {case 'q': return on;
+                                                      break;
+                                            case 'n':
+                                            case 'h': goto ResetGameUpdateScoreAndReturn;
+				                             }
+                                        break;
+          case GameEvent::KeyUp:        if (!shipGroup->hyper.hyperspacing)
+                                          switch (event.character)
+                                           {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity()<0)
+                                                        if (rightRotPending)
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                            shipGroup->ship->angularVelocity;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                              shipGroup->ship->angularVelocity;
+                                                         }
+                                                        else
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
+                                                         }
+                                                      leftRotPending=False;
+                                                      break;
+                                              case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity()>0)
+                                                        if (leftRotPending)
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                            -shipGroup->ship->angularVelocity;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                              -shipGroup->ship->angularVelocity;
+                                                         }
+                                                        else
+                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                          if (shipGroup->thrust->thrusting)
+                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
+                                                         }
+                                                      rightRotPending=False;
+                                                      break;
+                                              case 'o': intersector.RemovePermeable(shipGroup->thrust);
+                                                        shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
+                                                        shipGroup->thrust->thrusting=Thrust::off;
+                                                        break;
+                                              case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::off;
+                                                        firing=off;
+                                                        break;
+                                             }
+                                        break;
+          default:                      break;
          }
        }
       SetGravityAcceleration();
@@ -664,79 +637,70 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
   // map-and-raise) relocated into the backend's pass-2 init at task 15
   // (D-C C1); its two recorded deltas live there (argv/argc as NULL,0;
   // map-and-raise at init). The size pin is dropped entirely (v6/S2/D15).
+  // Task 25: this outer loop drains typed events like RunGame does. The
+  // old blocking single-event read becomes a drain-plus-idle-sleep: when
+  // no events are queued the loop parks for 1ms (sub-frame input latency,
+  // zero server traffic while parked) instead of blocking in the backend.
   Options options(argc,argv);
-  XEvent event;
   int localHighScore=0;
   Boolean pointerButtonReleased=on,
           buttonActivated=off;
+  GameEvent events[64];
   for(;;)
-   {XNextEvent(stage->display,&event);
-    switch(event.type)
-     {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
-                            break;
-      case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
-                              XAutoRepeatOn(stage->display);
-                            break;
-      case EnterNotify:     XAutoRepeatOff(stage->display);
-                            break;
-      case Expose:
-      case MapNotify:
-      case ConfigureNotify: stage->Refresh();
-                            break;
-      case KeyPress:        if (pointerButtonReleased)
-                             {char keyText[2];
-                              if (XLookupString((XKeyEvent*)&event,keyText,2,NULL,NULL)==1)
-                                switch(keyText[0])
-                                  {case 's': level=l;
-                                             Boolean earlyExit;
-#ifdef X11_BACKEND
-                                             earlyExit=RunGame(options);
-#endif
-                                             if (localHighScore<score->CurrentScore())
-                                              localHighScore=score->CurrentScore();
-                                            if (earlyExit)
-                                              return localHighScore;
-                                            break;
-                                  case 'q': return localHighScore;
-                                            break;
-                                  case 'h': GenHelpScreen();
-                                            stage->DrawPlayingField();
-                                            break;
-                                 }
-                             }
-                            break;
-      case ButtonPress:     if (((XButtonPressedEvent*)&event)->button==Button1)
-                             {pointerButtonReleased=off;
-                              if (button->PointerOnButton(*(XButtonEvent*)&event))
-                               {button->PressButton();
-                                buttonActivated=on;
-                               }
-                             }
-                            break;
-      case ButtonRelease:   if (((XButtonReleasedEvent*)&event)->button==Button1)
-                              {if (buttonActivated &&
-                                   button->PointerOnButton(*(XButtonEvent*)&event))
-                                {
-#ifdef X11_BACKEND
-                                 options.RealizeWindow();
-#endif
-                                 button->ReleaseButton();
-                                }
-                              buttonActivated=off;
-                              pointerButtonReleased=on;
-                             }
-                            break;
-      case MotionNotify:    if (buttonActivated &&
-                                button->PointerOnButton(*(XPointerMovedEvent*)&event))
-                              button->PressButton();
-                            else
-                              button->ReleaseButton();
-                            break;
-      case ClientMessage:   if (((XClientMessageEvent*)&event)->message_type==WM_PROTOCOLS&&
-                                ((XClientMessageEvent*)&event)->data.l[0]==WM_DELETE_WINDOW)
-                              return localHighScore;
-                            break;
-     }
+   {int numEvents=engine.pollEvents(events,64);
+    if (static_cast<X11Backend&>(engine).takeCloseRequest())
+      return localHighScore;
+    if (static_cast<X11Backend&>(engine).takeRefreshRequest())
+      stage->Refresh();
+    for (int i=0;i<numEvents;++i)
+     {const GameEvent& event=events[i];
+      switch(event.type)
+       {case GameEvent::KeyDown:    if (pointerButtonReleased)
+                                     switch(event.character)
+                                       {case 's': level=l;
+                                                  Boolean earlyExit;
+                                                  earlyExit=RunGame(options);
+                                                  if (localHighScore<score->CurrentScore())
+                                                    localHighScore=score->CurrentScore();
+                                                  if (earlyExit)
+                                                    return localHighScore;
+                                                  break;
+                                        case 'q': return localHighScore;
+                                                  break;
+                                        case 'h': GenHelpScreen();
+                                                  stage->DrawPlayingField();
+                                                  break;
+                                       }
+                                    break;
+        case GameEvent::MouseDown:  if (event.key==1/*Button1*/)
+                                     {pointerButtonReleased=off;
+                                      if (button->PointerOnButton(event.x,event.y))
+                                       {button->PressButton();
+                                        buttonActivated=on;
+                                       }
+                                     }
+                                    break;
+        case GameEvent::MouseUp:    if (event.key==1/*Button1*/)
+                                     {if (buttonActivated &&
+                                          button->PointerOnButton(event.x,event.y))
+                                       {options.RealizeWindow();
+                                        button->ReleaseButton();
+                                       }
+                                      buttonActivated=off;
+                                      pointerButtonReleased=on;
+                                     }
+                                    break;
+        case GameEvent::MouseMove:  if (buttonActivated &&
+                                        button->PointerOnButton(event.x,event.y))
+                                      button->PressButton();
+                                    else
+                                      button->ReleaseButton();
+                                    break;
+        default:                    break;
+       }
+      }
+    if (!numEvents)
+      usleep(1000);
     }
   #endif
   return 0;

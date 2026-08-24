@@ -1,0 +1,28 @@
+# q12-hyperspace-unarmed.script — Q12 fixture: SPACE with the gate UNARMED
+#
+# D16 row exercised (see test/harness/d16-state-machine.md):
+#   - KeyDown ' ' with hyper.hyperspacing OFF: RemoveShip + NewHyper —
+#     ship vanishes, random re-entry (seeded RNG draws), ship re-added.
+#   - The gate: while hyperspacing, space is IGNORED (see the armed variant).
+#
+# Pass criteria (Q12): identical object state at every checkpoint across
+# backends — same RNG draw count (re-entry position identical), same ship
+# absence/presence timing.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/q12-hyperspace-unarmed.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture q12_help
+
+3    keydown s
+6    keyup s
+40   capture q12_start
+
+50   keydown space
+54   keyup space
+58   capture q12_hyper_gone    # ship removed (re-entry pending)
+120  capture q12_hyper_back    # re-entered at the seeded spot
+
+150  keydown q
+154  keyup q

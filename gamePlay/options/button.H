@@ -23,10 +23,8 @@ class Button
     Button& PressButton();
     Button& ReleaseButton();
     const Button& DrawButton() const;
-#ifdef X11_BACKEND
-    Boolean PointerOnButton(const XButtonEvent&) const;
-    Boolean PointerOnButton(const XPointerMovedEvent&) const;
-#endif
+    // Logical client-area coordinates (GameEvent x/y feed this directly).
+    Boolean PointerOnButton(int x,int y) const;
     Boolean ButtonPressed() const;
     const int ButtonWidth() const;
     const int ButtonHeight() const;
@@ -244,17 +242,10 @@ inline const Button& Button::DrawButton() const
   return *this;
  }
 
-#ifdef X11_BACKEND
-inline Button::Boolean Button::PointerOnButton(const XButtonEvent& event) const
- {return event.x>=upperLeftX && event.x<upperLeftX+buttonWidth &&
-         event.y>=upperLeftY && event.y<upperLeftY+buttonHeight;
+inline Button::Boolean Button::PointerOnButton(int x,int y) const
+ {return x>=upperLeftX && x<upperLeftX+buttonWidth &&
+         y>=upperLeftY && y<upperLeftY+buttonHeight;
  }
-
-inline Button::Boolean Button::PointerOnButton(const XPointerMovedEvent& event) const
- {return event.x>=upperLeftX && event.x<upperLeftX+buttonWidth &&
-         event.y>=upperLeftY && event.y<upperLeftY+buttonHeight;
- }
-#endif
 
 inline Button::Boolean Button::ButtonPressed() const
  {return buttonPressed;

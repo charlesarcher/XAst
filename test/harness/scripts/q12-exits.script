@@ -1,0 +1,46 @@
+# q12-exits.script — Q12 event-parity fixture: 'q'/'n'/'h' exit paths
+#
+# D16 rows exercised (see test/harness/d16-state-machine.md):
+#   - 'h' on the title screen: GenHelpScreen + field present (help screen).
+#   - 'n' during play: goto ResetGameUpdateScoreAndReturn — yard cleared,
+#     groups reset, hi-score table drawn, RunGame returns off (title).
+#   - 'h' during play: same reset path as 'n'.
+#   - 'q' during play: RunGame returns on -> app exits (harness `exit`).
+#   - All three pass through the hyperspacing gate (work while armed).
+#
+# Pass criteria (Q12): identical screen state at every checkpoint across
+# backends; identical exit rc on the final 'q'.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/q12-exits.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture q12_help0         # initial help screen (ctor GenHelpScreen)
+
+3    keydown h                 # title 'h': redraw help
+6    keyup h
+20   capture q12_help_redrawn
+
+30   keydown s                 # start
+34   keyup s
+60   capture q12_play
+
+70   keydown n                 # play 'n': reset-and-return path
+74   keyup n
+110  capture q12_hiscore       # score table + S/Q/H menu
+
+120  keydown s                 # start again
+124  keyup s
+150  capture q12_play2
+
+160  keydown h                 # play 'h': same reset path
+164  keyup h
+200  capture q12_hiscore2
+
+210  keydown s
+214  keyup s
+240  capture q12_play3
+
+250  keydown q                 # play 'q': hard exit
+254  keyup q
+exit

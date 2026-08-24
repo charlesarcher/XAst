@@ -74,10 +74,18 @@
 //    sync of its own: the domain loops flush at their frame boundaries,
 //    and an extra round trip inside the draw sequence deterministically
 //    perturbs the sampled visible-frame sequence (Q13 red).
-//  - Event HANDLING stays in RunGame (playingField.H island) until task 25's
-//    verbatim relocation; pollEvents() below is a typed NON-BLOCKING drain
-//    that nothing calls on X11 until then — no event dropped or double-
-//    handled (the domain loop remains the pre-25 authority).
+//  - Event HANDLING relocated at task 25 (D16): pollEvents() below absorbed
+//    the playingField.H island verbatim — same order, same blocking
+//    semantics (the pointer-leave pause spin and the Button1 click session
+//    block INSIDE this call, exactly as they blocked inside the old drain),
+//    same server-side auto-repeat suppression. The domain loops now drain
+//    typed events once per frame and apply the key→action table themselves.
+//    Damage (expose-class) and window-close have no GameEvent representation
+//    in the frozen interface; they latch into takeRefreshRequest()/
+//    takeCloseRequest(). The once-per-frame request flush that bounds the
+//    frame-clock window is frameClockSync(), called by RunGame at the exact
+//    statement position of the old raw sync (an internal sync in endFrame is
+//    Q13-proven harmful — see that method).
 //  - The WM-hints block (naming/protocol-registration/input-selection/map-
 //    and-raise) RELOCATED here at task 15 (D-C C1), verbatim-order after the
 //    KBState save, with the size-pin hint structure dropped entirely
@@ -129,6 +137,8 @@ class X11Backend : public RenderingEngine
         frameYardX_(0),frameYardY_(0),frameYardW_(0),frameYardH_(0),
         frameFieldDstX_(0),frameFieldDstY_(0),
         frameYardPending_(false),frameFieldPending_(false),
+        raisePending_(false),refreshPending_(false),closePending_(false),
+        presentDirty_(true),presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
         scissorActive_(false),
         scissorX_(0),scissorY_(0),scissorW_(0),scissorH_(0)
      {fonts_[0]=fonts_[1]=fonts_[2]=fonts_[3]=fonts_[4]=nullptr;
@@ -245,49 +255,151 @@ class X11Backend : public RenderingEngine
     // (3) Seams
     // ------------------------------------------------------------------
     virtual int pollEvents(GameEvent* out,int maxCount) override
-     {int n=0;
+     {// ---- Task 25 (D16): the playingField.H event island, relocated
+      // verbatim. The pause spin and Button1 click session block INSIDE this
+      // call (as they blocked inside the old drain), so a drain returns only
+      // once the game is unpaused and the caller keeps its once-per-frame
+      // cadence. Mode rules mirror the old switches exactly:
+      //   normal     — keys/buttons/motion translate; bare enters only reset
+      //                auto-repeat; leave enters the pause spin; close and
+      //                damage latch for the domain.
+      //   pause spin — consume until re-enter: mapping refresh + damage
+      //                handled, everything else discarded (keys pressed
+      //                while paused never reached the game — preserved).
+      //   click      — motion/up/enter/leave drive the hover stream, keys
+      //                and other buttons discarded; ends on release-in-
+      //                window or release-then-reenter.
+      int n=0;
       if (!display||!out||maxCount<=0)
         return 0;
-      while (n<maxCount&&XEventsQueued(display,QueuedAfterReading)>0)
-       {XEvent e;
+      if (raisePending_)
+       {XRaiseWindow(display,window);
+        raisePending_=false;
+       }
+      if (presentDirty_)
+        updatePresentTransformCache();
+      bool pauseSpin=false;
+      bool clickSession=false;
+      bool clickReleased=false,clickInWindow=true;
+      int motionSlot=-1;
+      for (;;)
+       {// Normal mode: NON-blocking drain (queue check first, exactly the
+        // old gate). Pause spin / click session: fall through to the
+        // blocking read — they waited for their terminating event no
+        // matter how quiet the queue got, and so does this.
+        if (!pauseSpin&&!clickSession)
+         {if (n>=maxCount||XEventsQueued(display,QueuedAfterReading)==0)
+            break;
+         }
+        XEvent e;
         XNextEvent(display,&e);
         GameEvent g={};
-        bool emit=true;
+        bool emit=false;
         switch(e.type)
-         {case KeyPress:
+         {case MappingNotify:
+           XRefreshKeyboardMapping((XMappingEvent*)&e);
+           break;
+          case Expose:
+          case MapNotify:
+          case ConfigureNotify:
+           // damage latches for the domain: the frozen interface has no
+           // event type to carry it, so Refresh() fires after the drain
+           refreshPending_=true;
+           if (e.type==ConfigureNotify)
+             presentDirty_=true;
+           break;
+          case ClientMessage:
+           if (!pauseSpin&&!clickSession&&
+               ((XClientMessageEvent*)&e)->message_type==wmProtocolsAtom_&&
+               ((XClientMessageEvent*)&e)->data.l[0]==wmDeleteWindowAtom_)
+             closePending_=true;       // discarded verbatim inside both inner loops
+           break;
+          case EnterNotify:
+           XAutoRepeatOff(display);
+           if (pauseSpin)
+            {XRaiseWindow(display,window);
+             XSync(display,False);
+             pauseSpin=false;
+             g.type=GameEvent::CursorEnter;
+             emit=true;
+            }
+           else if (clickSession)
+            {clickInWindow=true;
+             g.type=GameEvent::CursorEnter;
+             emit=true;
+             if (clickReleased)
+              {XRaiseWindow(display,window);
+               XSync(display,False);
+               clickSession=false;
+              }
+            }
+           break;
+          case LeaveNotify:
+           if (autoRepeatState_==AutoRepeatModeOn)
+             XAutoRepeatOn(display);
+           g.type=GameEvent::CursorLeave;
+           emit=true;
+           if (clickSession)
+             clickInWindow=false;
+           else
+             pauseSpin=true;           // block below until re-enter
+           break;
+          case KeyPress:
           case KeyRelease:
+           if (pauseSpin||clickSession)
+             break;                    // consumed-and-discarded, as the island did
            {char keyText[2];
             g.type=(e.type==KeyPress)?GameEvent::KeyDown:GameEvent::KeyUp;
             g.key=(int)XLookupKeysym(&e.xkey,0);
             g.character=(XLookupString((XKeyEvent*)&e,keyText,2,NULL,NULL)==1)
                           ? keyText[0] : (char)0;
-            break;}
+            emit=true;
+           }
+           break;
           case ButtonPress:
+           if (pauseSpin||clickSession)
+             break;                    // discarded verbatim
+           g.type=GameEvent::MouseDown;
+           g.key=(int)e.xbutton.button;
+           inverseTransformPoint(e.xbutton.x,e.xbutton.y,g.x,g.y);
+           emit=true;
+           if (e.xbutton.button==Button1)
+            {clickSession=true;
+             clickReleased=false;clickInWindow=true;motionSlot=-1;
+            }
+           break;
           case ButtonRelease:
-            g.type=(e.type==ButtonPress)?GameEvent::MouseDown:GameEvent::MouseUp;
-            g.key=(int)e.xbutton.button;
-            inverseTransformPoint(e.xbutton.x,e.xbutton.y,g.x,g.y);
-            break;
+           if (!clickSession||e.xbutton.button!=Button1)
+             break;                    // the main drain had no release case
+           g.type=GameEvent::MouseUp;
+           g.key=(int)e.xbutton.button;
+           inverseTransformPoint(e.xbutton.x,e.xbutton.y,g.x,g.y);
+           emit=true;
+           clickReleased=true;
+           if (clickInWindow)
+            {XRaiseWindow(display,window);
+             XSync(display,False);
+             clickSession=false;
+            }
+           break;
           case MotionNotify:
-            g.type=GameEvent::MouseMove;
-            inverseTransformPoint(e.xmotion.x,e.xmotion.y,g.x,g.y);
-            break;
-          case EnterNotify:
-            g.type=GameEvent::CursorEnter;
-            break;
-          case LeaveNotify:
-            g.type=GameEvent::CursorLeave;
-            break;
-          default:
-            // MappingNotify/Expose/ConfigureNotify/ClientMessage are not
-            // representable as GameEvents; their VERBATIM handling relocates
-            // at task 25. Until then RunGame drains the queue itself and
-            // nothing calls this method on X11 — no event is dropped or
-            // double-handled (stated dependency, plan task 12(a)).
-            emit=false;
-            break;
+           if (pauseSpin)
+             break;                    // discarded verbatim in the spin
+           g.type=GameEvent::MouseMove;
+           inverseTransformPoint(e.xmotion.x,e.xmotion.y,g.x,g.y);
+           if (clickSession)
+            {// hover consumes only the latest position: compress into one
+             // slot so a drag can never overflow the caller's buffer
+             if (motionSlot>=0)
+               out[motionSlot]=g;
+             else if (n<maxCount)
+              {motionSlot=n;out[n++]=g;}
+            }
+           else
+             emit=true;
+           break;
          }
-        if (emit)
+        if (emit&&n<maxCount)
           out[n++]=g;
        }
       return n;
@@ -617,7 +729,38 @@ class X11Backend : public RenderingEngine
       frameYardPending_=true;
      }
     inline void requestFieldPresent()
-     {frameFieldPending_=true;}
+      {frameFieldPending_=true;}
+    // ---- Task-25 transition plumbing (DELETED at task 47) -----------------
+    // The frozen 27-method interface has no damage/close event types and no
+    // X11-specific pacing primitive, so the relocated island's remaining
+    // observable effects ride four tiny non-virtual helpers (exception zone
+    // (a); createBitmapMask/textFirstCharLbearing precedent):
+    //   requestRaise        — RunGame-entry window-raise latch, performed at
+    //                         the next drain (the raw call stood at RunGame's
+    //                         first statement).
+    //   frameClockSync      — the once-per-frame request flush bounding the
+    //                         D4 diffTime window; RunGame calls it at the old
+    //                         sync's exact statement position. Deliberately
+    //                         NOT inside endFrame (Q13-proven harmful there)
+    //                         and NOT inside pollEvents (the title loop must
+    //                         not pay a round trip per drain). GL/VK replace
+    //                         this with their own frame timestamps (D16).
+    //   takeRefreshRequest  — expose-class damage latch → stage->Refresh().
+    //   takeCloseRequest    — WM-delete latch → RunGame returns on /
+    //                         PlayTheGame returns its high score.
+    inline void requestRaise()
+      {raisePending_=true;}
+    inline void frameClockSync()
+     {if (display)
+        XSync(display,False);}
+    inline bool takeRefreshRequest()
+     {bool r=refreshPending_;
+      refreshPending_=false;
+      return r;}
+    inline bool takeCloseRequest()
+     {bool c=closePending_;
+      closePending_=false;
+      return c;}
     // Color-allocation seam (the T17/T20 closure path): domain code that
     // must hand a live colormap pixel to a non-engine consumer gets it from
     // here instead of allocating directly.
@@ -842,16 +985,18 @@ class X11Backend : public RenderingEngine
       display=nullptr;
      }
 
-    inline void inverseTransformPoint(int winX,int winY,int& outX,int& outY)
-      const
-     {float scale;int ox,oy;
-      // const-cast-free route: recompute inline (getPresentTransform is
-      // non-virtual-called only through the interface; keep logic in one
-      // place by mirroring its math here).
-      scale=1.0f;ox=0;oy=0;
-      if (windowWidth_>0&&windowHeight_>0)
+    // Present-transform cache for event coordinates: recomputed only on
+    // ConfigureNotify (file-header note) so a motion flood costs zero server
+    // round trips — the island used raw window coords directly, and a
+    // per-event XGetGeometry here would reintroduce the mid-drain round
+    // trips T14 proved harmful.
+    inline void updatePresentTransformCache()
+     {float scale=1.0f;
+      int ox=0,oy=0;
+      if (window&&windowWidth_>0&&windowHeight_>0)
        {unsigned int w=0,h=0,bb=0,depth=0;
-        Window root;int wx,wy;
+        Window root;
+        int wx,wy;
         if (XGetGeometry(display,window,&root,&wx,&wy,&w,&h,&bb,&depth))
          {scale=((float)w/windowWidth_<(float)h/windowHeight_)
                   ? (float)w/windowWidth_ : (float)h/windowHeight_;
@@ -859,6 +1004,14 @@ class X11Backend : public RenderingEngine
           oy=((int)h-(int)(windowHeight_*scale))/2;
          }
        }
+      presentScale_=scale;presentOffX_=ox;presentOffY_=oy;
+      presentDirty_=false;
+     }
+
+    inline void inverseTransformPoint(int winX,int winY,int& outX,int& outY)
+      const
+     {float scale=presentScale_;
+      int ox=presentOffX_,oy=presentOffY_;
       outX=(int)(((float)winX-(float)ox)/(scale==0.0f?1.0f:scale));
       outY=(int)(((float)winY-(float)oy)/(scale==0.0f?1.0f:scale));
      }
@@ -970,6 +1123,10 @@ class X11Backend : public RenderingEngine
     int frameYardX_,frameYardY_,frameYardW_,frameYardH_;
     int frameFieldDstX_,frameFieldDstY_;
     bool frameYardPending_,frameFieldPending_;
+    bool raisePending_,refreshPending_,closePending_;
+    bool presentDirty_;
+    float presentScale_;
+    int presentOffX_,presentOffY_;
     bool scissorActive_;
     int scissorX_,scissorY_,scissorW_,scissorH_;
     std::map<TextureId,std::pair<int,int> > textureDims_;

@@ -1,0 +1,33 @@
+# q12-hyperspace-armed.script — Q12 fixture: SPACE with the gate ARMED
+#
+# D16 row exercised (see test/harness/d16-state-machine.md):
+#   - KeyDown ' ' while hyper.hyperspacing is ON: the keypress is IGNORED
+#     (no second RemoveShip/NewHyper, no extra RNG draws). Only 'q'/'n'/'h'
+#     pass through the armed gate.
+#
+# Encoding: the first space arms the gate (hyperspacing until random
+# re-entry); the second space lands one boundary later — inside the
+# hyperspacing window with high probability. The CHECK is backend parity:
+# whatever the seeded landing, X11 and GL/VK must observe identical state.
+# A repeat-delivery regression (GLFW_REPEAT not dropped) would double-fire
+# NewThrust-style RNG consumption here and diverge the trajectories.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/q12-hyperspace-armed.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture q12_help
+
+3    keydown s
+6    keyup s
+40   capture q12_start
+
+50   keydown space             # arms the gate (ship enters hyperspace)
+54   keyup space
+58   keydown space             # gated: ignored while hyperspacing
+62   keyup space
+70   capture q12_hyper_single  # exactly ONE teleport in flight
+130  capture q12_hyper_back    # one re-entry, seeded position
+
+160  keydown q
+164  keyup q

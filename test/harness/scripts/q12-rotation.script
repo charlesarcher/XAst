@@ -1,0 +1,44 @@
+# q12-rotation.script — Q12 event-parity fixture: 'e'/'r' press-then-release
+#
+# D16 rows exercised (see test/harness/d16-state-machine.md):
+#   - KeyDown 'e'/'r': sets AngularVelocity (+thrust coupling); sets the
+#     pending-rotation flag ONLY when already rotating the other way.
+#   - KeyUp 'e'/'r': CONSUMES the pending flag and zeroes/flips angular
+#     velocity. This is the release-consumption semantics a per-frame
+#     boolean key-state array cannot express (the B3 regression test).
+#   - Phase 2 holds 'e', taps 'r' (pending flag arms), releases 'e':
+#     velocity must FLIP to rightward, not stop.
+#
+# Pass criteria (Q12): identical object state at every checkpoint when this
+# script runs on X11 vs GL/VK (positions/velocities/state hashes) — NOT a
+# pixel diff against qa/baseline-x11. No repeat-delivery divergence: exactly
+# ONE velocity transition per press, none per repeat.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/q12-rotation.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data
+# (GL/VK legs add their own --ref pairing per task 31/42; gameplay seq values
+# below are conservative starting points — pin them empirically per
+# script-format.md authoring rule 3 before first use.)
+
+1    capture q12_help       # initial static screen
+
+3    keydown s              # start game
+6    keyup s
+40   capture q12_start      # ship idle, pre-input
+
+# --- phase 1: hold left rotation, release zeroes it
+50   keydown e
+54   capture q12_e_held     # rotating left
+62   keyup e
+70   capture q12_e_released # velocity zeroed by release consumption
+
+# --- phase 2: pending-flag flip (hold 'e', tap 'r', release 'e')
+80   keydown e
+88   keydown r              # arms rightRotPending (still rotating left)
+92   keyup r                # no-op on velocity ('r' release with AV<0)
+100  keyup e                # consumes pending flag -> velocity flips right
+110  capture q12_flip       # rotating RIGHT without any held key
+
+130  keydown q
+134  keyup q

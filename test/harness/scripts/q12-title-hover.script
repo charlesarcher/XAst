@@ -1,0 +1,38 @@
+# q12-title-hover.script — Q12 event-parity fixture: title-state hover/click
+#
+# D16 rows exercised (see test/harness/d16-state-machine.md):
+#   - MouseMove over the Options button: pressed face while hovering,
+#     raised face otherwise (title MotionNotify hover path).
+#   - MouseDown/MouseUp on the button: press latch (buttonActivated),
+#     release inside -> options.RealizeWindow() + ReleaseButton.
+#     NOTE for the X11 leg: the click session blocks inside pollEvents, so
+#     the pressed-face draw lands when the drain returns (post-release);
+#     capture AFTER release+settle, never between down and up.
+#   - pointerButtonReleased gating: keys are ignored until a Button1
+#     release has been seen; after the release below, 'h' must work again.
+#
+# Coordinates: the Options button sits at client (2,2), roughly 60x30
+# ("Options" in the button font + borders). On-button point ~(20,15),
+# off-button point (360,300). Verify empirically before first run.
+#
+# Pass criteria (Q12): identical face state at checkpoints across backends;
+# key gating state identical (the trailing 'h' produces the help screen).
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/q12-title-hover.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture q12_title0
+
+10   move 20 15               # hover onto the button
+30   capture q12_hover_on     # pressed face
+50   move 360 300             # hover off
+70   capture q12_hover_off    # raised face
+
+90   mousedown 20 15          # press on button
+110  mouseup 20 15            # release on button -> RealizeWindow path
+140  capture q12_clicked      # face raised again; menu may be realized
+
+160  keydown h                # pointerButtonReleased is on again: works
+164  keyup h
+190  capture q12_help_after   # help screen proves the gate reopened
