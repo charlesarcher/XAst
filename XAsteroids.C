@@ -2,8 +2,12 @@
 #include<new>
 #include<iostream>
 #include<stdio.h>
+#include<sys/time.h>
+#include<unistd.h>
 #ifdef X11_BACKEND
 #include"utilities/rendering/x11Backend.H"
+#elif defined(GL_BACKEND)
+#include"utilities/rendering/glBackend.H"
 #endif
 #include"gamePlay/stage.H"
 #include"gamePlay/score.H"
@@ -87,6 +91,39 @@ int main (int argc, char *argv[])
   delete score;
   delete button;
   delete stage;
+  engine.shutdown();
+  return 0;
+  #endif
+  #ifdef GL_BACKEND
+  // Task-31 stub loop (M5-M1 relocated clause): engine init + a paced
+  // beginFrame/clear/endFrame loop under Xvfb. Non-interactive rendering —
+  // primitives/text/textures/rotation land at tasks 32-35; the full scripted
+  // session identity assertion is Q10 at task 36.
+  GLBackend engine;
+  engine.setCanonicalLayout(PlayingField::playArea.Width(),
+                            PlayingField::playArea.Height(),
+                            ShipGroup::maxIconHeight);
+  if (!engine.initWindow("Asteroids"))
+   {fprintf(stderr,"XAsteroids: initialization failed.\n");
+    return 1;
+   }
+   {const long uSecondsPerFrame=62500;          // D4 default (16 fps)
+    timeval start,now;
+    gettimeofday(&start,nullptr);
+    const char* frameLog=getenv("XAST_FRAME_LOG");
+    for (int frame=0;frame<160;++frame)
+     {engine.beginFrame();
+      if (frame==0)
+        engine.clear();
+      engine.endFrame();
+      gettimeofday(&now,nullptr);
+      long elapsed=(now.tv_sec-start.tv_sec)*1000000L+now.tv_usec-start.tv_usec;
+      if (frameLog)
+        fprintf(stderr,"[frame] %d %ld\n",frame,elapsed);
+      if (elapsed<(frame+1)*uSecondsPerFrame)
+        usleep((useconds_t)((frame+1)*uSecondsPerFrame-elapsed));
+     }
+   }
   engine.shutdown();
   return 0;
   #endif

@@ -92,3 +92,73 @@ Sources untouched by this task ⇒ byte-identity expected and confirmed.
 `./XAsteroids` left as the **GL-linked** flavor (last build in the sequence);
 `make BACKEND=X11` restores the X11 flavor. `AutoRepeatOn` builds on the X11 leg
 only (`all` is backend-aware as of this task).
+
+## Task 31 — GLBackend window+context
+
+**Executor note:** same delegation outage as task 29 (provider "Endpoint is
+unavailable": ultrabrain/quick/fixer/general lanes all failed on real-work
+payloads while trivial probes passed; 0-for-11 on implementation dispatches).
+Executed directly by the orchestrator under the documented emergency exception.
+
+### Leg 1 — GL build + context gate
+
+```
+$ make BACKEND=GL   # green; links obj/GL/{XAsteroids,rotatorDisplayData,
+                    # compositePixmap,glad,stbTruetypeImpl}.o -lglfw -lGL
+glBackend: GL_VERSION=4.6 (Compatibility Profile) Mesa 26.2.1-arch3.1
+           GL_RENDERER=llvmpipe (LLVM 22.1.8, 256 bits)
+```
+
+4.5-core minimum gate satisfied (llvmpipe reports 4.6-compat). New TU
+`stbTruetypeImpl.C` = single stb expansion point (glad.c precedent: plain -O3
+gcc, keeps the game-TU warning baseline untouched).
+
+### Leg 2 — Window geometry probe (Xvfb :77, 1280x1024)
+
+```
+$ glprobe :77 Asteroids  ->  "296 161 688 702 0 24"
+```
+
+- Size **688x702** = WindowSizeFormula::Compute output for the DejaVu TTF
+  metrics (40/10/20/40 px slots). Deliberately ≠ X11's 720x706: SAME shared
+  formula, DIFFERENT font metrics — D12 validates substitution by the F2 pixel
+  gate, never raw metrics.
+- Position **+296+161** = exact root-center for that size ((1280-688)/2,
+  (1024-702)/2). Border width **0** (GLFW windows have none — m9/N7 note).
+
+### Leg 3 — Q6 frame period (stub loop, XAST_FRAME_LOG)
+
+```
+frames: 160 | mean ms/frame (11+): 62.50 | min 62.14 | max 62.93 | app-exit=0
+```
+
+62.5 ms ±2 ms satisfied outright (no VSync cap encountered under llvmpipe).
+
+### Leg 4 — Resize smoke (scripted XResizeWindow mid-run)
+
+```
+initial 296 161 688 702 -> resize 1000x800 -> after: ALIVE, geometry 1000x800
+```
+
+Framebuffer-size callback path fires inside beginFrame()'s glfwPollEvents()
+without crash; letterbox transform recompute is lazy-on-dirty (Q15 owns the
+full sweep later).
+
+### Leg 5 — ASan open/close cycle
+
+ASan-instrumented GL build (29 __asan syms), full stub session under Xvfb:
+exit 0, **zero LSan findings** (no Xt in the GL binary — nothing pre-existing
+either). O3 build restored afterwards.
+
+### Leg 6 — X11 no-drift
+
+`make BACKEND=X11` green; harness Q13: `RESULT: PASS (all checkpoints AE=0)`.
+
+### Files
+
+- `utilities/rendering/glBackend.H` (new): all 27 overrides present; real =
+  initWindow/shutdown/nativeHandle/beginFrame/endFrame/getPresentTransform/
+  clear/measureText/getFontMetrics; honest TODO(task NN) stubs for 32-35.
+- `utilities/rendering/stbTruetypeImpl.C` (new), makefile (-DGL_BACKEND GL-leg
+  only, stb TU rule, link list), XAsteroids.C (#elif GL_BACKEND paced stub
+  loop; X11 branch byte-identical), vendor/fonts/* + PINNED.md rows.

@@ -31,6 +31,11 @@ endif
 ifneq ($(filter $(BACKEND),GL VK),)
 BACKEND_CXXFLAGS=$(VENDOR_INCS)
 endif
+# Task 31: the GL leg compiles main()'s GL backend branch (GLBackend engine +
+# paced stub loop). VK stays macro-free until vkBackend lands (task 37).
+ifeq ($(BACKEND),GL)
+BACKEND_CXXFLAGS+=-DGL_BACKEND
+endif
 
 # Objects feeding the X11 link always carry the X11 macro, whatever BACKEND says.
 obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o: BACKEND_CXXFLAGS=$(X11_BACKEND)
@@ -68,7 +73,7 @@ ifneq ($(filter $(BACKEND),GL VK),)
 IMGUI_OBJECTS=$(addprefix $(OBJDIR)/,$(addsuffix .o,$(DEAR_IMGUI_UNITS)))
 endif
 ifeq ($(BACKEND),GL)
-GL_OBJECTS=$(OBJDIR)/glad.o
+GL_OBJECTS=$(OBJDIR)/glad.o $(OBJDIR)/stbTruetypeImpl.o
 endif
 
 .PHONY: objects
@@ -94,6 +99,12 @@ $(OBJDIR)/xbmDecodeSelfTest.o: utilities/pixmaps/xbmDecodeSelfTest.C utilities/p
 # C++17 via global CXXFLAGS. Static pattern rule (a plain `imgui%.o` implicit
 # rule cannot build imgui.o — GNU make stems are never empty).
 $(OBJDIR)/glad.o: vendor/glad/src/glad.c vendor/glad/include/glad/glad.h vendor/glad/include/GL/glad.h vendor/glad/include/KHR/khrplatform.h | $(OBJDIR)
+	${CC} ${VENDOR_INCS} -O3 -c $< -o $@
+
+# stb_truetype implementation TU (task 31): the single expansion point of the
+# vendored third-party code — kept out of header-inline glBackend.H so the
+# game TU's warning baseline is untouched (glad.c precedent: plain -O3, gcc).
+$(OBJDIR)/stbTruetypeImpl.o: utilities/rendering/stbTruetypeImpl.C vendor/stb/stb_truetype.h | $(OBJDIR)
 	${CC} ${VENDOR_INCS} -O3 -c $< -o $@
 
 $(IMGUI_OBJECTS): $(OBJDIR)/%.o: vendor/dear_imgui/%.cpp vendor/dear_imgui/imgui.h vendor/dear_imgui/imconfig.h vendor/dear_imgui/imgui_internal.h $(wildcard vendor/dear_imgui/imstb_*.h) | $(OBJDIR)
@@ -137,7 +148,7 @@ OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon.xbm \
  bitmaps/ENEMYScoringIcon.xbm bitmaps/rockScoringIcon.xbm bitmaps/ROckScoringIcon.xbm \
  bitmaps/ROCKScoringIcon.xbm
 
-$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
+$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 # --- Link rules (task 29, F3/D10/U23) ---------------------------------------
@@ -149,8 +160,8 @@ $(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H $(GAME_XBM
 # compile on EVERY leg (guards-closed engine branches on GL) and DEFINE the
 # RotatorDisplayData-subclass / CPU-composite symbols the domain references.
 ifeq ($(BACKEND),GL)
-XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) obj/GL/glad.o
-	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) obj/GL/glad.o ${LDFLAGS} -lglfw -lGL -o XAsteroids
+XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS)
+	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) ${LDFLAGS} -lglfw -lGL -o XAsteroids
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids

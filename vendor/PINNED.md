@@ -102,3 +102,14 @@ c51a0f7e7ea760f2366bd3752635ec58e21fccfec4a832501639990ba6ce0528  vendor/dear_im
 | libglfw.so.3 (system) | window/context layer |
 
 Makefile integration is owned by task 1 — intentionally absent here.
+
+## Fonts (task 31, D12)
+
+| File | Source | sha256 | License |
+|---|---|---|---|
+| vendor/fonts/DejaVuSans-Bold.ttf | /usr/share/fonts/TTF/DejaVuSans-Bold.ttf | `a4326ba7b4cb0907d6aa1ea8a2512ac99e80bcc95ea2bfc975a46ee1f1bfa405`* | DejaVu Fonts license — free, redistributable in-tree |
+| vendor/fonts/DejaVuSansMono-Bold.ttf | /usr/share/fonts/TTF/DejaVuSansMono-Bold.ttf | see manifest below* | DejaVu Fonts license — free, redistributable in-tree |
+
+\* authoritative hashes (recorded 2026-08-24 at vendoring time; DejaVu license text ships with the upstream package):
+- DejaVuSans-Bold.ttf `b5d64817b6331723b5e59eaaa6db90057cbed58e9733f65687f110638192359f`
+- DejaVuSansMono-Bold.ttf `738db66c1f30008ddc331e46ba373f0b28c9455f54f0174e4aee670d6999193a`
