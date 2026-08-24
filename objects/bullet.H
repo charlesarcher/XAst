@@ -81,17 +81,19 @@ void Bullet::MissScript(Intersector& intersector, const double createTime,
   else
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
-      XCopyArea(stage->display,
-                rotator->GetPixAtTime(0),
-                playingField->pixmap,
-                playingField->gc,
-                0,0,
-                rotator->PixWidth(),
-                rotator->PixHeight(),
-                CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                           ObjectLiner().Velocity())
-                            .NorthWestCorner().x+.5,
-                CurrentBox().NorthWestCorner().y+.5);
+    #ifdef X11_BACKEND
+    XCopyArea(stage->display,
+              rotator->GetPixAtTime(0),
+              playingField->pixmap,
+              playingField->gc,
+              0,0,
+              rotator->PixWidth(),
+              rotator->PixHeight(),
+              CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                         ObjectLiner().Velocity())
+                          .NorthWestCorner().x+.5,
+              CurrentBox().NorthWestCorner().y+.5);
+    #endif
    }
  }
 
@@ -100,7 +102,9 @@ inline BulletExplosion::BulletExplosion(Bullet* const b): bullet(b)
  }
 
 inline void BulletExplosion::DisplayFrame()
- {int destX=CurrentBox().NorthWestCorner().x+.5,
+ {
+  #ifdef X11_BACKEND
+  int destX=CurrentBox().NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
   GC& gc=explosionGraphic->gc[frameList.GetFrameNumber()];
   XSetClipOrigin(stage->display,gc,destX,destY);
@@ -112,6 +116,7 @@ inline void BulletExplosion::DisplayFrame()
             frameList.PixWidth(),
             frameList.PixHeight(),
 	    destX,destY);
+  #endif
  }
 
 void BulletExplosion::MissScript(Intersector& intersector, const double createTime,

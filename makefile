@@ -19,13 +19,15 @@ VENDOR_INCS=-Ivendor/glad/include -Ivendor/stb -Ivendor/dear_imgui -Ivendor/glfw
 ifeq ($(BACKEND),X11)
 BACKEND_CXXFLAGS=$(X11_BACKEND)
 endif
-# GL/VK legs: today's game objects are still the X11-flavored sources (the
-# backend split lands at tasks 31+), so they keep -DX11_BACKEND to compile;
-# vendor -I paths ride along on these legs ONLY. The XBM decode self-test
-# overrides below to drop the macro — building WITHOUT -DX11_BACKEND there is
-# its whole reason to exist on the GPU legs.
+# GL/VK legs: NO backend macro (task 13 removed the task-30 stopgap — a GL
+# object that compiles X11 code paths is not green). The domain headers carry
+# `#ifdef X11_BACKEND` body guards, so guards-closed compilation is the real
+# first mandatory-green (D-A A3). Vendor -I paths ride on these legs ONLY.
+# The two D14 .C units (rotatorDisplayData/compositePixmap) stay OFF the GPU
+# legs until task 27 supplies their engine `#else` branches; they are not in
+# the GL/VK link list either (XAsteroids.o-only link list).
 ifneq ($(filter $(BACKEND),GL VK),)
-BACKEND_CXXFLAGS=$(X11_BACKEND) $(VENDOR_INCS)
+BACKEND_CXXFLAGS=$(VENDOR_INCS)
 endif
 
 # Objects feeding the X11 link always carry the X11 macro, whatever BACKEND says.
@@ -62,7 +64,12 @@ GL_OBJECTS=$(OBJDIR)/glad.o
 endif
 
 .PHONY: objects
-objects: $(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o $(OBJDIR)/XAsteroids.o $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS)
+# X11 leg: all three game objects. GL/VK legs: XAsteroids.o only (+ the
+# backend-agnostic self-test/vendor units) — the D14 .C units rejoin at 27.
+ifeq ($(BACKEND),X11)
+GAME_OBJECTS=$(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o
+endif
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS)
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)

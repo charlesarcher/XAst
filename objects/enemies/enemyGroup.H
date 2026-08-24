@@ -6,6 +6,7 @@
 #include<X11/Xlib.h>
 #endif
 #include"../../utilities/rendering/x11types.H"
+#include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
 #include"../../utilities/pixmaps/rotated/rotatorDisplayData.H"
@@ -101,7 +102,7 @@ class EnemyGroup
     enum {off, on};
     Boolean enemyInactive;
 
-    EnemyGroup();
+    EnemyGroup(RenderingEngine&);
     inline void NewEnemy(const int level);
     inline void Reset();
     inline void AdjustFramesPerSec(const double frameRatio);
@@ -230,6 +231,7 @@ void ENEMY::MissScript(Intersector& intersector, const double createTime,
      }
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
+    #ifdef X11_BACKEND
     XCopyArea(stage->display,
               rotator.GetPixAtTime(0),
               playingField->pixmap,
@@ -241,6 +243,7 @@ void ENEMY::MissScript(Intersector& intersector, const double createTime,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
               CurrentBox().NorthWestCorner().y+.5);
+    #endif
    }
  }
 
@@ -288,6 +291,7 @@ void enemy::MissScript(Intersector& intersector, const double createTime,
      }
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
+    #ifdef X11_BACKEND
     XCopyArea(stage->display,
               rotator.GetPixAtTime(0),
               playingField->pixmap,
@@ -299,6 +303,7 @@ void enemy::MissScript(Intersector& intersector, const double createTime,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
               CurrentBox().NorthWestCorner().y+.5);
+    #endif
    }
  }
 
@@ -326,7 +331,7 @@ inline const int EnemyGroup::scoreThreshold=1800,
           EnemyGroup::ENEMYFrequency1=RAND_MAX_16*70/100,
           EnemyGroup::ENEMYFrequency2=RAND_MAX_16-ENEMYFrequency1;
 
-inline EnemyGroup::EnemyGroup(): enemyInactive(on),
+inline EnemyGroup::EnemyGroup(RenderingEngine&): enemyInactive(on),
                                    frameTimer(minimumFrames)
  {
  }

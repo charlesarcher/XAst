@@ -19,22 +19,25 @@ class ExplosionGraphic
     CompositePixmap* const frames;
     GC gc[5];
 
-    ExplosionGraphic();
+    ExplosionGraphic(RenderingEngine& engine);
     ~ExplosionGraphic();
 
   private:
 
     Pixmap clipMask[3];
 
+#ifdef X11_BACKEND
     static XColor hottest,
                   hotter,
                   hot;
+#endif
  };
 
 extern ExplosionGraphic* explosionGraphic;
 
 inline const int ExplosionGraphic::numFrames=5;
 
+#ifdef X11_BACKEND
 inline XColor ExplosionGraphic::hottest={0,
                                   65535,//255
                                   65535,//255
@@ -50,8 +53,11 @@ inline XColor ExplosionGraphic::hottest={0,
                               42405,//165
                               0,
                               DoRed|DoGreen|DoBlue};
-inline ExplosionGraphic::ExplosionGraphic(): frames((CompositePixmap*)new char[sizeof(CompositePixmap)*numFrames])
- {(new(&frames[0]) CompositePixmap(stage->display,stage->window,
+#endif
+inline ExplosionGraphic::ExplosionGraphic(RenderingEngine&): frames((CompositePixmap*)new char[sizeof(CompositePixmap)*numFrames])
+ {
+  #ifdef X11_BACKEND
+  (new(&frames[0]) CompositePixmap(stage->display,stage->window,
                                    explosionEdge_width,explosionEdge_height))
       ->AddBitmapData(explosionCenter_bits,
                       explosionCenter_width,explosionCenter_height,
@@ -118,13 +124,17 @@ inline ExplosionGraphic::ExplosionGraphic(): frames((CompositePixmap*)new char[s
   gc[4]=XCreateGC(stage->display,stage->window,NULL,0);
   XSetGraphicsExposures(stage->display,gc[4],FALSE);
   XSetClipMask(stage->display,gc[4],clipMask[1]);
+  #endif
  }
 
 inline ExplosionGraphic::~ExplosionGraphic()
- {for(int i=5;i--;)
+ {
+  #ifdef X11_BACKEND
+  for(int i=5;i--;)
     XFreeGC(stage->display,gc[i]);
   for(int i=3;i--;)
     XFreePixmap(stage->display,clipMask[i]);
+  #endif
   for(int i=numFrames;i--;)
     frames[i].~CompositePixmap();
   delete [] (char*)frames;

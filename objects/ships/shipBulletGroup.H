@@ -3,6 +3,7 @@
 #include<X11/Xlib.h>
 #endif
 #include"../../utilities/rendering/x11types.H"
+#include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
 #include"../../utilities/pixmaps/rotated/rotatorDisplayData.H"
@@ -46,7 +47,7 @@ class ShipBulletGroup
     typedef int Boolean;
     enum {off, on};
 
-    ShipBulletGroup();
+    ShipBulletGroup(RenderingEngine&);
     inline void Fire(Intersector& intersector,
                      const double creationTime);
     inline void Reset();
@@ -132,6 +133,7 @@ void ShipBullet::MissScript(Intersector& intersector, const double createTime,
   else
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
+    #ifdef X11_BACKEND
     XCopyArea(stage->display,
               rotator->GetPixAtTime(0),
               playingField->pixmap,
@@ -143,6 +145,7 @@ void ShipBullet::MissScript(Intersector& intersector, const double createTime,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
               CurrentBox().NorthWestCorner().y+.5);
+    #endif
    }
  }
 
@@ -175,6 +178,7 @@ inline void ShipBullet::PositionBullet(Intersector& intersector,
                            +velocity*velocityDirection;
   inactive=off;
   intersector.AddNonPermeable(this,creationTime);
+  #ifdef X11_BACKEND
   XCopyArea(stage->display,
             rotator->GetPixAtTime(0),
             playingField->pixmap,
@@ -186,6 +190,7 @@ inline void ShipBullet::PositionBullet(Intersector& intersector,
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
             CurrentBox().NorthWestCorner().y+.5);
+  #endif
   frameTimer.Reset().TimerAlarm();
  }
 
@@ -204,7 +209,7 @@ inline XColor ShipBulletGroup::color={0,
                                0,
                                DoRed|DoGreen|DoBlue};
 
-inline ShipBulletGroup::ShipBulletGroup(): fireThisFrame(off),
+inline ShipBulletGroup::ShipBulletGroup(RenderingEngine&): fireThisFrame(off),
                                            graphic(stage->display,stage->window,color,
                                                    vectors,sizeof(vectors)/sizeof(Vector2d),
                                                    shipBulletDecor_bits,

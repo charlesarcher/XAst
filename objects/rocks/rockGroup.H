@@ -113,7 +113,7 @@ class RockGroup
     ROck ROcks[32];
     rock rocks[128];
 
-    RockGroup();
+    RockGroup(RenderingEngine& engine);
     ~RockGroup();
 
     inline void NewROCKs();
@@ -131,7 +131,9 @@ class RockGroup
 
     static Boolean opaqueRocks;
 
+#ifdef X11_BACKEND
     static XColor RockColor;
+#endif
 
   private:
     void SetVectorData(const Vector2d* const RockVecs, const int numvecs,
@@ -175,12 +177,14 @@ Rotator& Rock::ObjectRotator()
  }
 
 void Rock::MissScript(Intersector& intersector, const double createTime,
-                             const double existTime)
+                              const double existTime)
  {rotator.UpdateAngle(existTime);
   if (PlayingField::universalGravitationalConst)
     ObjectLiner().UpdateVelocity(existTime);
   if (rockGroup->opaqueRocks)
-   {int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
+   {
+    #ifdef X11_BACKEND
+    int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
         destY=CurrentBox().NorthWestCorner().y+.5;
@@ -194,8 +198,10 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
               rotator.PixWidth(),
               rotator.PixHeight(),
               destX,destY);
+    #endif
    }
   else
+  #ifdef X11_BACKEND
     XCopyArea(stage->display,
               rotator.GetPixAtTime(0),
               playingField->pixmap,
@@ -207,6 +213,9 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
               CurrentBox().NorthWestCorner().y+.5);
+  #else
+   ;
+  #endif
  }
 
 void Rock::HitScript(Intersector& intersector, const double createTime,
@@ -409,17 +418,21 @@ inline const int RockGroup::ROCKDecor_width[3]={eightball_width,peace_width,yiny
           RockGroup::ROCKDecor_height[3]={eightball_height,peace_height,yinyang_height};
 #endif
 
+#ifdef X11_BACKEND
 inline XColor RockGroup::RockColor={0,
                              56026,//218
                              42405,//165
                              8224,//32
                              DoRed|DoGreen|DoBlue};
+#endif
 
 inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int numvecs,
                                  const int graphicIndex)
- {Vector2d* scaledROCK=new Vector2d[numvecs],
-          * scaledROck=new Vector2d[numvecs],
-          * scaledrock=new Vector2d[numvecs];
+ {
+  #ifdef X11_BACKEND
+  Vector2d* scaledROCK=new Vector2d[numvecs],
+           * scaledROck=new Vector2d[numvecs],
+           * scaledrock=new Vector2d[numvecs];
   for(int i=0;i<numvecs;++i)
    {scaledROCK[i]=RockVecs[i]*ROCK::scale;
     scaledROck[i]=RockVecs[i]*ROck::scale;
@@ -437,12 +450,16 @@ inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int n
   delete [] scaledrock;
   delete [] scaledROck;
   delete [] scaledROCK;
+  #endif
  }
 
-inline RockGroup::RockGroup()
- {SetVectorData(RockVectors1,sizeof(RockVectors1)/sizeof(Vector2d),0);
+inline RockGroup::RockGroup(RenderingEngine&)
+ {
+  #ifdef X11_BACKEND
+  SetVectorData(RockVectors1,sizeof(RockVectors1)/sizeof(Vector2d),0);
   SetVectorData(RockVectors2,sizeof(RockVectors2)/sizeof(Vector2d),1);
   SetVectorData(RockVectors3,sizeof(RockVectors3)/sizeof(Vector2d),2);
+  #endif
  }
 
 
@@ -561,6 +578,7 @@ inline void RockGroup::NewROCKs()
      while(!shipGroup->hyper.hyperspacing&&Intersect(ROCKs[i].CurrentBox(),shipGroup->ship->CurrentBox()));
      playingField->selfPermeableList.SetCurrentAtHole().GetData()=&ROCKs[i];
      playingField->selfPermeableList.SetCurrentAtHead().AddPrior();
+     #ifdef X11_BACKEND
      XCopyArea(stage->display,
                ROCKs[i].ObjectRotator().GetPixAtTime(0),
                playingField->pixmap,
@@ -570,6 +588,7 @@ inline void RockGroup::NewROCKs()
                ROCKs[i].ObjectRotator().PixHeight(),
                ROCKs[i].CurrentBox().NorthWestCorner().x+.5,
                ROCKs[i].CurrentBox().NorthWestCorner().y+.5);
+     #endif
     }
  }
 

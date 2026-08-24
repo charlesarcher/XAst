@@ -21,6 +21,7 @@
 #include<X11/Xutil.h>
 #endif
 #include"../utilities/rendering/x11types.H"
+#include"../utilities/rendering/renderingEngine.H"
 #include"../utilities/vector2d.H"
 #include"../utilities/box.H"
 #include"../utilities/linkedArray.H"
@@ -34,7 +35,7 @@ class PlayingField
     typedef int Boolean;
     enum {off, on};
 
-    PlayingField();
+    PlayingField(RenderingEngine& engine);
     ~PlayingField();
     int PlayTheGame(const int level, int argc, char** argv);
     PlayingField& AddShip();
@@ -73,7 +74,6 @@ class PlayingField
 #ifdef X11_BACKEND
     Boolean RunGame(Options& options);
 #else
-    class RenderingEngine;
     class OptionsMenu;
     Boolean RunGame(RenderingEngine& engine, OptionsMenu& menu);
 #endif
@@ -92,8 +92,10 @@ class PlayingField
 
     double speedAdjust;
 
+#ifdef X11_BACKEND
     Atom WM_PROTOCOLS,
          WM_DELETE_WINDOW;
+#endif
 
     Intersector intersector;
 
@@ -117,17 +119,23 @@ inline PlayingField::Boolean PlayingField::enemiesExist=PlayingField::on,
 
 inline const Box PlayingField::playArea(640,512,Vector2d(320+2*ROCK::scale,256+2*ROCK::scale));
 
-inline PlayingField::PlayingField(): lastHitFromAlly(off),
+inline PlayingField::PlayingField(RenderingEngine&): lastHitFromAlly(off),
                                      lastHitScore(0),
+#ifdef X11_BACKEND
                                      fontHeight(stage->hiScoreInfo->ascent+stage->hiScoreInfo->descent+4),
+#else
+                                     fontHeight(0),
+#endif
                                      framesSinceLastBullet(0),
                                      framesThisLevel(0),
                                      nextShipScore(extraShipScore),
                                      framesSinceEnemy(0),
                                      speedAdjust(uSecondsPerFrame/125E3),
                                      level(0),
+#ifdef X11_BACKEND
                                      WM_PROTOCOLS(XInternAtom(stage->display,"WM_PROTOCOLS",FALSE)),
                                      WM_DELETE_WINDOW(XInternAtom(stage->display,"WM_DELETE_WINDOW",FALSE)),
+#endif
                                      nonPermeableList(28),
                                      selfPermeableList(128),
                                      permeableList(28),
@@ -135,7 +143,9 @@ inline PlayingField::PlayingField(): lastHitFromAlly(off),
                                      leftRotPending(off),
                                      rightRotPending(off),
                                      firing(off)
- {int screen=DefaultScreen(stage->display),
+ {
+  #ifdef X11_BACKEND
+  int screen=DefaultScreen(stage->display),
       blackPixel=BlackPixel(stage->display,screen);
   pixmap=XCreatePixmap(stage->display,stage->window,
 		                   playArea.Width()+4*ROCK::scale,playArea.Height()+4*ROCK::scale,
@@ -150,13 +160,16 @@ inline PlayingField::PlayingField(): lastHitFromAlly(off),
   XSetGraphicsExposures(stage->display,backgroundGC,FALSE);
   XSetForeground(stage->display,backgroundGC,blackPixel);
   GenHelpScreen();
+  #endif
  }
 
 inline PlayingField::~PlayingField()
  {
+  #ifdef X11_BACKEND
    XFreeGC(stage->display,backgroundGC);
    XFreeGC(stage->display,gc);
    XFreePixmap(stage->display,pixmap);
+  #endif
  }
 
 inline PlayingField& PlayingField::AddShip()
@@ -208,10 +221,12 @@ inline void PlayingField::DrawGame()
     stage->DrawShipYard();
     nextShipScore+=extraShipScore;
    }
-  stage->DrawPlayingField();
-  XFillRectangle(stage->display,pixmap,backgroundGC,
-                 playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
-                 playArea.Width(),playArea.Height());
+   stage->DrawPlayingField();
+  #ifdef X11_BACKEND
+   XFillRectangle(stage->display,pixmap,backgroundGC,
+                  playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
+                  playArea.Width(),playArea.Height());
+  #endif
  }
 
  inline Vector2d PlayingField::CalcGravityAcceleration(const MovableObject* const obj1,
@@ -293,7 +308,10 @@ inline void PlayingField::SetGravityAcceleration()
  }
 
 inline timeval PlayingField::ResumePlay(Intersector& intersector)
- {XRaiseWindow(stage->display,stage->window);
+ {
+  #ifdef X11_BACKEND
+  XRaiseWindow(stage->display,stage->window);
+  #endif
   timeval time;
   gettimeofday(&time,NULL);
   leftRotPending=rightRotPending=firing=off;
@@ -303,7 +321,9 @@ inline timeval PlayingField::ResumePlay(Intersector& intersector)
     shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
     shipGroup->thrust->thrusting=Thrust::off;
    }
+  #ifdef X11_BACKEND
   XSync(stage->display,False);
+  #endif
   return time;
  }
 
@@ -550,7 +570,9 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
 #endif
 
 inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
- {XSizeHints* sizeHints=XAllocSizeHints();
+ {
+  #ifdef X11_BACKEND
+  XSizeHints* sizeHints=XAllocSizeHints();
   sizeHints->min_width=sizeHints->max_width=sizeHints->base_width=stage->windowWidth;
   sizeHints->min_height=sizeHints->max_height=sizeHints->base_height=stage->windowHeight;
   sizeHints->width_inc=sizeHints->height_inc=0;
@@ -652,11 +674,15 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
                               return localHighScore;
                             break;
      }
-   }
+    }
+  #endif
+  return 0;
  }
 
 void PlayingField::GenHelpScreen()
- {XFillRectangle(stage->display,pixmap,backgroundGC,
+ {
+  #ifdef X11_BACKEND
+  XFillRectangle(stage->display,pixmap,backgroundGC,
                  playArea.NorthWestCorner().x,playArea.NorthWestCorner().y,
                  playArea.Width(),playArea.Height());
   int xPos=playArea.NorthWestCorner().x+(playArea.Width()
@@ -683,6 +709,7 @@ void PlayingField::GenHelpScreen()
               "        N -- new game",strlen("        N -- new game"));
   XDrawString(stage->display,pixmap,gc,xPos,yPos+=2*fontHeight,
               "        H -- help (this screen)",strlen("        H -- help (this screen)"));
+  #endif
  }
 
 inline void PlayingField::AlterExtraShipScore(const int newExtraShipScore)

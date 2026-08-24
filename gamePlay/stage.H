@@ -11,6 +11,7 @@
 #include<time.h>
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#include"../utilities/rendering/x11Backend.H"
 #endif
 #include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
@@ -55,10 +56,10 @@ class Stage
 
     // TRANSITION members (D11 single-ownership-seam extension; DELETED at
     // task 47): non-owning aliases onto X11Backend-owned resources (the D15
-    // map — exactly one owner, the backend). main() populates them from the
-    // concrete X11Backend it constructs. The first eight are the plan's
-    // durable set; the fonts/GCs below them are transient until task 14
-    // converts the raw HUD/blit bodies below to engine methods.
+    // map — exactly one owner, the backend). The Stage ctor populates them
+    // from the engine it is injected with (task 13 DI). Shim-typed members
+    // stay outside the guards; XFontStruct* has no shim stand-in (x11types.H),
+    // so those declarations are guarded with their readers.
     Display* display;
     Window window;
 
@@ -71,22 +72,26 @@ class Stage
     int buttonX,
         buttonY;
 
+#ifdef X11_BACKEND
     XFontStruct* buttonInfo,
                * errorInfo;
 
     XFontStruct* titleInfo,
                * hiScoreInfo,
                * scoreInfo;
+#endif
 
     GC titleGC,
        hiScoreGC,
        scoreGC,
        defaultGC;
 
+#ifdef X11_BACKEND
     static XColor windowBg,
                   shipYardBg,
                   buttonFg,
                   buttonBg;
+#endif
 
   private:
 
@@ -112,6 +117,7 @@ extern Stage* stage;
 #include"../objects/ships/shipGroup.H"
 extern PlayingField* playingField;
 
+#ifdef X11_BACKEND
 inline XColor Stage::windowBg={0,
                         46260,//180
                         46260,//180
@@ -132,6 +138,7 @@ inline XColor Stage::windowBg={0,
                         46260,//180
                         46260,//180
                         DoRed|DoGreen|DoBlue};
+#endif
 
 inline Stage::Stage(RenderingEngine& engine)
  {cout<<"XAsteroids is a Unix version of the original Atari Asteroids video game.  It features color, arbitrarily shaped drawables with interior decor, hidden line elimination, accurate collision detection, and dynamically selectable options including gravitation.  Game initialization requires a minute or two so please be patient.  If XAsteroids abnormally terminates the keyboard may no longer auto-repeat.  Auto-repeat can be reactivated by executing AutoRepeatOn."<<endl<<endl;
@@ -188,6 +195,33 @@ inline Stage::Stage(RenderingEngine& engine)
   playAreaY=headerHeight+shipYardHeight+35;
   const char* seedEnv=getenv("XAST_SEED");
   srand(seedEnv ? (time_t)strtoul(seedEnv,0,10) : (time_t)time(NULL));
+#ifdef X11_BACKEND
+  // Task-13 DI: the ctor populates its own non-owning transition members
+  // from the injected engine, replacing main()'s task-12 population block.
+  // display/window come through the RenderingEngine seam; the font/GC/icon
+  // accessors are concrete-backend transition accessors (die at 14/47 with
+  // the members they feed).
+  X11NativeHandle native=engine.nativeHandle();
+  display=(Display*)native.display;
+  window=(Window)native.window;
+  X11Backend& backend=static_cast<X11Backend&>(engine);
+  icon=backend.icon();
+  buttonInfo=backend.buttonFont();
+  errorInfo=backend.errorFont();
+  autoRepeatState=backend.autoRepeatState();
+  titleInfo=backend.titleFont();
+  hiScoreInfo=backend.hiScoreFont();
+  scoreInfo=backend.scoreFont();
+  titleGC=backend.titleGC();
+  hiScoreGC=backend.hiScoreGC();
+  scoreGC=backend.scoreGC();
+  defaultGC=backend.defaultGC();
+  // shipYardBg.pixel must stay valid for its one external reader
+  // (options.H's yard-icon background); allocating it here keeps that
+  // invariant now that ShipYard's ctor no longer receives the XColor&.
+  XAllocColor(display,DefaultColormap(display,DefaultScreen(display)),
+              &shipYardBg);
+#endif
  }
 
 inline Stage::~Stage()
@@ -201,43 +235,57 @@ inline Stage& Stage::DrawScore()
  {char str[12];
   if (score->CurrentScore()>=score->TopTenScore(0))
    {snprintf(str,sizeof(str),"%10.10s",score->CurrentName());
+#ifdef X11_BACKEND
     XDrawImageString(display,window,hiScoreGC,
                      hiScoreUserX,hiScoreUserY,str,10);
+#endif
     snprintf(str,sizeof(str),"%10d",score->CurrentScore());
+#ifdef X11_BACKEND
     XDrawImageString(display,window,hiScoreGC,
                      hiScoreX,hiScoreY,str,10);
+#endif
    }
   else
     snprintf(str,sizeof(str),"%10d",score->CurrentScore());
+#ifdef X11_BACKEND
   XDrawImageString(display,window,scoreGC,
                    scoreX,scoreY,str,10);
+#endif
   return *this;
  }
 
 inline Stage& Stage::DrawShipYard()
- {XCopyArea(display,
+ {
+  #ifdef X11_BACKEND
+  XCopyArea(display,
             shipYard->GetYard(),
             window,
             defaultGC,
             0,0,
             shipYardWidth,shipYardHeight,
             shipYardX,shipYardY);
+  #endif
   return *this;
  }
 
 inline Stage& Stage::DrawPlayingField()
- {XCopyArea(display,
+ {
+  #ifdef X11_BACKEND
+  XCopyArea(display,
             playingField->pixmap,
             window,
             defaultGC,
 	    PlayingField::playArea.NorthWestCorner().x,PlayingField::playArea.NorthWestCorner().y,
 	    PlayingField::playArea.Width(),PlayingField::playArea.Height(),
             playAreaX,playAreaY);
+  #endif
   return *this;
  }
 
 inline Stage& Stage::Refresh()
- {XDrawString(display,window,titleGC,
+ {
+  #ifdef X11_BACKEND
+  XDrawString(display,window,titleGC,
               titleX,titleY,"Asteroids",strlen("Asteroids"));
   char str[12];
   snprintf(str,sizeof(str),"%10.10s",score->TopTenName(0));
@@ -246,6 +294,7 @@ inline Stage& Stage::Refresh()
   snprintf(str,sizeof(str),"%10d",score->TopTenScore(0));
   XDrawImageString(display,window,hiScoreGC,
                    hiScoreX,hiScoreY,str,10);
+  #endif
   button->DrawButton();
   DrawScore().DrawShipYard().DrawPlayingField();
   return *this;

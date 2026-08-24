@@ -27,6 +27,21 @@ typedef unsigned long Font;
 
 typedef struct _XGC *GC;
 
+// Task 13: exact anonymous-tag mirror of Xlib's XColor — domain signatures
+// name it while the real Xlib.h is guard-stripped; layout must match Xlib's.
+typedef struct {
+  unsigned long pixel;
+  unsigned short red, green, blue;
+  char flags;
+  char pad;
+} XColor;
+
+// Plane-mask constants: same values as Xlib.h so dual-inclusion redefinition
+// stays benign.
+#define DoRed   1
+#define DoGreen 2
+#define DoBlue  4
+
 // XFontStruct must NOT be declared here, not even as `struct XFontStruct;`:
 // Xlib.h defines it as `typedef struct XFontStruct { ... } XFontStruct;`
 // (tag == typedef name), which g++ rejects when the name is already declared

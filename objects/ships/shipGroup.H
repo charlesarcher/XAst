@@ -3,6 +3,7 @@
 #include<X11/Xlib.h>
 #endif
 #include"../../utilities/rendering/x11types.H"
+#include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
 #include"../../utilities/pixmaps/composite/compositePixmap.H"
@@ -43,9 +44,11 @@ class Ship: public MovableObject
     typedef int Boolean;
     enum {off, on};
 
+#ifdef X11_BACKEND
     Ship(const unsigned char* const icon,
          const int iconWidth, const int iconHeight,
          XColor& iconColor);
+#endif
     virtual ~Ship();
     virtual Rotator& ObjectRotator()=0;
     virtual void MissScript(Intersector&, const double createTime,
@@ -57,7 +60,9 @@ class Ship: public MovableObject
     const unsigned char* const icon;
     const int iconWidth,
               iconHeight;
+#ifdef X11_BACKEND
     XColor iconColor;
+#endif
     static double maxVelocity,
                   acceleration,
                   angularVelocity;
@@ -66,26 +71,34 @@ class Ship: public MovableObject
 
 class StarDestroyer: public Ship
  {public:
+#ifdef X11_BACKEND
     StarDestroyer();
+#endif
     virtual Rotator& ObjectRotator();
 
   private:
     static const Vector2d vectors[5];
+#ifdef X11_BACKEND
     static XColor color;
+#endif
     RotVectorData graphic;
     Rotator rotator;
  };
 
 class NextGenerationEnterprise: public Ship
  {public:
+#ifdef X11_BACKEND
     NextGenerationEnterprise();
+#endif
     virtual ~NextGenerationEnterprise();
     virtual Rotator& ObjectRotator();
 
   private:
     static const Vector2d vectors[34];
+#ifdef X11_BACKEND
     static XColor bottomColor,
                   topColor;
+#endif
     static const double area;
     RotVectorData* graphic;
     Rotator* rotator;
@@ -93,12 +106,16 @@ class NextGenerationEnterprise: public Ship
 
 class MovieEnterprise: public Ship
  {public:
+#ifdef X11_BACKEND
     MovieEnterprise();
+#endif
     virtual Rotator& ObjectRotator();
 
   private:
     static const Vector2d vectors[32];
+#ifdef X11_BACKEND
     static XColor color;
+#endif
     static const double area;
     RotVectorData graphic;
     Rotator rotator;
@@ -119,38 +136,50 @@ class Thrust: public MovableObject
 
 class StarDestroyerThrust: public Thrust
  {public:
+#ifdef X11_BACKEND
     StarDestroyerThrust();
+#endif
     virtual ~StarDestroyerThrust();
     virtual Rotator& ObjectRotator();
 
   private:
+#ifdef X11_BACKEND
     static XColor edgeColor,
                   middleColor,
                   centerColor;
+#endif
     RotPixmapData* graphic;
     Rotator* rotator;
  };
 
 class NextGenerationEnterpriseThrust: public Thrust
  {public:
+#ifdef X11_BACKEND
     NextGenerationEnterpriseThrust();
+#endif
     virtual Rotator& ObjectRotator();
 
   private:
+#ifdef X11_BACKEND
     static XColor color;
+#endif
     RotPixmapData graphic;
     Rotator rotator;
  };
 
 class MovieEnterpriseThrust: public Thrust
  {public:
+#ifdef X11_BACKEND
     MovieEnterpriseThrust();
+#endif
     virtual Rotator& ObjectRotator();
     virtual void MissScript(Intersector&, const double createTime,
                                           const double existTime);
 
   private:
+#ifdef X11_BACKEND
     static XColor color;
+#endif
     MaskedRotPixmapData graphic;
     Rotator rotator;
  };
@@ -180,6 +209,8 @@ class Hyper: public MovableObject
 class ShipGroup
 {friend class Options;
   public:
+    ShipGroup(RenderingEngine& engine);
+
     StarDestroyer starDestroyer;
     StarDestroyerThrust starDestroyerThrust;
     NextGenerationEnterprise NCC1701D;
@@ -208,6 +239,16 @@ class ShipGroup
 
 extern ShipGroup* shipGroup;
 
+#ifdef X11_BACKEND
+// Engine-first DI ctor (task 13). The engine parameter is not consumed yet:
+// members still pull stage->display themselves until tasks 20/22 migrate
+// them. Memberwise construction in declaration order replicates the implicit
+// ctor the placement-new staging has always relied on (task-6 order).
+inline ShipGroup::ShipGroup(RenderingEngine&)
+ {
+ }
+#endif
+
 #include"../../gamePlay/playingField.H"
 
 
@@ -215,6 +256,7 @@ inline double Ship::maxVelocity=.43*PlayingField::maxLinearVelocity,
        Ship::acceleration=1.425,
        Ship::angularVelocity=0.2;
 
+#ifdef X11_BACKEND
 inline Ship::Ship(const unsigned char* const i,
                   const int iWidth, const int iHeight,
                   XColor& iColor): icon(i),
@@ -223,10 +265,11 @@ inline Ship::Ship(const unsigned char* const i,
                                    iconColor(iColor),
                                    dead(on)
  {if (!XAllocColor(stage->display,DefaultColormap(stage->display,
-                                                 DefaultScreen(stage->display)),
-                   &iconColor))
-    iconColor.pixel=WhitePixel(stage->display,DefaultScreen(stage->display));
+                                                  DefaultScreen(stage->display)),
+                    &iconColor))
+     iconColor.pixel=WhitePixel(stage->display,DefaultScreen(stage->display));
  }
+#endif
 
 Ship::~Ship()
  {
@@ -237,6 +280,7 @@ void Ship::MissScript(Intersector& intersector,
  {ObjectRotator().UpdateAngle(existTime);
   ObjectLiner().UpdateVelocity(existTime);
   shipBulletGroup->Fire(intersector,createTime+existTime);
+  #ifdef X11_BACKEND
   XCopyArea(stage->display,
             ObjectRotator().GetPixAtTime(0),
             playingField->pixmap,
@@ -248,6 +292,7 @@ void Ship::MissScript(Intersector& intersector,
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
             CurrentBox().NorthWestCorner().y+.5);
+  #endif
  }
 
 void Ship::HitScript(Intersector& intersector,
@@ -280,12 +325,15 @@ inline const Vector2d StarDestroyer::vectors[5]={Vector2d(0,-19),
                                           Vector2d(-4,7),
                                           Vector2d(-8,11)};
 
+#ifdef X11_BACKEND
 inline XColor StarDestroyer::color={0,
                              44461,//173
                              55512,//216
                              59110,//230
                              DoRed|DoGreen|DoBlue};
+#endif
 
+#ifdef X11_BACKEND
 inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
                                             starDestroyerIcon_width,
                                             starDestroyerIcon_height,
@@ -303,6 +351,7 @@ inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),maxVelocity,Vector2d());
  }
+#endif
 
 Rotator& StarDestroyer::ObjectRotator()
  {return rotator;
@@ -343,6 +392,7 @@ inline const Vector2d NextGenerationEnterprise::vectors[34]={Vector2d(0,-10),
                                                       Vector2d(-10,-6),
                                                       Vector2d(-8,-8)};
 
+#ifdef X11_BACKEND
 inline XColor NextGenerationEnterprise::bottomColor={0,
                                               61680,//240
                                               61680,//240
@@ -353,9 +403,11 @@ inline XColor NextGenerationEnterprise::bottomColor={0,
                                            0,//0
                                            0,//0
                                            DoRed|DoGreen|DoBlue};
+#endif
 
 inline const double NextGenerationEnterprise::area=472;
 
+#ifdef X11_BACKEND
 inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_bits,
                                                                   NCC1701DIcon_width,
                                                                   NCC1701DIcon_height,
@@ -379,6 +431,7 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
   SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
                    Vector2d(),maxVelocity,Vector2d());
  }
+#endif
 
 NextGenerationEnterprise::~NextGenerationEnterprise()
  {delete rotator;
@@ -420,16 +473,19 @@ inline const Vector2d MovieEnterprise::vectors[32]={Vector2d(0,-16),
                                              Vector2d(-7,-1),
                                              Vector2d(-9,-7),
                                              Vector2d(-7,-13),
-                                             Vector2d(-6,-14)};
+                                              Vector2d(-6,-14)};
 
+#ifdef X11_BACKEND
 inline XColor MovieEnterprise::color={0,
                                61680,//240
                                61680,//240
                                61680,//240
                                DoRed|DoGreen|DoBlue};
+#endif
 
 inline const double MovieEnterprise::area=446;
 
+#ifdef X11_BACKEND
 inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
                                                 NCC1701AIcon_width,
                                                 NCC1701AIcon_height,
@@ -443,6 +499,7 @@ inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),maxVelocity,Vector2d());
  }
+#endif
 
 Rotator& MovieEnterprise::ObjectRotator()
  {return rotator;
@@ -459,6 +516,7 @@ Thrust::~Thrust()
 void Thrust::MissScript(Intersector& intersector, const double createTime,
                         const double existTime)
  {shipGroup->NewThrust();
+  #ifdef X11_BACKEND
   XCopyArea(stage->display,
             ObjectRotator().GetPixAtTime(0),
             playingField->pixmap,
@@ -470,8 +528,10 @@ void Thrust::MissScript(Intersector& intersector, const double createTime,
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
             CurrentBox().NorthWestCorner().y+.5);
+  #endif
  }
 
+#ifdef X11_BACKEND
 inline XColor StarDestroyerThrust::edgeColor={0,
                                        0,
                                        0,
@@ -505,6 +565,7 @@ inline StarDestroyerThrust::StarDestroyerThrust()
   SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
  }
+#endif
 
 inline StarDestroyerThrust::~StarDestroyerThrust()
  {delete rotator;
@@ -515,6 +576,7 @@ Rotator& StarDestroyerThrust::ObjectRotator()
  {return *rotator;
  }
 
+#ifdef X11_BACKEND
 inline XColor NextGenerationEnterpriseThrust::color={0,
                                               65535,//255
                                               0,
@@ -530,11 +592,13 @@ inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
  }
+#endif
 
 Rotator& NextGenerationEnterpriseThrust::ObjectRotator()
  {return rotator;
  }
 
+#ifdef X11_BACKEND
 inline XColor MovieEnterpriseThrust::color={0,
                                      65535,//255
                                      0,
@@ -549,6 +613,7 @@ inline MovieEnterpriseThrust::MovieEnterpriseThrust():
  {SetMovableObject(Vector2d(),2*rotator.Radius(),2*rotator.Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
  }
+#endif
 
 Rotator& MovieEnterpriseThrust::ObjectRotator()
  {return rotator;
@@ -557,6 +622,7 @@ Rotator& MovieEnterpriseThrust::ObjectRotator()
 void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double createTime,
                                        const double existTime)
  {shipGroup->NewThrust();
+  #ifdef X11_BACKEND
   int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
@@ -571,6 +637,7 @@ void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double cr
             rotator.PixWidth(),
             rotator.PixHeight(),
             destX,destY);
+  #endif
  }
 
 inline double Hyper::percentDestructRate=1.25;
@@ -610,6 +677,7 @@ void Hyper::MissScript(Intersector& intersector,
     shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
     shipGroup->ship->ObjectRotator().AngularVelocity()=0;
     intersector.AddNonPermeable(shipGroup->ship,createTime+existTime);
+    #ifdef X11_BACKEND
     XCopyArea(stage->display,
 	            shipGroup->ship->ObjectRotator().GetPixAtTime(0),
               playingField->pixmap,
@@ -619,6 +687,7 @@ void Hyper::MissScript(Intersector& intersector,
 	            shipGroup->ship->ObjectRotator().PixHeight(),
 	            shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
 	            shipGroup->ship->CurrentBox().NorthWestCorner().y+.5);
+    #endif
     shipGroup->thrust->thrusting=Thrust::off;
     shipGroup->hyper.hyperspacing=Hyper::off;
    }
@@ -628,6 +697,7 @@ void Hyper::MissScript(Intersector& intersector,
     shipGroup->explosion.ObjectLiner().Velocity()=Vector2d();
     intersector.AddPermeable(&shipGroup->explosion,createTime+existTime);
     shipGroup->explosion.frameList.Reset();
+    #ifdef X11_BACKEND
     int destX=shipGroup->explosion.CurrentBox().NorthWestCorner().x+.5,
         destY=shipGroup->explosion.CurrentBox().NorthWestCorner().y+.5;
     GC& gc=explosionGraphic->gc[0];
@@ -640,6 +710,7 @@ void Hyper::MissScript(Intersector& intersector,
               shipGroup->explosion.frameList.PixWidth(),
               shipGroup->explosion.frameList.PixHeight(),
 	            destX,destY);
+    #endif
     shipGroup->explosion.frameList.UpdateFrameNumber();
     shipGroup->explosion.frameTimer.Reset().TimerAlarm();
    }

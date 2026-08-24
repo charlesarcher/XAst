@@ -36,6 +36,12 @@
 #ifndef _OPTIONS_H
 #define _OPTIONS_H
 
+// D9 exception zone: options.H is an X11-only compile path (the Motif dialog,
+// its callbacks, and the hand-rolled modal pump). The whole Options region is
+// wrapped so the guards-closed GL/VK legs see nothing but the includes above;
+// on the X11 target the guard is open and every byte below is unchanged.
+#ifdef X11_BACKEND
+
 class Ship;
 class Thrust;
 class Options
@@ -3874,5 +3880,7 @@ inline const char* const Options::MakeString(const double d)
   snprintf(str,sizeof(str),"%s",strout.str().c_str());
   return str;
  }
+
+#endif /* X11_BACKEND */
 
 #endif

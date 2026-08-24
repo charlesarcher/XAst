@@ -40,7 +40,9 @@ inline Explosion::Explosion(): frameList(explosionGraphic->frames,
  }
 
 inline void Explosion::DisplayFrame()
- {int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
+ {
+  #ifdef X11_BACKEND
+  int destX=CurrentBox().WrapMovingBox(PlayingField::playArea,
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
@@ -54,6 +56,7 @@ inline void Explosion::DisplayFrame()
             frameList.PixWidth(),
             frameList.PixHeight(),
             destX,destY);
+  #endif
  }
 
 void Explosion::MissScript(Intersector& intersector, const double createTime,

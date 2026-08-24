@@ -4,31 +4,29 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #include<X11/Intrinsic.h>
+#include"../../utilities/rendering/x11Backend.H"
 #endif
 #include"../../utilities/rendering/x11types.H"
+#include"../../utilities/rendering/renderingEngine.H"
+#include"../../utilities/rendering/windowSize.H"
 
 class Button
  {typedef int Boolean;
   enum {off, on};
 
   public:
-    Button(Display* display, Drawable& drawable,
-           const char* const label, const XFontStruct* const,
-           XColor& foreground, XColor& backGround,
+    Button(RenderingEngine& engine,
+           const char* const label,
            const int upperLeftX, const int upperLeftY,
-           const int borderWidth=5);
-    Button(Display* display, Drawable& drawable,
-           const char* const label, const XFontStruct* const,
-           XColor& foreground, XColor& backGround,
-           const int upperLeftX, const int upperLeftY,
-           XColor& upperBorder, XColor& lowerBorder,
            const int borderWidth=5);
     ~Button();
     Button& PressButton();
     Button& ReleaseButton();
     const Button& DrawButton() const;
+#ifdef X11_BACKEND
     Boolean PointerOnButton(const XButtonEvent&) const;
     Boolean PointerOnButton(const XPointerMovedEvent&) const;
+#endif
     Boolean ButtonPressed() const;
     const int ButtonWidth() const;
     const int ButtonHeight() const;
@@ -36,16 +34,21 @@ class Button
   private:
     Button(const Button&);
     Button& operator=(const Button&);
+#ifdef X11_BACKEND
     void CreateButton(const char* const label, const XFontStruct* const fontInfo,
                       XColor& foreground, XColor& background,
                       XColor& topBorderColor, XColor& bottomBorderColor);
+#endif
     void FindColorChange(const int colorValue, int& minChange, Boolean& lowSideMin);
 
     static const int borderPercentVariance;
 
     Display* display;
 
-    Drawable& drawable;
+    // Task-13 demotion (D11): was `Drawable&` — a reference cannot bind to
+    // the prvalue nativeHandle() returns, so the member is now a value copy
+    // of the backend window taken at construction.
+    Window drawable;
 
     Pixmap buttonUp,
            buttonDown;
@@ -63,6 +66,7 @@ class Button
 
 inline const int Button::borderPercentVariance=25;
 
+#ifdef X11_BACKEND
 inline void Button::CreateButton(const char* const label, const XFontStruct* const fontInfo,
                                  XColor& fg, XColor& bg,
                                  XColor& topBorderColor, XColor& bottomBorderColor)
@@ -145,6 +149,7 @@ inline void Button::CreateButton(const char* const label, const XFontStruct* con
                    borderWidth+3-charInfo.lbearing,borderWidth+3+fontInfo->max_bounds.ascent,
                    label,strlen(label));
  }
+#endif
 
 inline void Button::FindColorChange(const int colorValue, int& minChange, Boolean& lowSideMin)
  {if (colorValue<65535-colorValue)
@@ -160,24 +165,40 @@ inline void Button::FindColorChange(const int colorValue, int& minChange, Boolea
      }
  }
 
-inline Button::Button(Display* disp, Drawable& draw,
-                      const char* const label, const XFontStruct* const fontInfo,
-                      XColor& fg, XColor& bg,
+inline Button::Button(RenderingEngine& engine,
+                      const char* const label,
                       const int x, const int y,
-		                  const int borderSize): display(disp),
-                                             drawable(draw),
+		      const int borderSize): display((Display*)engine.nativeHandle().display),
+                                             drawable(engine.nativeHandle().window),
                                              upperLeftX(x),
                                              upperLeftY(y),
                                              borderWidth(borderSize>3 ? borderSize
                                                                       : 3),
-                                             buttonWidth(XTextWidth((XFontStruct*)fontInfo,
-                                                                    label,strlen(label))+6
-                                                         +2*borderSize),
-                                             buttonHeight(fontInfo->max_bounds.ascent
-                                                         +fontInfo->max_bounds.descent+6
-                                                         +2*borderSize),
                                              buttonPressed(off)
- {int minChange=65535;
+ {// Sizing via the engine (D11 font-by-id): measureText IS XTextWidth on X11
+  // and FontMetrics carries the exact short values, so these reproduce the
+  // original XTextWidth/max_bounds arithmetic bit-for-bit.
+  buttonWidth=(int)engine.measureText(label,EngineFont_Button)+6+2*borderWidth;
+  FontMetrics fm;
+  engine.getFontMetrics(EngineFont_Button,fm);
+  buttonHeight=(int)fm.max_bounds.ascent+(int)fm.max_bounds.descent+6+2*borderWidth;
+  #ifdef X11_BACKEND
+  // Colors are engine-managed from here on (D11); until task 16 migrates the
+  // face drawing, the guarded raw body reconstructs the exact Stage values
+  // the call site used to pass (stage.buttonFg/buttonBg literals).
+  XColor fg={0,
+             0,//0
+             0,//0
+             0,//0
+             DoRed|DoGreen|DoBlue,
+             0},
+          bg={0,
+              46260,//180
+              46260,//180
+              46260,//180
+              DoRed|DoGreen|DoBlue,
+              0};
+  int minChange=65535;
   Boolean lowSideMin;
   FindColorChange(bg.red,minChange,lowSideMin);
   FindColorChange(bg.green,minChange,lowSideMin);
@@ -199,68 +220,62 @@ inline Button::Button(Display* disp, Drawable& draw,
                          bg.red+redChange,
                          bg.green+greenChange,
                          bg.blue+blueChange,
-                         DoRed|DoGreen|DoBlue},
+                         DoRed|DoGreen|DoBlue,
+                         0},
 	 bottomBorderColor={0,
                             bg.red-redChange,
                             bg.green-greenChange,
                             bg.blue-blueChange,
-                            DoRed|DoGreen|DoBlue};
-  CreateButton(label,fontInfo,fg,bg,topBorderColor,bottomBorderColor);
- }
-
-inline Button::Button(Display* disp, Drawable& draw,
-                      const char* const label, const XFontStruct* const fontInfo,
-                      XColor& fg, XColor& bg,
-                      const int x, const int y,
-                      XColor& topBorderColor, XColor& bottomBorderColor,
-		                  const int borderSize): display(disp),
-                                             drawable(draw),
-                                             upperLeftX(x),
-                                             upperLeftY(y),
-                                             borderWidth(borderSize>3 ? borderSize
-                                                                      : 3),
-                                             buttonWidth(XTextWidth((XFontStruct*)fontInfo,
-                                                                    label,strlen(label))+6
-                                                         +2*borderSize),
-                                             buttonHeight(fontInfo->max_bounds.ascent
-                                                          +fontInfo->max_bounds.descent+6
-                                                          +2*borderSize),
-                                             buttonPressed(off)
- {CreateButton(label,fontInfo,fg,bg,topBorderColor,bottomBorderColor);
+                            DoRed|DoGreen|DoBlue,
+                            0};
+  CreateButton(label,static_cast<X11Backend&>(engine).buttonFont(),
+               fg,bg,topBorderColor,bottomBorderColor);
+  #endif
  }
 
 inline Button::~Button()
- {XFreeGC(display,buttonGC);
+ {
+  #ifdef X11_BACKEND
+  XFreeGC(display,buttonGC);
   XFreePixmap(display,buttonDown);
   XFreePixmap(display,buttonUp);
+  #endif
  }
 
 inline Button& Button::PressButton()
- {XCopyArea(display,
+ {
+  #ifdef X11_BACKEND
+  XCopyArea(display,
             buttonDown,
             drawable,
             buttonGC,
             0,0,
 	          buttonWidth,buttonHeight,
             upperLeftX,upperLeftY);
+  #endif
   buttonPressed=on;
   return *this;
  }
 
 inline Button& Button::ReleaseButton()
- {XCopyArea(display,
+ {
+  #ifdef X11_BACKEND
+  XCopyArea(display,
             buttonUp,
             drawable,
             buttonGC,
             0,0,
 	          buttonWidth,buttonHeight,
             upperLeftX,upperLeftY);
+  #endif
   buttonPressed=off;
   return *this;
  }
 
 inline const Button& Button::DrawButton() const
- {if (buttonPressed)
+ {
+  #ifdef X11_BACKEND
+  if (buttonPressed)
     XCopyArea(display,
               buttonDown,
               drawable,
@@ -276,9 +291,11 @@ inline const Button& Button::DrawButton() const
               0,0,
 	            buttonWidth,buttonHeight,
               upperLeftX,upperLeftY);
+  #endif
   return *this;
  }
 
+#ifdef X11_BACKEND
 inline Button::Boolean Button::PointerOnButton(const XButtonEvent& event) const
  {return event.x>=upperLeftX && event.x<upperLeftX+buttonWidth &&
          event.y>=upperLeftY && event.y<upperLeftY+buttonHeight;
@@ -288,6 +305,7 @@ inline Button::Boolean Button::PointerOnButton(const XPointerMovedEvent& event) 
  {return event.x>=upperLeftX && event.x<upperLeftX+buttonWidth &&
          event.y>=upperLeftY && event.y<upperLeftY+buttonHeight;
  }
+#endif
 
 inline Button::Boolean Button::ButtonPressed() const
  {return buttonPressed;

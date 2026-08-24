@@ -3,6 +3,7 @@
 #include<X11/Xlib.h>
 #endif
 #include"../../utilities/rendering/x11types.H"
+#include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
 #include"../../utilities/pixmaps/rotated/rotatorDisplayData.H"
@@ -45,7 +46,7 @@ class EnemyBullet: public Bullet
 class EnemyBulletGroup
  {friend class EnemyBullet;
   public:
-    EnemyBulletGroup();
+    EnemyBulletGroup(RenderingEngine&);
     inline void Fire(Intersector& intersector,
                 const double creationTime,
                 Enemy& shooter);
@@ -143,6 +144,7 @@ inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
                                   shooter.CurrentBox().Center().y+1)
                          -CurrentBox().Center());
   SetToIntercept(target,velocity);
+  #ifdef X11_BACKEND
   XCopyArea(stage->display,
             rotator->GetPixAtTime(0),
             playingField->pixmap,
@@ -154,6 +156,7 @@ inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
             CurrentBox().NorthWestCorner().y+.5);
+  #endif
   frameTimer.Reset().TimerAlarm();
  }
 
@@ -198,7 +201,7 @@ inline XColor EnemyBulletGroup::color={0,
                                 0,
                                 DoRed|DoGreen|DoBlue};
 
-inline EnemyBulletGroup::EnemyBulletGroup(): graphic(stage->display,stage->window,color,
+inline EnemyBulletGroup::EnemyBulletGroup(RenderingEngine&): graphic(stage->display,stage->window,color,
                                                      vectors,sizeof(vectors)/sizeof(Vector2d),
                                                      enemyBulletDecor_bits,
                                                      enemyBulletDecor_width,enemyBulletDecor_height),
