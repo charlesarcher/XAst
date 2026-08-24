@@ -116,6 +116,12 @@ class RockGroup
     RockGroup(RenderingEngine& engine);
     ~RockGroup();
 
+    // TRANSITION member (D11 single-ownership-seam extension; DELETED at
+    // task 47): non-owning reference to the engine injected at construction.
+    // The migrated draw paths consume it; Rock reaches it through the global
+    // group pointer, exactly as it does for the other shared group state.
+    RenderingEngine& engine;
+
     inline void NewROCKs();
 
     inline void ResetMinVelocity(const double newMinVelocity);
@@ -188,31 +194,32 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
                                          ObjectLiner().Velocity())
                           .NorthWestCorner().x+.5,
         destY=CurrentBox().NorthWestCorner().y+.5;
-    GC& gc=rotator.GetMaskGCAtTime(0);
-    XSetClipOrigin(stage->display,gc,destX,destY);
-    XCopyArea(stage->display,
-              rotator.GetPixAtTime(0),
-              playingField->pixmap,
-              gc,
-              0,0,
-              rotator.PixWidth(),
-              rotator.PixHeight(),
-              destX,destY);
+    // The rotator owns pre-computed depth-1 clip bitmaps alongside its
+    // pixmaps; GetMaskAtTime returns the same element the old clip-GC path
+    // pointed at (identical time-index math), so the masked copy is
+    // byte-identical to the pre-migration draw.
+    rockGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+    rockGroup->engine.drawTextureMasked((TextureId)rotator.GetPixAtTime(0),
+                                        (TextureId)rotator.GetMaskAtTime(0),
+                                        destX,destY,
+                                        rotator.PixWidth(),
+                                        rotator.PixHeight());
+    rockGroup->engine.endRenderTo();
     #endif
    }
   else
   #ifdef X11_BACKEND
-    XCopyArea(stage->display,
-              rotator.GetPixAtTime(0),
-              playingField->pixmap,
-              playingField->gc,
-              0,0,
-              rotator.PixWidth(),
-              rotator.PixHeight(),
-              CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                         ObjectLiner().Velocity())
-                          .NorthWestCorner().x+.5,
-              CurrentBox().NorthWestCorner().y+.5);
+   {rockGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+    rockGroup->engine.drawTexture((TextureId)rotator.GetPixAtTime(0),
+                                  CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                             ObjectLiner().Velocity())
+                                              .NorthWestCorner().x+.5,
+                                  CurrentBox().NorthWestCorner().y+.5,
+                                  rotator.PixWidth(),
+                                  rotator.PixHeight(),
+                                  1.0f);
+    rockGroup->engine.endRenderTo();
+   }
   #else
    ;
   #endif
@@ -453,7 +460,7 @@ inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int n
   #endif
  }
 
-inline RockGroup::RockGroup(RenderingEngine&)
+inline RockGroup::RockGroup(RenderingEngine& eng): engine(eng)
  {
   #ifdef X11_BACKEND
   SetVectorData(RockVectors1,sizeof(RockVectors1)/sizeof(Vector2d),0);
@@ -579,15 +586,14 @@ inline void RockGroup::NewROCKs()
      playingField->selfPermeableList.SetCurrentAtHole().GetData()=&ROCKs[i];
      playingField->selfPermeableList.SetCurrentAtHead().AddPrior();
      #ifdef X11_BACKEND
-     XCopyArea(stage->display,
-               ROCKs[i].ObjectRotator().GetPixAtTime(0),
-               playingField->pixmap,
-               playingField->gc,
-               0,0,
-               ROCKs[i].ObjectRotator().PixWidth(),
-               ROCKs[i].ObjectRotator().PixHeight(),
-               ROCKs[i].CurrentBox().NorthWestCorner().x+.5,
-               ROCKs[i].CurrentBox().NorthWestCorner().y+.5);
+     engine.beginRenderTo((TextureId)playingField->pixmap);
+     engine.drawTexture((TextureId)ROCKs[i].ObjectRotator().GetPixAtTime(0),
+                        ROCKs[i].CurrentBox().NorthWestCorner().x+.5,
+                        ROCKs[i].CurrentBox().NorthWestCorner().y+.5,
+                        ROCKs[i].ObjectRotator().PixWidth(),
+                        ROCKs[i].ObjectRotator().PixHeight(),
+                        1.0f);
+     engine.endRenderTo();
      #endif
     }
  }
