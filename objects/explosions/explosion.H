@@ -46,16 +46,19 @@ inline void Explosion::DisplayFrame()
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
-  GC& gc=explosionGraphic->gc[frameList.GetFrameNumber()];
-  XSetClipOrigin(stage->display,gc,destX,destY);
-  XCopyArea(stage->display,
-            frameList.GetFrame(),
-            playingField->pixmap,
-            gc,
-            0,0,
-            frameList.PixWidth(),
-            frameList.PixHeight(),
-            destX,destY);
+  // One masked-draw engine call per layer; every one of the 5 frames is
+  // masked (each original gc[] carried a clip mask), so there is no plain
+  // drawTexture leg here. The clip origin rides inside the call (D6).
+  // Bracketed like every world-sprite draw: the raw path copied onto the
+  // play-field canvas, and an unbracketed call would land on the standing
+  // window target instead (W6-hotfix).
+  explosionGraphic->engine.beginRenderTo((TextureId)playingField->pixmap);
+  explosionGraphic->engine.drawTextureMasked(frameList.GetFrame(),
+                                             explosionGraphic->MaskId(frameList.GetFrameNumber()),
+                                             destX,destY,
+                                             frameList.PixWidth(),
+                                             frameList.PixHeight());
+  explosionGraphic->engine.endRenderTo();
   #endif
  }
 
