@@ -198,27 +198,22 @@ void Rock::MissScript(Intersector& intersector, const double createTime,
     // pixmaps; GetMaskAtTime returns the same element the old clip-GC path
     // pointed at (identical time-index math), so the masked copy is
     // byte-identical to the pre-migration draw.
-    rockGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-    rockGroup->engine.drawTextureMasked((TextureId)rotator.GetPixAtTime(0),
-                                        (TextureId)rotator.GetMaskAtTime(0),
-                                        destX,destY,
-                                        rotator.PixWidth(),
-                                        rotator.PixHeight());
-    rockGroup->engine.endRenderTo();
+    playingField->DeferDrawMasked((TextureId)rotator.GetPixAtTime(0),
+                                  (TextureId)rotator.GetMaskAtTime(0),
+                                  destX,destY,
+                                  rotator.PixWidth(),
+                                  rotator.PixHeight());
     #endif
    }
   else
   #ifdef X11_BACKEND
-   {rockGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-    rockGroup->engine.drawTexture((TextureId)rotator.GetPixAtTime(0),
-                                  CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                             ObjectLiner().Velocity())
-                                              .NorthWestCorner().x+.5,
-                                  CurrentBox().NorthWestCorner().y+.5,
-                                  rotator.PixWidth(),
-                                  rotator.PixHeight(),
-                                  1.0f);
-    rockGroup->engine.endRenderTo();
+   {playingField->DeferDraw((TextureId)rotator.GetPixAtTime(0),
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                       .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            rotator.PixWidth(),
+                            rotator.PixHeight());
    }
   #else
    ;
@@ -586,14 +581,11 @@ inline void RockGroup::NewROCKs()
      playingField->selfPermeableList.SetCurrentAtHole().GetData()=&ROCKs[i];
      playingField->selfPermeableList.SetCurrentAtHead().AddPrior();
      #ifdef X11_BACKEND
-     engine.beginRenderTo((TextureId)playingField->pixmap);
-     engine.drawTexture((TextureId)ROCKs[i].ObjectRotator().GetPixAtTime(0),
-                        ROCKs[i].CurrentBox().NorthWestCorner().x+.5,
-                        ROCKs[i].CurrentBox().NorthWestCorner().y+.5,
-                        ROCKs[i].ObjectRotator().PixWidth(),
-                        ROCKs[i].ObjectRotator().PixHeight(),
-                        1.0f);
-     engine.endRenderTo();
+     playingField->DeferDraw((TextureId)ROCKs[i].ObjectRotator().GetPixAtTime(0),
+                             ROCKs[i].CurrentBox().NorthWestCorner().x+.5,
+                             ROCKs[i].CurrentBox().NorthWestCorner().y+.5,
+                             ROCKs[i].ObjectRotator().PixWidth(),
+                             ROCKs[i].ObjectRotator().PixHeight());
      #endif
     }
  }

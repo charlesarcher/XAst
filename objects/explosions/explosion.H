@@ -49,16 +49,13 @@ inline void Explosion::DisplayFrame()
   // One masked-draw engine call per layer; every one of the 5 frames is
   // masked (each original gc[] carried a clip mask), so there is no plain
   // drawTexture leg here. The clip origin rides inside the call (D6).
-  // Bracketed like every world-sprite draw: the raw path copied onto the
-  // play-field canvas, and an unbracketed call would land on the standing
-  // window target instead (W6-hotfix).
-  explosionGraphic->engine.beginRenderTo((TextureId)playingField->pixmap);
-  explosionGraphic->engine.drawTextureMasked(frameList.GetFrame(),
-                                             explosionGraphic->MaskId(frameList.GetFrameNumber()),
-                                             destX,destY,
-                                             frameList.PixWidth(),
-                                             frameList.PixHeight());
-  explosionGraphic->engine.endRenderTo();
+  // Deferred like every world-sprite draw (task 24): the record replays
+  // onto the freshly cleared canvas in original emission order.
+  playingField->DeferDrawMasked(frameList.GetFrame(),
+                                explosionGraphic->MaskId(frameList.GetFrameNumber()),
+                                destX,destY,
+                                frameList.PixWidth(),
+                                frameList.PixHeight());
   #endif
  }
 

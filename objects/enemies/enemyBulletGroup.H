@@ -148,16 +148,13 @@ inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
                          -CurrentBox().Center());
   SetToIntercept(target,velocity);
   #ifdef X11_BACKEND
-  enemyBulletGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-  enemyBulletGroup->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
-                                       CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                                  ObjectLiner().Velocity())
-                                                   .NorthWestCorner().x+.5,
-                                       CurrentBox().NorthWestCorner().y+.5,
-                                       rotator->PixWidth(),
-                                       rotator->PixHeight(),
-                                       1.0f);
-  enemyBulletGroup->engine.endRenderTo();
+  playingField->DeferDraw((TextureId)rotator->GetPixAtTime(0),
+                          CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                     ObjectLiner().Velocity())
+                                      .NorthWestCorner().x+.5,
+                          CurrentBox().NorthWestCorner().y+.5,
+                          rotator->PixWidth(),
+                          rotator->PixHeight());
   #endif
   frameTimer.Reset().TimerAlarm();
  }

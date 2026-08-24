@@ -74,6 +74,49 @@ class PlayingField
 
     static const Box playArea;
 
+    // ---- D8 frame-draw deferral (task 24) ----------------------------------
+    // World draws fire mid-physics today (inside Intersect→MissScript).
+    // Objects removed later in the same pass WERE drawn this frame, and
+    // collision response can mutate an object AFTER its draw fired — an
+    // end-of-frame "draw all survivors" sweep would change membership,
+    // order, AND state. Instead every draw site snapshots its exact
+    // arguments into this frame-local ordered list at the old draw point;
+    // the render pass (RenderFrameDraws) replays the records verbatim onto
+    // the freshly cleared canvas. Identical membership, order, and state
+    // by construction; the float arguments are captured exactly as the
+    // immediate call received them (same double→float conversions at the
+    // same statement positions).
+    struct FrameDrawRecord
+     {TextureId tex;     // content texture
+      TextureId mask;    // 0 → plain texture leg
+      float x,y,w,h;
+     };
+    // Capacity bound: worst case per frame ≈ 176 rock misses + 16 spawn
+    // placements + ship/thrust/hyper/enemy sprites + ≤10 enemy-bullet and
+    // ≤16 ship-bullet aims/misses/explosion frames + 2 big explosions
+    // < 300; 1024 is >3x headroom. Overflow aborts loudly rather than
+    // silently dropping a draw (a dropped record would break identity).
+    static const int maxFrameDraws=1024;
+    inline void DeferDraw(TextureId tex,float x,float y,float w,float h)
+     {if (numFrameDraws>=maxFrameDraws)
+       {fprintf(stderr,"frame draw list overflow\n");
+        abort();
+        }
+      FrameDrawRecord& record=frameDraws[numFrameDraws++];
+      record.tex=tex;record.mask=0;
+      record.x=x;record.y=y;record.w=w;record.h=h;
+     }
+    inline void DeferDrawMasked(TextureId tex,TextureId mask,
+                                float x,float y,float w,float h)
+     {if (numFrameDraws>=maxFrameDraws)
+       {fprintf(stderr,"frame draw list overflow\n");
+        abort();
+        }
+      FrameDrawRecord& record=frameDraws[numFrameDraws++];
+      record.tex=tex;record.mask=mask;
+      record.x=x;record.y=y;record.w=w;record.h=h;
+     }
+
 
   private:
 
@@ -107,7 +150,13 @@ class PlayingField
             rightRotPending,
             firing;
 
- };
+    FrameDrawRecord frameDraws[maxFrameDraws];
+    int numFrameDraws;
+
+    void PresentFrame();
+    void RenderFrameDraws();
+
+  };
 
 extern PlayingField* playingField;
 
@@ -148,10 +197,11 @@ inline PlayingField::PlayingField(RenderingEngine& eng): engine(eng),
                                      nonPermeableList(28),
                                      selfPermeableList(128),
                                      permeableList(28),
-                                     intersector(nonPermeableList,selfPermeableList,permeableList),
-                                     leftRotPending(off),
-                                     rightRotPending(off),
-                                     firing(off)
+                                      intersector(nonPermeableList,selfPermeableList,permeableList),
+                                      leftRotPending(off),
+                                      rightRotPending(off),
+                                      firing(off),
+                                      numFrameDraws(0)
  {GenHelpScreen();
  }
 
@@ -203,18 +253,59 @@ inline void PlayingField::NewRocksAndEnemy()
  }
 
 inline void PlayingField::DrawGame()
- {stage->DrawScore();
+ {// D8 step (7): HUD pass — score/title/shipyard/button all live OUTSIDE the
+  // play rect, so this runs with the scissor disabled. The canvas clear that
+  // used to trail the present here moved to the head of the frame.
+  stage->DrawScore();
   if (score->CurrentScore()>=nextShipScore)
    {shipYard->AddShip();
     stage->DrawShipYard();
     nextShipScore+=extraShipScore;
    }
-   stage->DrawPlayingField();
-  #ifdef X11_BACKEND
-   engine.beginRenderTo((TextureId)pixmap);
-   engine.clear();
-   engine.endRenderTo();
-  #endif
+ }
+
+inline void PlayingField::RenderFrameDraws()
+ {for (int i=0;i<numFrameDraws;++i)
+   {const FrameDrawRecord& record=frameDraws[i];
+    if (record.mask)
+      engine.drawTextureMasked(record.tex,record.mask,record.x,record.y,
+                               record.w,record.h);
+    else
+      engine.drawTexture(record.tex,record.x,record.y,record.w,record.h,
+                         1.0f);
+    }
+  numFrameDraws=0;
+ }
+
+inline void PlayingField::PresentFrame()
+ {// ---- D8 canonical frame structure (task 24) ----
+  // (2) frame start — owns NO scissor anywhere (m14);
+  engine.beginFrame();
+  // World pass targets the canvas (the standing target is the window; the
+  // HUD below needs that standing target restored, hence the bracket).
+  engine.beginRenderTo((TextureId)pixmap);
+  // (3) canvas play-area sub-rect only (the border ring survives);
+  engine.clear();
+  // (4) LOGICAL CLIENT coords: Stage layout values + play-area extents; the
+  // backend applies any present transform uniformly. On X11 the scissor is
+  // stored-only today, which is byte-identical by construction: the frame-end
+  // present leg already copies exactly this rect out of the canvas, so a
+  // clip here could not change a single pixel — GL/VK consume it for real.
+  const int playRect[4]={stage->playAreaX,stage->playAreaY,
+                         (int)playArea.Width(),(int)playArea.Height()};
+  engine.setScissorRect(playRect);
+  // (5) world pass — ORIGINAL per-object emission order verbatim on X11
+  // (O5-M4: the canonical order is a GL/VK-only contract); replay of the
+  // records captured at the old mid-physics draw points;
+  RenderFrameDraws();
+  engine.setScissorRect(nullptr);
+  engine.endRenderTo();
+  // (6) HUD lives outside the play rect;
+  // (7) HUD pass;
+  DrawGame();
+  // (8) present — requests the field leg and replays both request-gated
+  // legs (yard first, then field), no internal sync (Q13-proven).
+  stage->DrawPlayingField();
  }
 
  inline Vector2d PlayingField::CalcGravityAcceleration(const MovableObject* const obj1,
@@ -328,11 +419,10 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   framesSinceEnemy=0;
   for (int i=0;i<initialShips;++i)
     shipYard->AddShip();
-  engine.beginRenderTo((TextureId)pixmap);
-  engine.clear();
-  engine.endRenderTo();
+  numFrameDraws=0;
   NewRocksAndEnemy();
-  DrawGame();
+  // The old init-time canvas clear folds into the frame structure below.
+  PresentFrame();
   while(shipYard->NumShips())
    {shipYard->RemoveShip();
     stage->DrawShipYard();
@@ -520,7 +610,7 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
        }
       SetGravityAcceleration();
       intersector.Intersect();
-      DrawGame();
+      PresentFrame();
       gettimeofday(&endTime,NULL);
       unsigned int diffTime=endTime.tv_usec-startTime.tv_usec+(endTime.tv_sec-startTime.tv_sec)*1000000;
       if (diffTime<uSecondsPerFrame)
@@ -539,6 +629,10 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
       yPos=yPosSave;
   char str[23];
   engine.beginRenderTo((TextureId)pixmap);
+  // The old flow cleared the canvas right after every present, so this
+  // screen always drew over fresh black; the clear now heads each frame,
+  // so restore that black base explicitly before the score table.
+  engine.clear();
   for(int i=0;i<score->NumScores();++i)
    {const int nameWidth=12-(int)strlen(score->TopTenName(i));
     snprintf(str,sizeof(str),"%s%*s%10d",

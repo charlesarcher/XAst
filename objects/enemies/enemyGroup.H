@@ -234,16 +234,13 @@ void ENEMY::MissScript(Intersector& intersector, const double createTime,
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    enemyGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-    enemyGroup->engine.drawTexture((TextureId)rotator.GetPixAtTime(0),
-                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                              ObjectLiner().Velocity())
-                                               .NorthWestCorner().x+.5,
-                                   CurrentBox().NorthWestCorner().y+.5,
-                                   rotator.PixWidth(),
-                                   rotator.PixHeight(),
-                                   1.0f);
-    enemyGroup->engine.endRenderTo();
+    playingField->DeferDraw((TextureId)rotator.GetPixAtTime(0),
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                        .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            rotator.PixWidth(),
+                            rotator.PixHeight());
     #endif
    }
  }
@@ -293,16 +290,13 @@ void enemy::MissScript(Intersector& intersector, const double createTime,
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    enemyGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-    enemyGroup->engine.drawTexture((TextureId)rotator.GetPixAtTime(0),
-                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                              ObjectLiner().Velocity())
-                                               .NorthWestCorner().x+.5,
-                                   CurrentBox().NorthWestCorner().y+.5,
-                                   rotator.PixWidth(),
-                                   rotator.PixHeight(),
-                                   1.0f);
-    enemyGroup->engine.endRenderTo();
+    playingField->DeferDraw((TextureId)rotator.GetPixAtTime(0),
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                        .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            rotator.PixWidth(),
+                            rotator.PixHeight());
     #endif
    }
  }

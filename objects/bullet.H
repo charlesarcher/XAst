@@ -82,16 +82,13 @@ void Bullet::MissScript(Intersector& intersector, const double createTime,
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    explosionGraphic->engine.beginRenderTo((TextureId)playingField->pixmap);
-    explosionGraphic->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
-                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                              ObjectLiner().Velocity())
-                                               .NorthWestCorner().x+.5,
-                                   CurrentBox().NorthWestCorner().y+.5,
-                                   rotator->PixWidth(),
-                                   rotator->PixHeight(),
-                                   1.0f);
-    explosionGraphic->engine.endRenderTo();
+    playingField->DeferDraw((TextureId)rotator->GetPixAtTime(0),
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                        .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            rotator->PixWidth(),
+                            rotator->PixHeight());
     #endif
    }
  }
@@ -107,13 +104,13 @@ inline void BulletExplosion::DisplayFrame()
       destY=CurrentBox().NorthWestCorner().y+.5;
   // Per-frame clip-origin + masked copy absorbed into the engine's masked
   // draw (D6); MaskId maps frame number to its original per-frame mask.
-  explosionGraphic->engine.beginRenderTo((TextureId)playingField->pixmap);
-  explosionGraphic->engine.drawTextureMasked(frameList.GetFrame(),
-                                   explosionGraphic->MaskId(frameList.GetFrameNumber()),
-                                   destX,destY,
-                                   frameList.PixWidth(),
-                                   frameList.PixHeight());
-  explosionGraphic->engine.endRenderTo();
+  // Deferred (task 24): the record replays onto the freshly cleared canvas
+  // in original emission order.
+  playingField->DeferDrawMasked(frameList.GetFrame(),
+                                explosionGraphic->MaskId(frameList.GetFrameNumber()),
+                                destX,destY,
+                                frameList.PixWidth(),
+                                frameList.PixHeight());
   #endif
  }
 

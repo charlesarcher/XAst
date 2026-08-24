@@ -138,16 +138,13 @@ void ShipBullet::MissScript(Intersector& intersector, const double createTime,
    {if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    shipBulletGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-    shipBulletGroup->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
-                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                              ObjectLiner().Velocity())
-                                               .NorthWestCorner().x+.5,
-                                   CurrentBox().NorthWestCorner().y+.5,
-                                   rotator->PixWidth(),
-                                   rotator->PixHeight(),
-                                   1.0f);
-    shipBulletGroup->engine.endRenderTo();
+    playingField->DeferDraw((TextureId)rotator->GetPixAtTime(0),
+                            CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                       ObjectLiner().Velocity())
+                                        .NorthWestCorner().x+.5,
+                            CurrentBox().NorthWestCorner().y+.5,
+                            rotator->PixWidth(),
+                            rotator->PixHeight());
     #endif
    }
  }
@@ -182,16 +179,13 @@ inline void ShipBullet::PositionBullet(Intersector& intersector,
   inactive=off;
   intersector.AddNonPermeable(this,creationTime);
   #ifdef X11_BACKEND
-  shipBulletGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-  shipBulletGroup->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
-                                 CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                            ObjectLiner().Velocity())
-                                             .NorthWestCorner().x+.5,
-                                 CurrentBox().NorthWestCorner().y+.5,
-                                 rotator->PixWidth(),
-                                 rotator->PixHeight(),
-                                 1.0f);
-  shipBulletGroup->engine.endRenderTo();
+  playingField->DeferDraw((TextureId)rotator->GetPixAtTime(0),
+                          CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                     ObjectLiner().Velocity())
+                                      .NorthWestCorner().x+.5,
+                          CurrentBox().NorthWestCorner().y+.5,
+                          rotator->PixWidth(),
+                          rotator->PixHeight());
   #endif
   frameTimer.Reset().TimerAlarm();
  }

@@ -291,16 +291,13 @@ void Ship::MissScript(Intersector& intersector,
   ObjectLiner().UpdateVelocity(existTime);
   shipBulletGroup->Fire(intersector,createTime+existTime);
   #ifdef X11_BACKEND
-  shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-  shipGroup->engine.drawTexture((TextureId)ObjectRotator().GetPixAtTime(0),
-                                CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                           ObjectLiner().Velocity())
-                                            .NorthWestCorner().x+.5,
-                                CurrentBox().NorthWestCorner().y+.5,
-                                ObjectRotator().PixWidth(),
-                                ObjectRotator().PixHeight(),
-                                1.0f);
-  shipGroup->engine.endRenderTo();
+  playingField->DeferDraw((TextureId)ObjectRotator().GetPixAtTime(0),
+                          CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                     ObjectLiner().Velocity())
+                                      .NorthWestCorner().x+.5,
+                          CurrentBox().NorthWestCorner().y+.5,
+                          ObjectRotator().PixWidth(),
+                          ObjectRotator().PixHeight());
   #endif
  }
 
@@ -526,16 +523,13 @@ void Thrust::MissScript(Intersector& intersector, const double createTime,
                         const double existTime)
  {shipGroup->NewThrust();
   #ifdef X11_BACKEND
-  shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-  shipGroup->engine.drawTexture((TextureId)ObjectRotator().GetPixAtTime(0),
-                                CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                           ObjectLiner().Velocity())
-                                            .NorthWestCorner().x+.5,
-                                CurrentBox().NorthWestCorner().y+.5,
-                                ObjectRotator().PixWidth(),
-                                ObjectRotator().PixHeight(),
-                                1.0f);
-  shipGroup->engine.endRenderTo();
+  playingField->DeferDraw((TextureId)ObjectRotator().GetPixAtTime(0),
+                          CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                     ObjectLiner().Velocity())
+                                      .NorthWestCorner().x+.5,
+                          CurrentBox().NorthWestCorner().y+.5,
+                          ObjectRotator().PixWidth(),
+                          ObjectRotator().PixHeight());
   #endif
  }
 
@@ -639,13 +633,11 @@ void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double cr
   // pixmaps; GetMaskAtTime returns the same element the old clip-GC path
   // pointed at (identical time-index math), so the masked copy is
   // byte-identical to the pre-migration draw.
-  shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-  shipGroup->engine.drawTextureMasked((TextureId)rotator.GetPixAtTime(0),
-                                      (TextureId)rotator.GetMaskAtTime(0),
-                                      destX,destY,
-                                      rotator.PixWidth(),
-                                      rotator.PixHeight());
-  shipGroup->engine.endRenderTo();
+  playingField->DeferDrawMasked((TextureId)rotator.GetPixAtTime(0),
+                                (TextureId)rotator.GetMaskAtTime(0),
+                                destX,destY,
+                                rotator.PixWidth(),
+                                rotator.PixHeight());
   #endif
  }
 
@@ -687,14 +679,11 @@ void Hyper::MissScript(Intersector& intersector,
     shipGroup->ship->ObjectRotator().AngularVelocity()=0;
     intersector.AddNonPermeable(shipGroup->ship,createTime+existTime);
     #ifdef X11_BACKEND
-    shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-    shipGroup->engine.drawTexture((TextureId)shipGroup->ship->ObjectRotator().GetPixAtTime(0),
-                                  shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
-                                  shipGroup->ship->CurrentBox().NorthWestCorner().y+.5,
-                                  shipGroup->ship->ObjectRotator().PixWidth(),
-                                  shipGroup->ship->ObjectRotator().PixHeight(),
-                                  1.0f);
-    shipGroup->engine.endRenderTo();
+    playingField->DeferDraw((TextureId)shipGroup->ship->ObjectRotator().GetPixAtTime(0),
+                            shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
+                            shipGroup->ship->CurrentBox().NorthWestCorner().y+.5,
+                            shipGroup->ship->ObjectRotator().PixWidth(),
+                            shipGroup->ship->ObjectRotator().PixHeight());
     #endif
     shipGroup->thrust->thrusting=Thrust::off;
     shipGroup->hyper.hyperspacing=Hyper::off;
@@ -711,13 +700,11 @@ void Hyper::MissScript(Intersector& intersector,
     // The historical draw wired the CENTER clip bitmap (frame slot 0)
     // regardless of which frame is shown; MaskId(0) pins that exact choice.
     // Do NOT "fix" this to MaskId(frame number) — it would change pixels.
-    shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
-    shipGroup->engine.drawTextureMasked(shipGroup->explosion.frameList.GetFrame(),
-                                        explosionGraphic->MaskId(0),
-                                        destX,destY,
-                                        shipGroup->explosion.frameList.PixWidth(),
-                                        shipGroup->explosion.frameList.PixHeight());
-    shipGroup->engine.endRenderTo();
+    playingField->DeferDrawMasked(shipGroup->explosion.frameList.GetFrame(),
+                                  explosionGraphic->MaskId(0),
+                                  destX,destY,
+                                  shipGroup->explosion.frameList.PixWidth(),
+                                  shipGroup->explosion.frameList.PixHeight());
     #endif
     shipGroup->explosion.frameList.UpdateFrameNumber();
     shipGroup->explosion.frameTimer.Reset().TimerAlarm();
