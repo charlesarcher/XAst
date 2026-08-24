@@ -44,8 +44,11 @@ class EnemyBullet: public Bullet
  };
 
 class EnemyBulletGroup
- {friend class EnemyBullet;
-  public:
+  {friend class EnemyBullet;
+   public:
+    // TRANSITION (task 21): DELETED at task 47
+    RenderingEngine& engine;
+
     EnemyBulletGroup(RenderingEngine&);
     inline void Fire(Intersector& intersector,
                 const double creationTime,
@@ -145,17 +148,16 @@ inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
                          -CurrentBox().Center());
   SetToIntercept(target,velocity);
   #ifdef X11_BACKEND
-  XCopyArea(stage->display,
-            rotator->GetPixAtTime(0),
-            playingField->pixmap,
-            playingField->gc,
-            0,0,
-            rotator->PixWidth(),
-            rotator->PixHeight(),
-            CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                       ObjectLiner().Velocity())
-                        .NorthWestCorner().x+.5,
-            CurrentBox().NorthWestCorner().y+.5);
+  enemyBulletGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+  enemyBulletGroup->engine.drawTexture((TextureId)rotator->GetPixAtTime(0),
+                                       CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                                  ObjectLiner().Velocity())
+                                                   .NorthWestCorner().x+.5,
+                                       CurrentBox().NorthWestCorner().y+.5,
+                                       rotator->PixWidth(),
+                                       rotator->PixHeight(),
+                                       1.0f);
+  enemyBulletGroup->engine.endRenderTo();
   #endif
   frameTimer.Reset().TimerAlarm();
  }
@@ -201,10 +203,11 @@ inline XColor EnemyBulletGroup::color={0,
                                 0,
                                 DoRed|DoGreen|DoBlue};
 
-inline EnemyBulletGroup::EnemyBulletGroup(RenderingEngine&): graphic(stage->display,stage->window,color,
-                                                     vectors,sizeof(vectors)/sizeof(Vector2d),
-                                                     enemyBulletDecor_bits,
-                                                     enemyBulletDecor_width,enemyBulletDecor_height),
+inline EnemyBulletGroup::EnemyBulletGroup(RenderingEngine& eng): engine(eng),
+                                                 graphic(stage->display,stage->window,color,
+                                                      vectors,sizeof(vectors)/sizeof(Vector2d),
+                                                      enemyBulletDecor_bits,
+                                                      enemyBulletDecor_width,enemyBulletDecor_height),
                                              rotator(&graphic,0,PlayingField::maxLinearVelocity),
                                              bullet1(&explosion1),
                                              bullet2(&explosion2),

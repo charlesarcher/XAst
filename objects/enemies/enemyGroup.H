@@ -100,6 +100,8 @@ class EnemyGroup
 
     typedef int Boolean;
     enum {off, on};
+    // TRANSITION (task 21): DELETED at task 47
+    RenderingEngine& engine;
     Boolean enemyInactive;
 
     EnemyGroup(RenderingEngine&);
@@ -232,17 +234,16 @@ void ENEMY::MissScript(Intersector& intersector, const double createTime,
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    XCopyArea(stage->display,
-              rotator.GetPixAtTime(0),
-              playingField->pixmap,
-              playingField->gc,
-              0,0,
-              rotator.PixWidth(),
-              rotator.PixHeight(),
-              CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                         ObjectLiner().Velocity())
-                          .NorthWestCorner().x+.5,
-              CurrentBox().NorthWestCorner().y+.5);
+    enemyGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+    enemyGroup->engine.drawTexture((TextureId)rotator.GetPixAtTime(0),
+                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                              ObjectLiner().Velocity())
+                                               .NorthWestCorner().x+.5,
+                                   CurrentBox().NorthWestCorner().y+.5,
+                                   rotator.PixWidth(),
+                                   rotator.PixHeight(),
+                                   1.0f);
+    enemyGroup->engine.endRenderTo();
     #endif
    }
  }
@@ -292,17 +293,16 @@ void enemy::MissScript(Intersector& intersector, const double createTime,
     if (PlayingField::universalGravitationalConst)
       ObjectLiner().UpdateVelocity(existTime);
     #ifdef X11_BACKEND
-    XCopyArea(stage->display,
-              rotator.GetPixAtTime(0),
-              playingField->pixmap,
-              playingField->gc,
-              0,0,
-              rotator.PixWidth(),
-              rotator.PixHeight(),
-              CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                         ObjectLiner().Velocity())
-                          .NorthWestCorner().x+.5,
-              CurrentBox().NorthWestCorner().y+.5);
+    enemyGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+    enemyGroup->engine.drawTexture((TextureId)rotator.GetPixAtTime(0),
+                                   CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                              ObjectLiner().Velocity())
+                                               .NorthWestCorner().x+.5,
+                                   CurrentBox().NorthWestCorner().y+.5,
+                                   rotator.PixWidth(),
+                                   rotator.PixHeight(),
+                                   1.0f);
+    enemyGroup->engine.endRenderTo();
     #endif
    }
  }
@@ -331,8 +331,9 @@ inline const int EnemyGroup::scoreThreshold=1800,
           EnemyGroup::ENEMYFrequency1=RAND_MAX_16*70/100,
           EnemyGroup::ENEMYFrequency2=RAND_MAX_16-ENEMYFrequency1;
 
-inline EnemyGroup::EnemyGroup(RenderingEngine&): enemyInactive(on),
-                                   frameTimer(minimumFrames)
+inline EnemyGroup::EnemyGroup(RenderingEngine& eng): engine(eng),
+                                     enemyInactive(on),
+                                     frameTimer(minimumFrames)
  {
  }
 
