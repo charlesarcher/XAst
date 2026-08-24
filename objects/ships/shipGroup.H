@@ -211,6 +211,11 @@ class ShipGroup
   public:
     ShipGroup(RenderingEngine& engine);
 
+    // Transition DI handle (task 20): lets the ship bodies reach the
+    // rendering abstraction without widening Stage. Removed with the other
+    // transition members at task 47.
+    RenderingEngine& engine;
+
     StarDestroyer starDestroyer;
     StarDestroyerThrust starDestroyerThrust;
     NextGenerationEnterprise NCC1701D;
@@ -240,11 +245,12 @@ class ShipGroup
 extern ShipGroup* shipGroup;
 
 #ifdef X11_BACKEND
-// Engine-first DI ctor (task 13). The engine parameter is not consumed yet:
-// members still pull stage->display themselves until tasks 20/22 migrate
-// them. Memberwise construction in declaration order replicates the implicit
-// ctor the placement-new staging has always relied on (task-6 order).
-inline ShipGroup::ShipGroup(RenderingEngine&)
+// Engine-first DI ctor (task 13, consumed from task 20). Members still pull
+// stage->display themselves until task 22 migrates them. Memberwise
+// construction in declaration order replicates the implicit ctor the
+// placement-new staging has always relied on (task-6 order); the leading
+// engine binding is a side-effect-free reference init and preserves it.
+inline ShipGroup::ShipGroup(RenderingEngine& eng): engine(eng)
  {
  }
 #endif
@@ -264,11 +270,15 @@ inline Ship::Ship(const unsigned char* const i,
                                    iconHeight(iHeight),
                                    iconColor(iColor),
                                    dead(on)
- {if (!XAllocColor(stage->display,DefaultColormap(stage->display,
-                                                  DefaultScreen(stage->display)),
+  {/* STOPPED SITE (task 20): colormap allocation retained for its external
+      readers — the assigned pixel value is consumed directly by the options
+      header's icon foregrounds; closure path = backend-exposed color
+      primitive. */
+   if (!XAllocColor(stage->display,DefaultColormap(stage->display,
+                                                   DefaultScreen(stage->display)),
                     &iconColor))
-     iconColor.pixel=WhitePixel(stage->display,DefaultScreen(stage->display));
- }
+       iconColor.pixel=WhitePixel(stage->display,DefaultScreen(stage->display));
+  }
 #endif
 
 Ship::~Ship()
@@ -281,17 +291,16 @@ void Ship::MissScript(Intersector& intersector,
   ObjectLiner().UpdateVelocity(existTime);
   shipBulletGroup->Fire(intersector,createTime+existTime);
   #ifdef X11_BACKEND
-  XCopyArea(stage->display,
-            ObjectRotator().GetPixAtTime(0),
-            playingField->pixmap,
-            playingField->gc,
-            0,0,
-            ObjectRotator().PixWidth(),
-            ObjectRotator().PixHeight(),
-            CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                       ObjectLiner().Velocity())
-                        .NorthWestCorner().x+.5,
-            CurrentBox().NorthWestCorner().y+.5);
+  shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+  shipGroup->engine.drawTexture((TextureId)ObjectRotator().GetPixAtTime(0),
+                                CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                           ObjectLiner().Velocity())
+                                            .NorthWestCorner().x+.5,
+                                CurrentBox().NorthWestCorner().y+.5,
+                                ObjectRotator().PixWidth(),
+                                ObjectRotator().PixHeight(),
+                                1.0f);
+  shipGroup->engine.endRenderTo();
   #endif
  }
 
@@ -517,17 +526,16 @@ void Thrust::MissScript(Intersector& intersector, const double createTime,
                         const double existTime)
  {shipGroup->NewThrust();
   #ifdef X11_BACKEND
-  XCopyArea(stage->display,
-            ObjectRotator().GetPixAtTime(0),
-            playingField->pixmap,
-            playingField->gc,
-            0,0,
-            ObjectRotator().PixWidth(),
-            ObjectRotator().PixHeight(),
-            CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                       ObjectLiner().Velocity())
-                        .NorthWestCorner().x+.5,
-            CurrentBox().NorthWestCorner().y+.5);
+  shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+  shipGroup->engine.drawTexture((TextureId)ObjectRotator().GetPixAtTime(0),
+                                CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                           ObjectLiner().Velocity())
+                                            .NorthWestCorner().x+.5,
+                                CurrentBox().NorthWestCorner().y+.5,
+                                ObjectRotator().PixWidth(),
+                                ObjectRotator().PixHeight(),
+                                1.0f);
+  shipGroup->engine.endRenderTo();
   #endif
  }
 
@@ -627,16 +635,17 @@ void MovieEnterpriseThrust::MissScript(Intersector& intersector, const double cr
                                        ObjectLiner().Velocity())
                         .NorthWestCorner().x+.5,
       destY=CurrentBox().NorthWestCorner().y+.5;
-  GC& gc=rotator.GetMaskGCAtTime(0);
-  XSetClipOrigin(stage->display,gc,destX,destY);
-  XCopyArea(stage->display,
-            rotator.GetPixAtTime(0),
-            playingField->pixmap,
-            gc,
-            0,0,
-            rotator.PixWidth(),
-            rotator.PixHeight(),
-            destX,destY);
+  // The rotator owns pre-computed depth-1 clip bitmaps alongside its
+  // pixmaps; GetMaskAtTime returns the same element the old clip-GC path
+  // pointed at (identical time-index math), so the masked copy is
+  // byte-identical to the pre-migration draw.
+  shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+  shipGroup->engine.drawTextureMasked((TextureId)rotator.GetPixAtTime(0),
+                                      (TextureId)rotator.GetMaskAtTime(0),
+                                      destX,destY,
+                                      rotator.PixWidth(),
+                                      rotator.PixHeight());
+  shipGroup->engine.endRenderTo();
   #endif
  }
 
@@ -678,15 +687,14 @@ void Hyper::MissScript(Intersector& intersector,
     shipGroup->ship->ObjectRotator().AngularVelocity()=0;
     intersector.AddNonPermeable(shipGroup->ship,createTime+existTime);
     #ifdef X11_BACKEND
-    XCopyArea(stage->display,
-	            shipGroup->ship->ObjectRotator().GetPixAtTime(0),
-              playingField->pixmap,
-              playingField->gc,
-              0,0,
-	            shipGroup->ship->ObjectRotator().PixWidth(),
-	            shipGroup->ship->ObjectRotator().PixHeight(),
-	            shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
-	            shipGroup->ship->CurrentBox().NorthWestCorner().y+.5);
+    shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+    shipGroup->engine.drawTexture((TextureId)shipGroup->ship->ObjectRotator().GetPixAtTime(0),
+                                  shipGroup->ship->CurrentBox().NorthWestCorner().x+.5,
+                                  shipGroup->ship->CurrentBox().NorthWestCorner().y+.5,
+                                  shipGroup->ship->ObjectRotator().PixWidth(),
+                                  shipGroup->ship->ObjectRotator().PixHeight(),
+                                  1.0f);
+    shipGroup->engine.endRenderTo();
     #endif
     shipGroup->thrust->thrusting=Thrust::off;
     shipGroup->hyper.hyperspacing=Hyper::off;
@@ -700,16 +708,16 @@ void Hyper::MissScript(Intersector& intersector,
     #ifdef X11_BACKEND
     int destX=shipGroup->explosion.CurrentBox().NorthWestCorner().x+.5,
         destY=shipGroup->explosion.CurrentBox().NorthWestCorner().y+.5;
-    GC& gc=explosionGraphic->gc[0];
-    XSetClipOrigin(stage->display,gc,destX,destY);
-    XCopyArea(stage->display,
-              shipGroup->explosion.frameList.GetFrame(),
-              playingField->pixmap,
-              gc,
-              0,0,
-              shipGroup->explosion.frameList.PixWidth(),
-              shipGroup->explosion.frameList.PixHeight(),
-	            destX,destY);
+    // The historical draw wired the CENTER clip bitmap (frame slot 0)
+    // regardless of which frame is shown; MaskId(0) pins that exact choice.
+    // Do NOT "fix" this to MaskId(frame number) — it would change pixels.
+    shipGroup->engine.beginRenderTo((TextureId)playingField->pixmap);
+    shipGroup->engine.drawTextureMasked(shipGroup->explosion.frameList.GetFrame(),
+                                        explosionGraphic->MaskId(0),
+                                        destX,destY,
+                                        shipGroup->explosion.frameList.PixWidth(),
+                                        shipGroup->explosion.frameList.PixHeight());
+    shipGroup->engine.endRenderTo();
     #endif
     shipGroup->explosion.frameList.UpdateFrameNumber();
     shipGroup->explosion.frameTimer.Reset().TimerAlarm();
