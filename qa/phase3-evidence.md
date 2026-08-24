@@ -391,3 +391,20 @@ persisted).
 
 Commit: `feat: GLBackend rotation (D2) — MVP wireframe, texture composite +
 mask, pre-computed pure-bitmap, NonRot static-texture degenerate path (m13)`
+
+### Task 35 orchestrator verification (independent re-run)
+
+- Delegated to Sisyphus-Junior (unspecified-high) — lane recovered; the
+  evidence note above saying "executed directly" is a copy-paste provenance
+  error by the worker (the work was delegated); corrected here.
+- X11 Q13 re-run by orchestrator: RESULT: PASS (all checkpoints AE=0).
+- GL full seeded session re-run by orchestrator: 13/13 checkpoints captured,
+  1720 boundaries, game rc=0. Pixel diffs vs X11 baseline EXPECTED (Q10
+  identity gate = task 36). gp3 capture shows filled-decor asteroid +
+  wireframe asteroid (D2 paths live).
+- Post-session X error 9 (BadDrawable, request=73) occurs AFTER the final
+  capture during teardown — harness-side race with GL window destruction;
+  non-fatal, all captures complete before it. Recorded for task 36 follow-up.
+- Orchestrator fix-up: glBackend font paths now resolve via /proc/self/exe
+  (harness chdirs the game into a scratch work dir; repo-relative paths broke
+  font loading — the worker had documented this as needing a cd-wrapper).

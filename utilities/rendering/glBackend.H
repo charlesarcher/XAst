@@ -984,19 +984,38 @@ class GLBackend : public RenderingEngine
      {// Pass 1 (D15): FOUR stb TTF slots (D12 list; NO errorInfo — m21).
       // Fonts 1-3 (title/button/hi-score) render from DejaVuSans-Bold.ttf;
       // font 4 (score display, courier role) from DejaVuSansMono-Bold.ttf.
-      static const char* const paths[4]=
-       {"vendor/fonts/DejaVuSans-Bold.ttf",
-        "vendor/fonts/DejaVuSans-Bold.ttf",
-        "vendor/fonts/DejaVuSans-Bold.ttf",
-        "vendor/fonts/DejaVuSansMono-Bold.ttf"};
+      // Paths resolve against the BINARY's directory (/proc/self/exe), not
+      // the process cwd — the QA harness chdirs the game into a scratch
+      // work dir, which must not break font loading.
+      static char fontDir[4096];
+      static bool fontDirInit=false;
+      if (!fontDirInit)
+       {ssize_t n=readlink("/proc/self/exe",fontDir,sizeof fontDir-1);
+        if (n>0)
+         {fontDir[n]='\0';
+          char* slash=strrchr(fontDir,'/');
+          if (slash)
+            *slash='\0';                  // strip binary name -> repo root
+         }
+        else
+          strcpy(fontDir,".");
+        fontDirInit=true;
+       }
+      static const char* const names[4]=
+       {"/vendor/fonts/DejaVuSans-Bold.ttf",
+        "/vendor/fonts/DejaVuSans-Bold.ttf",
+        "/vendor/fonts/DejaVuSans-Bold.ttf",
+        "/vendor/fonts/DejaVuSansMono-Bold.ttf"};
       static const float pixelSizes[4]={40.0f,10.0f,20.0f,40.0f};
       static const char* const slotNames[4]=
        {"title","button","hi-score","score"};
+      char path[4200];
       for (int i=0;i<4;++i)
-       {FILE* f=fopen(paths[i],"rb");
+       {snprintf(path,sizeof path,"%s%s",fontDir,names[i]);
+        FILE* f=fopen(path,"rb");
         if (!f)
          {fprintf(stderr,"glBackend: cannot open %s (slot %s).\n",
-                  paths[i],slotNames[i]);
+                  path,slotNames[i]);
           return false;
          }
         fseek(f,0,SEEK_END);
@@ -1005,7 +1024,7 @@ class GLBackend : public RenderingEngine
         uint8_t* buf=new uint8_t[len];
         if (fread(buf,1,(size_t)len,f)!=(size_t)len)
          {fclose(f);delete[] buf;
-          fprintf(stderr,"glBackend: short read on %s.\n",paths[i]);
+          fprintf(stderr,"glBackend: short read on %s.\n",path);
           return false;
          }
         fclose(f);
@@ -1013,7 +1032,7 @@ class GLBackend : public RenderingEngine
         if (offset<0||
             !stbtt_InitFont(fontInfo_[i],buf,offset))
          {delete[] buf;
-          fprintf(stderr,"glBackend: stb_init failed on %s.\n",paths[i]);
+          fprintf(stderr,"glBackend: stb_init failed on %s.\n",path);
           return false;
          }
         fontData_[i]=buf;
