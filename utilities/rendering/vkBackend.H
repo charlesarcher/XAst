@@ -92,6 +92,66 @@
 // applyPresentTransformToScissor_ chain via VkClearRect (spec-guaranteed),
 // which pins the coordinate mapping end-to-end.
 //
+// TASK-41 PIPELINES (this revision): four graphics pipelines built against
+// THE ONE task-40 render pass, all sharing VK_DYNAMIC_STATE_VIEWPORT|SCISSOR
+// (the per-frame latched vkCmdSetScissor finally gets its consumer — the
+// task-40 driver finding is closed: draws ARE scissor-clipped):
+//   linePipeline     LINE_LIST topology, FILL raster — thin lines (width<2,
+//                    GL core-profile parity: lineWidth static 1.0)
+//   triPipeline      TRIANGLE_LIST + VK_POLYGON_MODE_FILL — thick lines
+//                    (SC8 quad expansion, ported verbatim from glBackend),
+//                    filled polygons/rects (earClip ported verbatim)
+//   outlinePipeline  LINE_LIST + VK_POLYGON_MODE_LINE — polygon/rect
+//                    outlines (GL_LINE_LOOP emulated by emitting the closing
+//                    segment; VK has no LINE_LOOP)
+//   texPipeline      TRIANGLE_LIST + FILL — textured quads/triangles;
+//                    stride-7 [x y u v r g b] vertices (glBackend's
+//                    drawTriangles contract); drawTexture synthesizes
+//                    tint=(1,1,1,alpha) which reproduces GL's
+//                    vec4(c.rgb,c.a*uAlpha) exactly through the shared
+//                    FragColor = texture(uTex,vUV)*vColor shader. This MERGES
+//                    glBackend's two textured programs (stride-4 texProgram_
+//                    + uAlpha uniform vs stride-7 triProgram_ + vColor) into
+//                    one pipeline — documented divergence, sampling result
+//                    identical.
+// SHADERS COMPILE AT INIT: committed .vert/.frag sources live in
+// utilities/rendering/vkShaders/ and are compiled to SPIR-V by glslc AT
+// initWindow (temp dir /tmp/xast-vkspv-<pid>, files unlinked after module
+// creation). glslc's exit status AND captured stderr are checked — any
+// compile error fails initWindow before a frame is ever drawn (no mid-game
+// first-use failure, mirroring glBackend's compile-at-init gate). Sources
+// resolve via /proc/self/exe like the fonts.
+// MVP TRANSFORM = push-constant UNIFORM BLOCK (mat4, vertex stage), recorded
+// PER DRAW via vkCmdPushConstants — the exact analog of GL's per-draw
+// glUniformMatrix4fv(uMVP). A UBO+dynamic-offset scheme was rejected:
+// engine draws are RECORDED at call time between beginFrame/endFrame, so
+// mid-frame setTransform changes (ship then bullet) must reach each draw
+// individually; per-draw dynamic offsets would force a descriptor rebind
+// per draw. Composition (presentMVP_): M = rotate-about-own-origin THEN
+// translate (D2 rotator placement, m19 GL/VK-only semantics); P maps
+// logical client space onto NDC. Vulkan NDC is y-DOWN already, so P has NO
+// y-flip (GL's b=-2*scale/fbH becomes +2*scale/fbH here) — same logical
+// geometry renders to the same pixels as GL.
+// RENDER-PASS LIFETIME DECISION: pipelines bind to THE render pass object,
+// so the pass now lives for the BACKEND'S LIFE — destroySwapchainFramebuffers_
+// no longer destroys it (framebuffers only); shutdown() does. Re-bootstraps
+// rebuild framebuffers ONLY; pipelines survive untouched (verified live:
+// resize soak with draws bound every frame). The defensive format-change
+// branch (never taken on X11 WSI) destroys+recreates pipelines together
+// with the pass.
+// DRAW RESOURCES: one host-visible coherent VERTEX SCRATCH BUFFER per
+// in-flight frame slot (4 MB, bump-allocated per draw, reset each preamble)
+// replaces GL's per-draw glBufferData STREAM_DRAW. Textures: device-local
+// images uploaded via staging + one-shot command buffer, one shared linear/
+// clamp-to-edge sampler, one combined-image-sampler descriptor set per
+// texture from a pool sized 256 sets/samplers. channels==3 uploads expand
+// to RGBA8 on VK (RGB888 images are format-minefield; content opaque).
+// FRAME SPLIT (was recordFrameCommands_): beginFrame records the PREAMBLE
+// (BeginRenderPass + viewport + latched scissor + in-pass QA hook) and
+// LEAVES THE COMMAND BUFFER OPEN; engine draws record into it; endFrame
+// records the POSTAMBLE (EndRenderPass + after-pass QA hook + End) and
+// submits. Hook ordering relative to the pass is unchanged from task 40.
+//
 // QA HOOKS (task-40 scissor proof only; NULL by default, zero cost):
 //   qaInRenderPassHook(cb,imageIndex,image,ud)    runs INSIDE the render
 //                    pass, after the scissor is applied;
@@ -173,7 +233,12 @@
 #include<stdio.h>
 #include<string.h>
 #include<unistd.h>        // readlink/ssize_t (pass-1 font path resolution)
+#include<sys/stat.h>      // mkdir (task-41 shader temp dir)
+#include<sys/wait.h>      // WEXITSTATUS (glslc exit status)
+#include<errno.h>
+#include<math.h>          // cosf/sinf/sqrtf (MVP composition, SC8 quads)
 #include<vector>
+#include<map>
 
 #include<vulkan/vulkan.h> // vendor/vulkan (pin 1:1.4.357.0-1 == installed loader)
 #include<GLFW/glfw3.h>    // system glfw3 3.5.1 — pass 0 queries
@@ -236,6 +301,15 @@ class VKBackend : public RenderingEngine
         canonicalWidth_(0),canonicalHeight_(0),
         commandPool(VK_NULL_HANDLE),
         renderPass(VK_NULL_HANDLE),
+        linePipeline(VK_NULL_HANDLE),
+        triPipeline(VK_NULL_HANDLE),
+        outlinePipeline(VK_NULL_HANDLE),
+        texPipeline(VK_NULL_HANDLE),
+        colorPipelineLayout(VK_NULL_HANDLE),
+        texPipelineLayout(VK_NULL_HANDLE),
+        descriptorPool(VK_NULL_HANDLE),
+        shaderModulesLoaded_(0),
+        shadersCompiledAtInit_(false),
         frameCount_(0),
         rebootstrapCount_(0),
         stallSkipCount_(0),
@@ -252,6 +326,17 @@ class VKBackend : public RenderingEngine
         renderPassFormat_(VK_FORMAT_UNDEFINED),
         scissorActive_(false),
         scissorRect_{0,0,0,0},
+        primVs_(VK_NULL_HANDLE),
+        primFs_(VK_NULL_HANDLE),
+        texVs_(VK_NULL_HANDLE),
+        texFs_(VK_NULL_HANDLE),
+        texSetLayout_(VK_NULL_HANDLE),
+        sharedSampler_(VK_NULL_HANDLE),
+        nextTextureId_(1),
+        tx_(0.0f),ty_(0.0f),angle_(0.0f),
+        presentScale_(1.0f),
+        presentOffX_(0),presentOffY_(0),
+        passOpen_(false),
         acquiredImageIndex_(0),
         currentFrame_(0),
         frameAcquired_(false),
@@ -260,15 +345,20 @@ class VKBackend : public RenderingEngine
         swapchainTransferSrcSupported_(false),
         consecutiveStallCount_(0)
        {deviceName_[0]='\0';
+       shaderSpvDir_[0]='\0';
        for (int i=0;i<4;++i)
         {fontInfo_[i]=NULL;fontData_[i]=NULL;
          fontDataLen_[i]=0;fontScale_[i]=0.0f;maxAsciiAdvance_[i]=0.0f;
         }
-       for (int i=0;i<kMaxFramesInFlight;++i)
-        {commandBuffers_[i]=VK_NULL_HANDLE;
-         inFlightFences_[i]=VK_NULL_HANDLE;
-         imageAvailableSemaphores_[i]=VK_NULL_HANDLE;
-        }
+        for (int i=0;i<kMaxFramesInFlight;++i)
+         {commandBuffers_[i]=VK_NULL_HANDLE;
+          inFlightFences_[i]=VK_NULL_HANDLE;
+          imageAvailableSemaphores_[i]=VK_NULL_HANDLE;
+          vertBuf_[i]=VK_NULL_HANDLE;
+          vertMem_[i]=VK_NULL_HANDLE;
+          vertMapped_[i]=NULL;
+          vertUsed_[i]=0;
+         }
        s_instance=this;   // debug callback routes here (exactly one engine)
       }
 
@@ -605,6 +695,10 @@ class VKBackend : public RenderingEngine
         }
 
        // ---- logical device: VK_KHR_swapchain iff surface-backed --------
+       // fillModeNonSolid: required by the outline pipeline's
+       // VK_POLYGON_MODE_LINE (VUID-01507); universal on real GPUs.
+       VkPhysicalDeviceFeatures feats{};
+       feats.fillModeNonSolid=VK_TRUE;
        float prio=1.0f;
        VkDeviceQueueCreateInfo qci[2]{};
        uint32_t nqci=1;
@@ -620,9 +714,10 @@ class VKBackend : public RenderingEngine
          nqci=2;
         }
        const char* swapchainExt=VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-       VkDeviceCreateInfo dci{};
-       dci.sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-       dci.queueCreateInfoCount=nqci;
+        VkDeviceCreateInfo dci{};
+        dci.sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        dci.pEnabledFeatures=&feats;
+        dci.queueCreateInfoCount=nqci;
        dci.pQueueCreateInfos=qci;
        if (withSwapchain)
         {dci.enabledExtensionCount=1;
@@ -657,8 +752,16 @@ class VKBackend : public RenderingEngine
     //   pass 2b createSwapchain_: swapchain + per-image views
     // ------------------------------------------------------------------
     virtual bool initWindow(const char* title) override
-      {if (!initInstance_(true))
+      {// Task 41: shaders compile FIRST — a glslc error must fail init
+       // before any other resource exists (no mid-game first-use failure).
+       if (!compileShadersAtInit_())
+         {shutdown();
+          return false;
+         }
+       if (!initInstance_(true))
+        {shutdown();
          return false;
+        }
        if (!loadFonts_())
         {shutdown();
          return false;
@@ -679,6 +782,14 @@ class VKBackend : public RenderingEngine
          {shutdown();
           return false;
          }
+        // Task 41: pipelines bind to THE render pass object created inside
+        // createSwapchain_'s commit point; they are built once here and
+        // survive re-bootstraps (the pass does too — see
+        // destroySwapchainFramebuffers_).
+        if (!initPipelines_())
+         {shutdown();
+          return false;
+         }
         return true;
       }
 
@@ -695,9 +806,15 @@ class VKBackend : public RenderingEngine
         // beyond queue execution), then free device-level objects BEFORE
         // the device.
         drainPresentEngine_();
+        destroyTextures_();
         destroySwapchainFramebuffers_();   // task 40: BEFORE views (fbs
-                                           // reference views); render pass
-                                           // dies with them, before swapchain
+                                           // reference views); the render
+                                           // pass outlives re-bootstraps and
+                                           // dies in destroyDrawResources_
+        destroyDrawResources_();   // task 41: vert scratch + pipelines +
+                                   // layouts + pool + sampler + shader
+                                   // modules + THE render pass (pipelines
+                                   // reference it)
         for (size_t i=0;i<swapchainImageViews_.size();++i)
           vkDestroyImageView(device,swapchainImageViews_[i],NULL);
         swapchainImageViews_.clear();
@@ -833,7 +950,10 @@ class VKBackend : public RenderingEngine
          {handleFatalStall_("acquire failed");
           return;
          }
-        if (!recordFrameCommands_(acquiredImageIndex_))
+        // Task 41: only the PREAMBLE is recorded here (BeginRenderPass +
+        // viewport + latched scissor + in-pass hook); the command buffer
+        // stays OPEN so engine draws record into it between begin/end.
+        if (!recordFramePreamble_(acquiredImageIndex_))
           return;
         frameAcquired_=true;
       }
@@ -841,6 +961,14 @@ class VKBackend : public RenderingEngine
     virtual void endFrame() override
       {if (!frameAcquired_||sessionDead_||shutdownDone_)
          return;
+       // Task 41: close the open render pass (after-pass hook rides here,
+       // image back in PRESENT_SRC_KHR) before submitting.
+       if (!recordFramePostamble_())
+        {fprintf(stderr,"vkBackend: postamble record failed — frame "
+                        "skipped\n");
+         frameAcquired_=false;
+         return;
+        }
        // Arm the fence JUST before submit (not at wait time): a skipped
        // frame must leave the fence signaled so the next beginFrame's wait
        // succeeds instantly instead of false-stalling.
@@ -949,26 +1077,97 @@ class VKBackend : public RenderingEngine
 
     virtual void drawLine(float x1,float y1,float x2,float y2,
                           float r,float g,float b,float width) override
-      {(void)x1;(void)y1;(void)x2;(void)y2;(void)r;(void)g;(void)b;(void)width;
-       notImplemented();
+      {// SC8, glBackend verbatim: width<2 = 2-vert LINE_LIST; width>1 =
+       // filled quad expanded perpendicular in LOGICAL space (thickLineQuad
+       // port) drawn through triPipeline.
+       if (!passOpen_)
+         return;
+       float verts[30];
+       int count;
+       VkPipeline pipe;
+       if (width<2.0f)
+        {makeVert(verts,0,x1,y1,r,g,b);
+         makeVert(verts,5,x2,y2,r,g,b);
+         count=2;
+         pipe=linePipeline;
+        }
+       else
+        {thickLineQuad(verts,x1,y1,x2,y2,width*0.5f,r,g,b);
+         count=6;
+         pipe=triPipeline;
+        }
+       drawColorPrims_(pipe,verts,count);
       }
 
     virtual void drawPolygon(const float* verts,int count,
                              float r,float g,float b,bool fill) override
-      {(void)verts;(void)count;(void)r;(void)g;(void)b;(void)fill;
-       notImplemented();
+      {if (!passOpen_||!verts||count<2)
+         return;
+       if (!fill)
+        {// GL_LINE_LOOP emulation: VK has no loop topology — emit the
+         // closing segment explicitly (n+1 verts).
+         float line[5*261];
+         int n=count<260?count:260;
+         for (int i=0;i<n;++i)
+           makeVert(line,5*i,verts[2*i],verts[2*i+1],r,g,b);
+         makeVert(line,5*n,verts[0],verts[1],r,g,b);
+         drawColorPrims_(outlinePipeline,line,n+1);
+         return;
+        }
+       // Ear-clipped triangles (glBackend port incl. the fan fallback).
+       float pairs[2*1536];
+       int ntri=earClip(verts,count,pairs);
+       if (ntri<1)
+        {float fan[5*256];
+         int n=0;
+         for (int i=1;i+1<count&&i<255;++i)
+          {makeVert(fan,5*n++,verts[0],verts[1],r,g,b);
+           makeVert(fan,5*n++,verts[2*i],verts[2*i+1],r,g,b);
+           makeVert(fan,5*n++,verts[2*i+2],verts[2*i+3],r,g,b);
+          }
+         drawColorPrims_(triPipeline,fan,n);
+         return;
+        }
+       float out[5*1536];
+       for (int i=0;i<ntri*3;++i)
+         makeVert(out,5*i,pairs[2*i],pairs[2*i+1],r,g,b);
+       drawColorPrims_(triPipeline,out,ntri*3);
       }
 
     virtual void drawRect(float x,float y,float w,float h,
                           float r,float g,float b,bool fill) override
-      {(void)x;(void)y;(void)w;(void)h;(void)r;(void)g;(void)b;(void)fill;
-       notImplemented();
+      {if (!passOpen_)
+         return;
+       float quad[10]={x,y, x+w,y, x+w,y+h, x,y+h};
+       if (fill)
+        {static const int idx[6]={0,1,2,0,2,3};
+         float tris[30];
+         for (int i=0;i<6;++i)
+           makeVert(tris,5*i,quad[2*idx[i]],quad[2*idx[i]+1],r,g,b);
+         drawColorPrims_(triPipeline,tris,6);
+        }
+       else
+         drawPolygon(quad,4,r,g,b,false);
       }
 
     virtual void drawTriangles(const float* verts,int count,
                                TextureId tex) override
-      {(void)verts;(void)count;(void)tex;
-       notImplemented();
+      {// D9 menu pair: interleaved [x y u v r g b]*count, WINDOW-space
+       // coords — the SOLE window-space method (v6.1 rule), so the MVP here
+       // is windowMVP_ (pixel coords -> NDC). The 7-float engine contract
+       // repacks onto the pipeline's clean 8-float stride with alpha=1
+       // (glBackend's overrun-alpha effective behavior; see initPipelines_).
+       auto it=textures_.find(tex);
+       if (!passOpen_||!verts||count<3||it==textures_.end())
+         return;
+       std::vector<float> packed((size_t)count*8);
+       for (int i=0;i<count;++i)
+        {const float* s=verts+(size_t)i*7;
+         float* d=&packed[(size_t)i*8];
+         d[0]=s[0];d[1]=s[1];d[2]=s[2];d[3]=s[3];
+         d[4]=s[4];d[5]=s[5];d[6]=s[6];d[7]=1.0f;
+        }
+       drawTexPrims_(it->second.set,packed.data(),count,windowMVP_());
       }
 
     // ------------------------------------------------------------------
@@ -1031,43 +1230,237 @@ class VKBackend : public RenderingEngine
     // ------------------------------------------------------------------
     virtual TextureId createTextureFromBitmap(const uint8_t* data,int w,
                                               int h,int channels) override
-      {(void)data;(void)w;(void)h;(void)channels;
-       notImplemented();
-       return 0;      // not reached
+      {// D13: the ONE texture entry point (xbmDecode output; channels
+       // 1/3/4). VK path: staging upload -> device-local image -> view +
+       // shared sampler + descriptor set. channels==3 expands to RGBA8
+       // (documented divergence; content opaque).
+       if (!device||!data||w<=0||h<=0||(channels!=1&&channels!=3&&channels!=4))
+         return 0;
+       VkFormat fmt=channels==1?VK_FORMAT_R8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
+       size_t texelBytes=(size_t)w*h*(channels==1?1u:4u);
+       // ---- staging buffer (host-visible) -----------------------------
+       VkBufferCreateInfo bci{};
+       bci.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+       bci.size=texelBytes;
+       bci.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+       bci.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
+       VkBuffer staging=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateBuffer(device,&bci,NULL,&staging),
+                    "vkCreateBuffer(staging)"))
+         return 0;
+       VkMemoryRequirements mr;
+       vkGetBufferMemoryRequirements(device,staging,&mr);
+       uint32_t memType=findMemoryType_(mr.memoryTypeBits,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                       |VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+       VkMemoryAllocateInfo smai{};
+       smai.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+       smai.allocationSize=mr.size;
+       smai.memoryTypeIndex=memType;
+       VkDeviceMemory stagingMem=VK_NULL_HANDLE;
+       void* mapped=NULL;
+       if (memType==UINT32_MAX
+           ||!vkCheck(vkAllocateMemory(device,&smai,NULL,&stagingMem),
+                      "vkAllocateMemory(staging)")
+           ||!vkCheck(vkBindBufferMemory(device,staging,stagingMem,0),
+                    "vkBindBufferMemory(staging)")
+           ||!vkCheck(vkMapMemory(device,stagingMem,0,texelBytes,0,&mapped),
+                    "vkMapMemory(staging)"))
+        {if (mapped) vkUnmapMemory(device,stagingMem);
+         if (stagingMem!=VK_NULL_HANDLE)
+           vkFreeMemory(device,stagingMem,NULL);
+         vkDestroyBuffer(device,staging,NULL);
+         return 0;
+        }
+       if (channels==3)
+        {// expand RGB888 -> RGBA888 row by row
+         uint8_t* dst=(uint8_t*)mapped;
+         for (int y=0;y<h;++y)
+          {const uint8_t* src=data+(size_t)y*w*3;
+           uint8_t* drow=dst+(size_t)y*w*4;
+           for (int x=0;x<w;++x)
+            {drow[x*4+0]=src[x*3+0];
+             drow[x*4+1]=src[x*3+1];
+             drow[x*4+2]=src[x*3+2];
+             drow[x*4+3]=255;
+            }
+          }
+        }
+       else
+         memcpy(mapped,data,texelBytes);
+       vkUnmapMemory(device,stagingMem);
+       // ---- device-local image ----------------------------------------
+       VkImageCreateInfo ici{};
+       ici.sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+       ici.imageType=VK_IMAGE_TYPE_2D;
+       ici.format=fmt;
+       ici.extent.width=(uint32_t)w;
+       ici.extent.height=(uint32_t)h;
+       ici.extent.depth=1;
+       ici.mipLevels=1;
+       ici.arrayLayers=1;
+       ici.samples=VK_SAMPLE_COUNT_1_BIT;
+       ici.tiling=VK_IMAGE_TILING_OPTIMAL;
+       ici.usage=VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT;
+       ici.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
+       ici.initialLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+       VkImage image=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateImage(device,&ici,NULL,&image),
+                    "vkCreateImage"))
+        {vkDestroyBuffer(device,staging,NULL);
+         vkFreeMemory(device,stagingMem,NULL);
+         return 0;
+        }
+       vkGetImageMemoryRequirements(device,image,&mr);
+       memType=findMemoryType_(mr.memoryTypeBits,
+                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+       if (memType==UINT32_MAX)
+         memType=findMemoryType_(mr.memoryTypeBits,
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                 |VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+       VkDeviceMemory imageMem=VK_NULL_HANDLE;
+       VkMemoryAllocateInfo mai{};
+       mai.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+       mai.allocationSize=mr.size;
+       mai.memoryTypeIndex=memType;
+       if (memType==UINT32_MAX
+           ||!vkCheck(vkAllocateMemory(device,&mai,NULL,&imageMem),
+                      "vkAllocateMemory(texture)")
+           ||!vkCheck(vkBindImageMemory(device,image,imageMem,0),
+                      "vkBindImageMemory"))
+        {if (imageMem!=VK_NULL_HANDLE)
+           vkFreeMemory(device,imageMem,NULL);
+         vkDestroyImage(device,image,NULL);
+         vkDestroyBuffer(device,staging,NULL);
+         vkFreeMemory(device,stagingMem,NULL);
+         return 0;
+        }
+       // ---- one-shot copy + layout transitions -------------------------
+       bool uploaded=false;
+       if (!passOpen_)     // never touch the frame command buffers here
+        {uploaded=uploadTexture_(staging,image,(uint32_t)w,(uint32_t)h);
+        }
+       vkDestroyBuffer(device,staging,NULL);
+       vkFreeMemory(device,stagingMem,NULL);
+       if (!uploaded)
+        {vkFreeMemory(device,imageMem,NULL);
+         vkDestroyImage(device,image,NULL);
+         fprintf(stderr,"vkBackend: texture upload failed\n");
+         return 0;
+        }
+       // ---- view + sampler set ----------------------------------------
+       VkImageViewCreateInfo vci{};
+       vci.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+       vci.image=image;
+       vci.viewType=VK_IMAGE_VIEW_TYPE_2D;
+       vci.format=fmt;
+       vci.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+       vci.subresourceRange.levelCount=1;
+       vci.subresourceRange.layerCount=1;
+       VkImageView view=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateImageView(device,&vci,NULL,&view),
+                    "vkCreateImageView(texture)"))
+        {vkFreeMemory(device,imageMem,NULL);
+         vkDestroyImage(device,image,NULL);
+         return 0;
+        }
+       VkDescriptorSetLayout layouts[]={texSetLayout_};
+       VkDescriptorSetAllocateInfo dai{};
+       dai.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+       dai.descriptorPool=descriptorPool;
+       dai.descriptorSetCount=1;
+       dai.pSetLayouts=layouts;
+       VkDescriptorSet set=VK_NULL_HANDLE;
+       if (!vkCheck(vkAllocateDescriptorSets(device,&dai,&set),
+                    "vkAllocateDescriptorSets(texture)"))
+        {vkDestroyImageView(device,view,NULL);
+         vkFreeMemory(device,imageMem,NULL);
+         vkDestroyImage(device,image,NULL);
+         return 0;
+        }
+       VkDescriptorImageInfo ii{};
+       ii.sampler=sharedSampler_;
+       ii.imageView=view;
+       ii.imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+       VkWriteDescriptorSet wr{};
+       wr.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+       wr.dstSet=set;
+       wr.dstBinding=0;
+       wr.descriptorCount=1;
+       wr.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+       wr.pImageInfo=&ii;
+       vkUpdateDescriptorSets(device,1,&wr,0,NULL);
+       TextureId id=nextTextureId_++;
+       TexEntry e;
+       e.image=image;
+       e.mem=imageMem;
+       e.view=view;
+       e.set=set;
+       textures_[id]=e;
+       return id;
       }
 
     virtual void drawTexture(TextureId tex,float x,float y,float w,float h,
                              float alpha) override
-      {(void)tex;(void)x;(void)y;(void)w;(void)h;(void)alpha;
-       notImplemented();
+      {// Textured quad, alpha-blended (D8 canonical order governs call
+       // order). Tint=(1,1,1,alpha): through FragColor = texture*vColor this
+       // reproduces GL's vec4(c.rgb,c.a*uAlpha) exactly.
+       auto it=textures_.find(tex);
+       if (!passOpen_||it==textures_.end())
+         return;
+       float verts[48];
+       static const int idx[6]={0,1,2,0,2,3};
+       const float fx[4]={x,x+w,x+w,x};
+       const float fy[4]={y,y,y+h,y+h};
+       const float fu[4]={0.0f,1.0f,1.0f,0.0f};
+       const float fv[4]={0.0f,0.0f,1.0f,1.0f};
+       for (int i=0;i<6;++i)
+        {float* v=verts+8*i;
+         v[0]=fx[idx[i]];v[1]=fy[idx[i]];
+         v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+         v[4]=1.0f;v[5]=1.0f;v[6]=1.0f;
+         v[7]=alpha;            // tint = (1,1,1,uAlpha)
+        }
+       drawTexPrims_(it->second.set,verts,6,presentMVP_());
       }
 
     virtual void drawTextureMasked(TextureId content,TextureId mask,
                                    float x,float y,float w,float h) override
       {(void)content;(void)mask;(void)x;(void)y;(void)w;(void)h;
-       notImplemented();
+       notImplemented();   // task 42: needs a 2-sampler frag variant of the
+                           // tex pipeline (pipeline slot exists; layout
+                           // grows a second COMBINED_IMAGE_SAMPLER binding)
       }
 
     virtual void deleteTexture(TextureId tex) override
-      {(void)tex;    // benign: nothing can be created yet (create aborts)
+      {auto it=textures_.find(tex);
+       if (it==textures_.end()||device==VK_NULL_HANDLE)
+         return;
+       vkDestroyImageView(device,it->second.view,NULL);
+       vkFreeMemory(device,it->second.mem,NULL);
+       vkDestroyImage(device,it->second.image,NULL);
+       textures_.erase(it);   // descriptor set returns with pool reset
       }
 
     virtual TextureId createTextureFromRGBA32(const uint8_t* pixels,int w,
                                               int h) override
-      {(void)pixels;(void)w;(void)h;
-       notImplemented();
-       return 0;      // not reached
+      {// D9 menu pair: Dear ImGui font atlas / UI textures (RGBA8888).
+       return createTextureFromBitmap(pixels,w,h,4);
       }
 
     // ------------------------------------------------------------------
     // (7) Transform
     // ------------------------------------------------------------------
     virtual void setTransform(float tx,float ty,float angleRadians) override
-      {(void)tx;(void)ty;(void)angleRadians;   // TODO(task 42): push constants
+      {// GL/VK-only semantics (m19): model transform applied BEFORE the
+       // present transform; rotation is about the object's OWN origin, then
+       // translation (D2 rotator placement). Consumed per-draw by
+       // presentMVP_ via the push-constant uniform block.
+       tx_=tx;ty_=ty;angle_=angleRadians;
       }
 
     virtual void resetTransform() override
-      {// TODO(task 42)
+      {tx_=0.0f;ty_=0.0f;angle_=0.0f;   // identity (glBackend verbatim)
       }
 
     // ------------------------------------------------------------------
@@ -1113,6 +1506,16 @@ class VKBackend : public RenderingEngine
     VkRenderPass renderPass;             // task 40: ONE pass, color attachment
                                          // = swapchain image, finalLayout
                                          // PRESENT_SRC_KHR, loadOp CLEAR black
+    VkPipeline linePipeline;             // task 41: LINE_LIST, thin lines
+    VkPipeline triPipeline;              // task 41: TRIANGLE_LIST+FILL (thick
+                                         // lines, filled polys/rects)
+    VkPipeline outlinePipeline;          // task 41: LINE_LIST+POLYGON_MODE_LINE
+    VkPipeline texPipeline;              // task 41: textured quads/triangles
+    VkPipelineLayout colorPipelineLayout;// push-constant uMVP only
+    VkPipelineLayout texPipelineLayout;  // push-constant uMVP + sampler set 0
+    VkDescriptorPool descriptorPool;     // combined-image-sampler sets
+    unsigned shaderModulesLoaded_;       // task-41 init evidence (0..4)
+    bool shadersCompiledAtInit_;         // glslc ran clean at initWindow
     unsigned frameCount_;                // completed submit+present cycles
     unsigned rebootstrapCount_;          // swapchain rebuilds performed
     unsigned stallSkipCount_;            // recovered stalls (skipped frames)
@@ -1141,6 +1544,36 @@ class VKBackend : public RenderingEngine
     VkFormat renderPassFormat_;          // format renderPass was built for
     bool scissorActive_;                 // setScissorRect state (D7/D8)
     int scissorRect_[4];                 // LOGICAL CLIENT {x,y,w,h}
+
+    // Task-41 draw resources. Shader modules hold the init-compiled SPIR-V;
+    // pipelines/layouts/pool are public above. The vertex scratch buffers
+    // are per in-flight frame slot (device-level like the sync objects).
+    VkShaderModule primVs_,primFs_,texVs_,texFs_;
+    char shaderSpvDir_[96];              // init-time glslc output (consumed
+                                         // by createShaderModules_)
+    VkDescriptorSetLayout texSetLayout_;
+    VkSampler sharedSampler_;            // linear + clamp-to-edge (GL params)
+    struct TexEntry
+      {VkImage image;
+       VkDeviceMemory mem;
+       VkImageView view;
+       VkDescriptorSet set;
+      };
+    std::map<TextureId,TexEntry> textures_;
+    TextureId nextTextureId_;
+    static constexpr VkDeviceSize kVertBufBytes=(VkDeviceSize)4<<20;
+    VkBuffer vertBuf_[kMaxFramesInFlight];
+    VkDeviceMemory vertMem_[kMaxFramesInFlight];
+    void* vertMapped_[kMaxFramesInFlight];
+    VkDeviceSize vertUsed_[kMaxFramesInFlight];
+    float tx_,ty_,angle_;                // setTransform state (m19)
+    float presentScale_;                 // present transform (identity until
+    int presentOffX_,presentOffY_;       // D17.4a letterbox)
+    bool passOpen_;                      // command buffer open between
+                                         // beginFrame preamble/endFrame
+                                         // postamble; draws record only then
+    float mvp_[16];                      // presentMVP_ scratch
+    float winMvp_[16];                   // windowMVP_ scratch
 
     // Task-39 frame-sync objects (device-level; independent of the
     // swapchain — re-bootstrap never recreates them). EXCEPTION:
@@ -1673,15 +2106,23 @@ class VKBackend : public RenderingEngine
     // ------------------------------------------------------------------
     bool ensureRenderPassAndFramebuffers_()
       {if (renderPass==VK_NULL_HANDLE)
-        {if (!createRenderPass_())
-           return false;
-        }
-       else if (renderPassFormat_!=swapchainFormat_)
-        {vkDestroyRenderPass(device,renderPass,NULL);
-         renderPass=VK_NULL_HANDLE;
-         if (!createRenderPass_())
-           return false;
-        }
+         {if (!createRenderPass_())
+            return false;
+         }
+        else if (renderPassFormat_!=swapchainFormat_)
+         {// Defensive only (X11 WSI pins the format): a new pass invalidates
+          // every pipeline built against the old one, so they are rebuilt
+          // together. Safe point: re-bootstrap drained the device.
+          vkDestroyRenderPass(device,renderPass,NULL);
+          renderPass=VK_NULL_HANDLE;
+          if (!createRenderPass_())
+            return false;
+          if (linePipeline!=VK_NULL_HANDLE)
+           {destroyPipelines_();
+            if (!initPipelines_())
+              return false;
+           }
+         }
        swapchainFramebuffers_.resize(swapchainImageViews_.size(),
                                      VK_NULL_HANDLE);
        for (size_t i=0;i<swapchainImageViews_.size();++i)
@@ -1747,11 +2188,11 @@ class VKBackend : public RenderingEngine
          if (swapchainFramebuffers_[i]!=VK_NULL_HANDLE)
            vkDestroyFramebuffer(device,swapchainFramebuffers_[i],NULL);
        swapchainFramebuffers_.clear();
-       if (renderPass!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
-        {vkDestroyRenderPass(device,renderPass,NULL);
-         renderPass=VK_NULL_HANDLE;
-         renderPassFormat_=VK_FORMAT_UNDEFINED;
-        }
+       // Task 41: the RENDER PASS IS DELIBERATELY NOT DESTROYED HERE. It
+       // used to die with the framebuffers on every re-bootstrap, but
+       // pipelines bind to THE pass object — recreating it would orphan
+       // them. The pass now lives for the backend's lifetime (X11 WSI never
+       // changes format); shutdown's destroyDrawResources_ retires it.
       }
 
     // D7/v6.1 seam: logical client rect -> framebuffer-space VkRect2D.
@@ -1773,10 +2214,12 @@ class VKBackend : public RenderingEngine
        return r;
       }
 
-    bool recordFrameCommands_(uint32_t imageIndex)
+    bool recordFramePreamble_(uint32_t imageIndex)
       {// The load-op CLEAR performs the black clear; the pass's implicit
        // layout transitions (UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL ->
-       // PRESENT_SRC_KHR) replace any manual barriers.
+       // PRESENT_SRC_KHR) replace any manual barriers. Task 41: this leaves
+       // the command buffer OPEN between Begin/EndRenderPass so engine
+       // draws record into it; endFrame's postamble closes it.
        VkCommandBuffer cb=commandBuffers_[currentFrame_];
        if (!vkCheck(vkResetCommandBuffer(cb,0),"vkResetCommandBuffer"))
          return false;
@@ -1801,23 +2244,776 @@ class VKBackend : public RenderingEngine
        rp.clearValueCount=1;
        rp.pClearValues=&clearBlack;
        vkCmdBeginRenderPass(cb,&rp,VK_SUBPASS_CONTENTS_INLINE);
-       // Dynamic scissor (task 40): full extent unless setScissorRect
-       // overrode it. Dynamic state needs no pipeline; it latches here for
-       // task 41's draws inside this same pass.
+       // Dynamic viewport + scissor: full extent unless setScissorRect
+       // overrode it. The pipelines declare VK_DYNAMIC_STATE_VIEWPORT|
+       // SCISSOR, so these latched commands drive every draw recorded
+       // before the postamble.
+       VkViewport vp{};
+       vp.x=0.0f;vp.y=0.0f;
+       vp.width=(float)swapchainExtent_.width;
+       vp.height=(float)swapchainExtent_.height;
+       vp.minDepth=0.0f;vp.maxDepth=1.0f;
+       vkCmdSetViewport(cb,0,1,&vp);
        VkRect2D sci=applyPresentTransformToScissor_();
        vkCmdSetScissor(cb,0,1,&sci);
+       vertUsed_[currentFrame_]=0;   // fresh scratch budget per frame
+       passOpen_=true;
        if (qaInRenderPassHook)
          qaInRenderPassHook(cb,imageIndex,
                             swapchainImages_[imageIndex],
                             qaInRenderPassHookUserData);
-       // [task 41 PIPELINE SLOT] graphics pipelines bind here:
-       // vkCmdBindPipeline + draw commands between Begin/EndRenderPass.
+       return true;
+      }
+
+    bool recordFramePostamble_()
+      {VkCommandBuffer cb=commandBuffers_[currentFrame_];
+       passOpen_=false;
        vkCmdEndRenderPass(cb);
        if (qaAfterRenderPassHook)
-         qaAfterRenderPassHook(cb,imageIndex,
-                               swapchainImages_[imageIndex],
+         qaAfterRenderPassHook(cb,acquiredImageIndex_,
+                               swapchainImages_[acquiredImageIndex_],
                                qaAfterRenderPassHookUserData);
        return vkCheck(vkEndCommandBuffer(cb),"vkEndCommandBuffer");
+      }
+
+    // ------------------------------------------------------------------
+    // Task 41: init-time GLSL -> SPIR-V compilation. Sources live in
+    // utilities/rendering/vkShaders/ (resolved /proc/self/exe-relative like
+    // the fonts); glslc compiles each into a per-process temp dir and BOTH
+    // its exit status and captured stderr are checked — a compile error
+    // fails initWindow here, never mid-game. The .spv files stay until
+    // createShaderModules_ (module creation needs the device) consume them.
+    // ------------------------------------------------------------------
+    bool compileShadersAtInit_()
+      {if (shadersCompiledAtInit_)
+         return true;
+       static const char* const names[4]={"prim.vert","prim.frag",
+                                          "tex.vert","tex.frag"};
+       char root[4096];
+       ssize_t n=readlink("/proc/self/exe",root,sizeof root-1);
+       if (n<=0)
+         {fprintf(stderr,"vkBackend: cannot resolve /proc/self/exe for "
+                         "shader sources\n");
+          return false;
+         }
+       root[n]='\0';
+       char* slash=strrchr(root,'/');
+       if (slash)
+         *slash='\0';
+       snprintf(shaderSpvDir_,sizeof shaderSpvDir_,"/tmp/xast-vkspv-%d",
+                (int)getpid());
+       if (mkdir(shaderSpvDir_,0700)!=0&&errno!=EEXIST)
+         {fprintf(stderr,"vkBackend: cannot create shader temp dir %s\n",
+                  shaderSpvDir_);
+          return false;
+         }
+       bool ok=true;
+       for (int i=0;i<4&&ok;++i)
+        {char srcPath[4600],spvPath[200];
+         snprintf(srcPath,sizeof srcPath,
+                  "%s/utilities/rendering/vkShaders/%s",root,names[i]);
+         snprintf(spvPath,sizeof spvPath,"%s/%d.spv",shaderSpvDir_,i);
+         if (!glslcCompile_(srcPath,spvPath))
+           ok=false;
+        }
+       if (!ok)
+        {fprintf(stderr,"vkBackend: shader compilation failed at init — "
+                        "refusing to start (no mid-game first-use "
+                        "failure)\n");
+         return false;
+        }
+       shadersCompiledAtInit_=true;
+       printf("vkBackend: 4 shaders compiled from source at init (glslc "
+              "clean)\n");
+       return true;
+      }
+
+    bool createShaderModules_()
+      {// Consumes the init-time .spv files (device now exists); unlinks
+       // them once the modules hold the code.
+       if (primVs_!=VK_NULL_HANDLE)
+         return true;
+       if (!shadersCompiledAtInit_)
+        {fprintf(stderr,"vkBackend: no compiled shaders to load\n");
+         return false;
+        }
+       VkShaderModule* slots[4]={&primVs_,&primFs_,&texVs_,&texFs_};
+       for (int i=0;i<4;++i)
+        {char spvPath[200];
+         snprintf(spvPath,sizeof spvPath,"%s/%d.spv",shaderSpvDir_,i);
+         if (!createShaderModuleFromSpv_(spvPath,slots[i]))
+           return false;
+         ++shaderModulesLoaded_;
+         unlink(spvPath);
+        }
+       rmdir(shaderSpvDir_);
+       shaderSpvDir_[0]='\0';
+       printf("vkBackend: %u shader module(s) loaded\n",
+              shaderModulesLoaded_);
+       return true;
+      }
+
+    static bool glslcCompile_(const char* srcPath,const char* spvPath)
+      {char cmd[9600];
+       snprintf(cmd,sizeof cmd,"glslc -o '%s' '%s' 2>&1",spvPath,srcPath);
+       FILE* p=popen(cmd,"r");
+       if (!p)
+        {fprintf(stderr,"vkBackend: popen(glslc) failed — is glslc on "
+                        "PATH?\n");
+         return false;
+        }
+       char log[2048];
+       size_t got=fread(log,1,sizeof log-1,p);
+       log[got]='\0';
+       int st=pclose(p);
+       bool clean=(st!=-1)&&WIFEXITED(st)&&WEXITSTATUS(st)==0;
+       if (clean)
+        {if (got>0)
+           fprintf(stderr,"vkBackend: glslc %s: %.*s",srcPath,(int)got,log);
+         return true;
+        }
+       fprintf(stderr,"vkBackend: glslc FAILED on %s (exit %d):\n%.*s\n",
+               srcPath,
+               (st!=-1&&WIFEXITED(st))?WEXITSTATUS(st):-1,(int)got,log);
+       return false;
+      }
+
+    bool createShaderModuleFromSpv_(const char* path,VkShaderModule* out)
+      {FILE* f=fopen(path,"rb");
+       if (!f)
+        {fprintf(stderr,"vkBackend: cannot open compiled shader %s\n",path);
+         return false;
+        }
+       fseek(f,0,SEEK_END);
+       long len=ftell(f);
+       fseek(f,0,SEEK_SET);
+       if (len<=0||len%4!=0)
+        {fclose(f);
+         fprintf(stderr,"vkBackend: bad SPIR-V size %ld (%s)\n",len,path);
+         return false;
+        }
+       std::vector<uint32_t> code((size_t)len/4);
+       bool readOk=fread(code.data(),4,code.size(),f)==code.size();
+       fclose(f);
+       if (!readOk)
+        {fprintf(stderr,"vkBackend: short read on %s\n",path);
+         return false;
+        }
+       VkShaderModuleCreateInfo ci{};
+       ci.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+       ci.codeSize=code.size()*sizeof(uint32_t);
+       ci.pCode=code.data();
+       return vkCheck(vkCreateShaderModule(device,&ci,NULL,out),
+                      "vkCreateShaderModule");
+      }
+
+    // ------------------------------------------------------------------
+    // Task 41: pipelines + draw resources. All four pipelines bind THE
+    // task-40 render pass (public member) and share dynamic
+    // viewport+scissor state; they are created once at initWindow and
+    // survive re-bootstraps because the pass does too.
+    // ------------------------------------------------------------------
+    bool initPipelines_()
+      {if (linePipeline!=VK_NULL_HANDLE)
+         return true;
+       if (!createShaderModules_())
+         return false;
+       VkDescriptorSetLayoutBinding samp{};
+       samp.binding=0;
+       samp.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+       samp.descriptorCount=1;
+       samp.stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT;
+       VkDescriptorSetLayoutCreateInfo dli{};
+       dli.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+       dli.bindingCount=1;
+       dli.pBindings=&samp;
+       if (!vkCheck(vkCreateDescriptorSetLayout(device,&dli,NULL,
+                    &texSetLayout_),
+                    "vkCreateDescriptorSetLayout"))
+         return false;
+       // Pool sized for the textured path (one set per texture).
+       VkDescriptorPoolSize ps{};
+       ps.type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+       ps.descriptorCount=256;
+       VkDescriptorPoolCreateInfo dpi{};
+       dpi.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+       dpi.maxSets=256;
+       dpi.poolSizeCount=1;
+       dpi.pPoolSizes=&ps;
+       if (!vkCheck(vkCreateDescriptorPool(device,&dpi,NULL,
+                    &descriptorPool),
+                    "vkCreateDescriptorPool"))
+         return false;
+       // Shared sampler: glBackend's texture params verbatim (task-36
+       // defect-B state: LINEAR MIN+MAG, CLAMP_TO_EDGE).
+       VkSamplerCreateInfo smci{};
+       smci.sType=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+       smci.magFilter=VK_FILTER_LINEAR;
+       smci.minFilter=VK_FILTER_LINEAR;
+       smci.mipmapMode=VK_SAMPLER_MIPMAP_MODE_LINEAR;
+       smci.addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+       smci.addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+       smci.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+       smci.maxLod=0.0f;
+       if (!vkCheck(vkCreateSampler(device,&smci,NULL,&sharedSampler_),
+                    "vkCreateSampler"))
+         return false;
+       // uMVP rides a push-constant uniform block (per-draw recorded —
+       // see header comment for why not a UBO).
+       VkPushConstantRange pcr{};
+       pcr.offset=0;
+       pcr.size=(uint32_t)(sizeof(float)*16);
+       pcr.stageFlags=VK_SHADER_STAGE_VERTEX_BIT;
+       VkPipelineLayoutCreateInfo cli{};
+       cli.sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+       cli.pushConstantRangeCount=1;
+       cli.pPushConstantRanges=&pcr;
+       if (!vkCheck(vkCreatePipelineLayout(device,&cli,NULL,
+                    &colorPipelineLayout),
+                    "vkCreatePipelineLayout(color)"))
+         return false;
+       cli.setLayoutCount=1;
+       cli.pSetLayouts=&texSetLayout_;
+       if (!vkCheck(vkCreatePipelineLayout(device,&cli,NULL,
+                    &texPipelineLayout),
+                    "vkCreatePipelineLayout(tex)"))
+         return false;
+       // Vertex scratch: one host-visible coherent buffer per in-flight
+       // frame slot (GL's per-draw STREAM_DRAW equivalent).
+       for (int i=0;i<kMaxFramesInFlight;++i)
+        {VkBufferCreateInfo vbci{};
+         vbci.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+         vbci.size=kVertBufBytes;
+         vbci.usage=VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+         vbci.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
+         if (!vkCheck(vkCreateBuffer(device,&vbci,NULL,&vertBuf_[i]),
+                      "vkCreateBuffer(vertex-scratch)"))
+           return false;
+         VkMemoryRequirements mr;
+         vkGetBufferMemoryRequirements(device,vertBuf_[i],&mr);
+         uint32_t mt=findMemoryType_(mr.memoryTypeBits,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                      |VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+         VkMemoryAllocateInfo mai{};
+         mai.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+         mai.allocationSize=mr.size;
+         mai.memoryTypeIndex=mt;
+         if (mt==UINT32_MAX
+             ||!vkCheck(vkAllocateMemory(device,&mai,NULL,&vertMem_[i]),
+                        "vkAllocateMemory(vertex-scratch)")
+             ||!vkCheck(vkBindBufferMemory(device,vertBuf_[i],
+                        vertMem_[i],0),
+                        "vkBindBufferMemory(vertex-scratch)")
+             ||!vkCheck(vkMapMemory(device,vertMem_[i],0,kVertBufBytes,0,
+                        &vertMapped_[i]),
+                        "vkMapMemory(vertex-scratch)"))
+           return false;
+        }
+       // Vertex layouts: color prims = pos(2)+rgb(3) stride 20 (glBackend
+       // verbatim); textured = pos(2)+uv(2)+rgba(4) stride 32 — the
+       // ENGINE-facing drawTriangles contract stays 7 floats [x y u v r g b]
+       // like GL, but this pipeline stores a clean 4th alpha component
+       // (glBackend's stride-7 vec4 attribute overran into the next
+       // vertex's x, so its sampled alpha was always >=1: opaque. The
+       // repack in drawTriangles pins a=1 = that effective behavior,
+       // minus the overrun).
+       VkVertexInputBindingDescription bindCol{};
+       bindCol.binding=0;
+       bindCol.stride=5*sizeof(float);
+       bindCol.inputRate=VK_VERTEX_INPUT_RATE_VERTEX;
+       VkVertexInputAttributeDescription attrCol[2];
+       attrCol[0].location=0;
+       attrCol[0].binding=0;
+       attrCol[0].format=VK_FORMAT_R32G32_SFLOAT;
+       attrCol[0].offset=0;
+       attrCol[1].location=1;
+       attrCol[1].binding=0;
+       attrCol[1].format=VK_FORMAT_R32G32B32_SFLOAT;
+       attrCol[1].offset=2*sizeof(float);
+       VkVertexInputBindingDescription bindTex{};
+       bindTex.binding=0;
+       bindTex.stride=8*sizeof(float);
+       bindTex.inputRate=VK_VERTEX_INPUT_RATE_VERTEX;
+       VkVertexInputAttributeDescription attrTex[3];
+       attrTex[0].location=0;
+       attrTex[0].binding=0;
+       attrTex[0].format=VK_FORMAT_R32G32_SFLOAT;
+       attrTex[0].offset=0;
+       attrTex[1].location=1;
+       attrTex[1].binding=0;
+       attrTex[1].format=VK_FORMAT_R32G32_SFLOAT;
+       attrTex[1].offset=2*sizeof(float);
+       attrTex[2].location=2;
+       attrTex[2].binding=0;
+       attrTex[2].format=VK_FORMAT_R32G32B32A32_SFLOAT;
+       attrTex[2].offset=4*sizeof(float);
+       if (!buildGraphicsPipeline_(primVs_,primFs_,&bindCol,attrCol,2,
+                                   VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+                                   VK_POLYGON_MODE_FILL,
+                                   colorPipelineLayout,&linePipeline))
+         return false;
+       if (!buildGraphicsPipeline_(primVs_,primFs_,&bindCol,attrCol,2,
+                                   VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                                   VK_POLYGON_MODE_FILL,
+                                   colorPipelineLayout,&triPipeline))
+         return false;
+       if (!buildGraphicsPipeline_(primVs_,primFs_,&bindCol,attrCol,2,
+                                   VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+                                   VK_POLYGON_MODE_LINE,
+                                   colorPipelineLayout,&outlinePipeline))
+         return false;
+       if (!buildGraphicsPipeline_(texVs_,texFs_,&bindTex,attrTex,3,
+                                   VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                                   VK_POLYGON_MODE_FILL,
+                                   texPipelineLayout,&texPipeline))
+         return false;
+       return true;
+      }
+
+    bool buildGraphicsPipeline_(VkShaderModule vs,VkShaderModule fs,
+                                const VkVertexInputBindingDescription* bind,
+                                const VkVertexInputAttributeDescription* attr,
+                                uint32_t nattr,
+                                VkPrimitiveTopology topo,
+                                VkPolygonMode poly,
+                                VkPipelineLayout layout,VkPipeline* out)
+      {VkPipelineShaderStageCreateInfo stages[2]{};
+       stages[0].sType=
+         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+       stages[0].stage=VK_SHADER_STAGE_VERTEX_BIT;
+       stages[0].module=vs;
+       stages[0].pName="main";
+       stages[1].sType=
+         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+       stages[1].stage=VK_SHADER_STAGE_FRAGMENT_BIT;
+       stages[1].module=fs;
+       stages[1].pName="main";
+       VkPipelineVertexInputStateCreateInfo vi{};
+       vi.sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+       vi.vertexBindingDescriptionCount=1;
+       vi.pVertexBindingDescriptions=bind;
+       vi.vertexAttributeDescriptionCount=nattr;
+       vi.pVertexAttributeDescriptions=attr;
+       VkPipelineInputAssemblyStateCreateInfo ia{};
+       ia.sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+       ia.topology=topo;
+       ia.primitiveRestartEnable=VK_FALSE;
+       VkPipelineViewportStateCreateInfo vp{};
+       vp.sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+       vp.viewportCount=1;
+       vp.scissorCount=1;      // both DYNAMIC — latched per frame
+       VkPipelineRasterizationStateCreateInfo rs{};
+       rs.sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+       rs.polygonMode=poly;
+       rs.cullMode=VK_CULL_MODE_NONE;   // GL leg runs unculled
+       rs.frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE;
+       rs.lineWidth=1.0f;               // core-profile parity; thick lines
+                                        // ride quads (SC8)
+       VkPipelineMultisampleStateCreateInfo ms{};
+       ms.sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+       ms.rasterizationSamples=VK_SAMPLE_COUNT_1_BIT;
+       VkPipelineDepthStencilStateCreateInfo ds{};
+       ds.sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+       ds.depthTestEnable=VK_FALSE;
+       ds.depthWriteEnable=VK_FALSE;
+       // GL leg enables GL_BLEND SRC_ALPHA/ONE_MINUS_SRC_ALPHA globally
+       // (initPrimitives); mirror it on every pipeline.
+       VkPipelineColorBlendAttachmentState att{};
+       att.blendEnable=VK_TRUE;
+       att.srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA;
+       att.dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+       att.colorBlendOp=VK_BLEND_OP_ADD;
+       att.srcAlphaBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA;
+       att.dstAlphaBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+       att.alphaBlendOp=VK_BLEND_OP_ADD;
+       att.colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT
+                         |VK_COLOR_COMPONENT_B_BIT
+                         |VK_COLOR_COMPONENT_A_BIT;
+       VkPipelineColorBlendStateCreateInfo cb{};
+       cb.sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+       cb.attachmentCount=1;
+       cb.pAttachments=&att;
+       VkDynamicState dyn[2]={VK_DYNAMIC_STATE_VIEWPORT,
+                              VK_DYNAMIC_STATE_SCISSOR};
+       VkPipelineDynamicStateCreateInfo dy{};
+       dy.sType=VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+       dy.dynamicStateCount=2;
+       dy.pDynamicStates=dyn;
+       VkGraphicsPipelineCreateInfo pi{};
+       pi.sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+       pi.stageCount=2;
+       pi.pStages=stages;
+       pi.pVertexInputState=&vi;
+       pi.pInputAssemblyState=&ia;
+       pi.pViewportState=&vp;
+       pi.pRasterizationState=&rs;
+       pi.pMultisampleState=&ms;
+       pi.pDepthStencilState=&ds;
+       pi.pColorBlendState=&cb;
+       pi.pDynamicState=&dy;
+       pi.layout=layout;
+       pi.renderPass=renderPass;
+       pi.subpass=0;
+       return vkCheck(vkCreateGraphicsPipelines(device,VK_NULL_HANDLE,1,
+                     &pi,NULL,out),
+                     "vkCreateGraphicsPipelines");
+      }
+
+    void destroyPipelines_()
+      {VkPipeline pipes[4]={linePipeline,triPipeline,outlinePipeline,
+                            texPipeline};
+       for (int i=0;i<4;++i)
+        {if (pipes[i]!=VK_NULL_HANDLE)
+           vkDestroyPipeline(device,pipes[i],NULL);
+         pipes[i]=VK_NULL_HANDLE;
+        }
+       linePipeline=triPipeline=outlinePipeline=texPipeline=VK_NULL_HANDLE;
+       if (colorPipelineLayout!=VK_NULL_HANDLE)
+        {vkDestroyPipelineLayout(device,colorPipelineLayout,NULL);
+         colorPipelineLayout=VK_NULL_HANDLE;
+        }
+       if (texPipelineLayout!=VK_NULL_HANDLE)
+        {vkDestroyPipelineLayout(device,texPipelineLayout,NULL);
+         texPipelineLayout=VK_NULL_HANDLE;
+        }
+      }
+
+    void destroyDrawResources_()
+      {for (int i=0;i<kMaxFramesInFlight;++i)
+        {if (vertMapped_[i])
+           vkUnmapMemory(device,vertMem_[i]);
+         if (vertMem_[i]!=VK_NULL_HANDLE)
+           vkFreeMemory(device,vertMem_[i],NULL);
+         if (vertBuf_[i]!=VK_NULL_HANDLE)
+           vkDestroyBuffer(device,vertBuf_[i],NULL);
+         vertMapped_[i]=NULL;
+         vertMem_[i]=VK_NULL_HANDLE;
+         vertBuf_[i]=VK_NULL_HANDLE;
+         vertUsed_[i]=0;
+        }
+       destroyPipelines_();
+       if (descriptorPool!=VK_NULL_HANDLE)
+        {vkDestroyDescriptorPool(device,descriptorPool,NULL);
+         descriptorPool=VK_NULL_HANDLE;
+        }
+       if (texSetLayout_!=VK_NULL_HANDLE)
+        {vkDestroyDescriptorSetLayout(device,texSetLayout_,NULL);
+         texSetLayout_=VK_NULL_HANDLE;
+        }
+       if (sharedSampler_!=VK_NULL_HANDLE)
+        {vkDestroySampler(device,sharedSampler_,NULL);
+         sharedSampler_=VK_NULL_HANDLE;
+        }
+       VkShaderModule mods[4]={primVs_,primFs_,texVs_,texFs_};
+       for (int i=0;i<4;++i)
+        {if (mods[i]!=VK_NULL_HANDLE)
+           vkDestroyShaderModule(device,mods[i],NULL);
+        }
+       primVs_=primFs_=texVs_=texFs_=VK_NULL_HANDLE;
+       if (renderPass!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
+        {vkDestroyRenderPass(device,renderPass,NULL);
+         renderPass=VK_NULL_HANDLE;
+         renderPassFormat_=VK_FORMAT_UNDEFINED;
+        }
+      }
+
+    void destroyTextures_()
+      {for (auto& kv:textures_)
+        {vkDestroyImageView(device,kv.second.view,NULL);
+         vkFreeMemory(device,kv.second.mem,NULL);
+         vkDestroyImage(device,kv.second.image,NULL);
+        }
+       textures_.clear();
+      }
+
+    uint32_t findMemoryType_(uint32_t typeBits,VkMemoryPropertyFlags props)
+      {VkPhysicalDeviceMemoryProperties mp;
+       vkGetPhysicalDeviceMemoryProperties(physicalDevice,&mp);
+       for (uint32_t i=0;i<mp.memoryTypeCount;++i)
+         if ((typeBits&(1u<<i))
+             &&(mp.memoryTypes[i].propertyFlags&props)==props)
+           return i;
+       return UINT32_MAX;
+      }
+
+    bool uploadTexture_(VkBuffer staging,VkImage image,uint32_t w,
+                        uint32_t h)
+      {// One-shot command buffer from the transient pool: UNDEFINED ->
+       // TRANSFER_DST -> copy -> SHADER_READ_ONLY. Runs only outside an
+       // open frame (guarded by the caller); a finite fence wait bounds it.
+       VkCommandBufferAllocateInfo cai{};
+       cai.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+       cai.commandPool=commandPool;
+       cai.level=VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+       cai.commandBufferCount=1;
+       VkCommandBuffer cb=VK_NULL_HANDLE;
+       if (!vkCheck(vkAllocateCommandBuffers(device,&cai,&cb),
+                    "vkAllocateCommandBuffers(upload)"))
+         return false;
+       VkCommandBufferBeginInfo bi{};
+       bi.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+       bi.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+       if (!vkCheck(vkBeginCommandBuffer(cb,&bi),
+                    "vkBeginCommandBuffer(upload)"))
+         return false;
+       VkImageMemoryBarrier toDst{};
+       toDst.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+       toDst.srcAccessMask=0;
+       toDst.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+       toDst.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+       toDst.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+       toDst.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       toDst.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       toDst.image=image;
+       toDst.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+       toDst.subresourceRange.levelCount=1;
+       toDst.subresourceRange.layerCount=1;
+       vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL,
+                            1,&toDst);
+       VkBufferImageCopy region{};
+       region.imageSubresource.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+       region.imageSubresource.layerCount=1;
+       region.imageExtent.width=w;
+       region.imageExtent.height=h;
+       region.imageExtent.depth=1;
+       vkCmdCopyBufferToImage(cb,staging,image,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,
+                              &region);
+       VkImageMemoryBarrier toShader{};
+       toShader.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+       toShader.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+       toShader.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
+       toShader.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+       toShader.newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+       toShader.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       toShader.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       toShader.image=image;
+       toShader.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+       toShader.subresourceRange.levelCount=1;
+       toShader.subresourceRange.layerCount=1;
+       vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,NULL,
+                            0,NULL,1,&toShader);
+       if (!vkCheck(vkEndCommandBuffer(cb),"vkEndCommandBuffer(upload)"))
+         return false;
+       VkFenceCreateInfo fci{};
+       fci.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+       VkFence fence=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateFence(device,&fci,NULL,&fence),
+                    "vkCreateFence(upload)"))
+         return false;
+       VkSubmitInfo si{};
+       si.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO;
+       si.commandBufferCount=1;
+       si.pCommandBuffers=&cb;
+       VkResult sr=vkQueueSubmit(graphicsQueue,1,&si,fence);
+       bool done=false;
+       if (sr==VK_SUCCESS)
+        {VkResult wr=vkWaitForFences(device,1,&fence,VK_TRUE,
+                                     (uint64_t)1000*1000000ull);
+         done=(wr==VK_SUCCESS);
+         if (wr!=VK_SUCCESS)
+           fprintf(stderr,"vkBackend: texture upload fence wait: %d (%s)\n",
+                   (int)wr,vkResultName(wr));
+        }
+       else
+         fprintf(stderr,"vkBackend: texture upload submit: %d (%s)\n",
+                 (int)sr,vkResultName(sr));
+       vkDestroyFence(device,fence,NULL);
+       vkFreeCommandBuffers(device,commandPool,1,&cb);
+       return done;
+      }
+
+    // ------------------------------------------------------------------
+    // Task 41 draw plumbing: bump-allocated vertex scratch + per-draw
+    // recorded MVP push constant.
+    // ------------------------------------------------------------------
+    void* reserveVerts_(VkDeviceSize bytes,VkDeviceSize* outOffset)
+      {VkDeviceSize off=(vertUsed_[currentFrame_]+15)
+                        &~(VkDeviceSize)15;
+       if (off+bytes>kVertBufBytes)
+        {fprintf(stderr,"vkBackend: vertex scratch exhausted (%llu bytes "
+                        "wanted)\n",(unsigned long long)bytes);
+         return NULL;
+        }
+       vertUsed_[currentFrame_]=off+bytes;
+       *outOffset=off;
+       return (char*)vertMapped_[currentFrame_]+off;
+      }
+
+    void pushMvp_(VkCommandBuffer cb,VkPipelineLayout layout,
+                  const float* m)
+      {vkCmdPushConstants(cb,layout,VK_SHADER_STAGE_VERTEX_BIT,0,
+                          sizeof(float)*16,m);
+      }
+
+    void drawColorPrims_(VkPipeline pipe,const float* interleaved,
+                         int vertCount)
+      {if (!passOpen_||!interleaved||vertCount<1)
+         return;
+       VkDeviceSize off=0;
+       void* p=reserveVerts_((VkDeviceSize)vertCount*5*sizeof(float),&off);
+       if (!p)
+         return;
+       memcpy(p,interleaved,(size_t)vertCount*5*sizeof(float));
+       VkCommandBuffer cb=commandBuffers_[currentFrame_];
+       vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,pipe);
+       pushMvp_(cb,colorPipelineLayout,presentMVP_());
+       vkCmdBindVertexBuffers(cb,0,1,&vertBuf_[currentFrame_],&off);
+       vkCmdDraw(cb,(uint32_t)vertCount,1,0,0);
+      }
+
+    void drawTexPrims_(VkDescriptorSet set,const float* verts,int count,
+                       const float* mvp)
+      {if (!passOpen_||count<3)
+         return;
+       VkDeviceSize off=0;
+       void* p=reserveVerts_((VkDeviceSize)count*8*sizeof(float),&off);
+       if (!p)
+         return;
+       memcpy(p,verts,(size_t)count*8*sizeof(float));
+       VkCommandBuffer cb=commandBuffers_[currentFrame_];
+       vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,texPipeline);
+       pushMvp_(cb,texPipelineLayout,mvp);
+       vkCmdBindDescriptorSets(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,
+                               texPipelineLayout,0,1,&set,0,NULL);
+       vkCmdBindVertexBuffers(cb,0,1,&vertBuf_[currentFrame_],&off);
+       vkCmdDraw(cb,(uint32_t)count,1,0,0);
+      }
+
+    // L = P*M, column-major (GLSL mat4 layout). M = R(angle)*local + t —
+    // the object rotates about its OWN origin, then translates (D2 rotator
+    // placement, m19). P maps logical client pixels onto NDC; Vulkan NDC is
+    // y-DOWN like logical space, so P carries NO flip (GL's negative
+    // y-scale becomes positive here — same geometry, same pixels).
+    const float* presentMVP_()
+      {float W=(float)swapchainExtent_.width;
+       float H=(float)swapchainExtent_.height;
+       float a=2.0f*presentScale_/W;
+       float c=2.0f*(float)presentOffX_/W-1.0f;
+       float b=2.0f*presentScale_/H;
+       float d=2.0f*(float)presentOffY_/H-1.0f;
+       float cs=cosf(angle_),sn=sinf(angle_);
+       float ma=cs,mb=-sn,mc=tx_;
+       float md=sn,me=cs,mf=ty_;
+       mvp_[0]=a*ma;    mvp_[1]=b*md;    mvp_[2]=0.0f;mvp_[3]=0.0f;
+       mvp_[4]=a*mb;    mvp_[5]=b*me;    mvp_[6]=0.0f;mvp_[7]=0.0f;
+       mvp_[8]=0.0f;    mvp_[9]=0.0f;    mvp_[10]=1.0f;mvp_[11]=0.0f;
+       mvp_[12]=a*mc+c; mvp_[13]=b*mf+d; mvp_[14]=0.0f;mvp_[15]=1.0f;
+       return mvp_;
+      }
+
+    // Window-space pixel coords -> NDC (y-down top-left origin, matching
+    // the ImGui convention drawTriangles feeds in; glBackend windowMVP
+    // analog without the GL flip).
+    const float* windowMVP_()
+      {float W=(float)swapchainExtent_.width;
+       float H=(float)swapchainExtent_.height;
+       winMvp_[0]=2.0f/W; winMvp_[1]=0.0f; winMvp_[2]=0.0f; winMvp_[3]=0.0f;
+       winMvp_[4]=0.0f; winMvp_[5]=2.0f/H; winMvp_[6]=0.0f; winMvp_[7]=0.0f;
+       winMvp_[8]=0.0f; winMvp_[9]=0.0f; winMvp_[10]=1.0f;winMvp_[11]=0.0f;
+       winMvp_[12]=-1.0f;winMvp_[13]=-1.0f;winMvp_[14]=0.0f;winMvp_[15]=1.0f;
+       return winMvp_;
+      }
+
+    static void makeVert(float* dst,int slot,float x,float y,
+                         float r,float g,float b)
+      {dst[slot]=x;dst[slot+1]=y;
+       dst[slot+2]=r;dst[slot+3]=g;dst[slot+4]=b;
+      }
+
+    static void thickLineQuad(float* dst,float x1,float y1,float x2,
+                              float y2,float halfW,float r,float g,float b)
+      {// SC8 port (glBackend verbatim): perpendicular expansion in LOGICAL
+       // space, butt caps.
+       float dx=x2-x1,dy=y2-y1;
+       float len=sqrtf(dx*dx+dy*dy);
+       if (len<1e-6f)
+        {dx=1.0f;dy=0.0f;len=1.0f;
+        }
+       float px=-dy/len*halfW,py=dx/len*halfW;
+       const float cx[4]={x1+px,x2+px,x2-px,x1-px};
+       const float cy[4]={y1+py,y2+py,y2-py,y1-py};
+       static const int idx[6]={0,1,2,0,2,3};
+       for (int i=0;i<6;++i)
+         makeVert(dst,5*i,cx[idx[i]],cy[idx[i]],r,g,b);
+      }
+
+    static bool pointInTri(float px,float py,
+                           float ax,float ay,float bx,float by,
+                           float cx,float cy)
+      {float d1=(px-bx)*(ay-by)-(ax-bx)*(py-by);
+       float d2=(px-cx)*(by-cy)-(bx-cx)*(py-cy);
+       float d3=(px-ax)*(cy-ay)-(cx-ax)*(py-ay);
+       bool neg=(d1<0)||(d2<0)||(d3<0);
+       bool pos=(d1>0)||(d2>0)||(d3>0);
+       return !(neg&&pos);
+      }
+
+    static int earClip(const float* verts,int count,float* outPairs)
+      {// glBackend port verbatim: O(n^2) ear clipping, orientation
+       // normalized; caller fans when it cannot close.
+       if (count<3)
+         return 0;
+       if (count>256)
+         return 0;
+       float px[256],py[256];
+       double area=0.0;
+       for (int i=0;i<count;++i)
+        {int j=(i+1)%count;
+         area+=(double)verts[2*i]*verts[2*j+1]
+              -(double)verts[2*j]*verts[2*i+1];
+         px[i]=verts[2*i];py[i]=verts[2*i+1];
+        }
+       if (area<0)
+        {for (int i=0;i<count/2;++i)
+          {float tx=px[i],ty=py[i];
+           px[i]=px[count-1-i];py[i]=py[count-1-i];
+           px[count-1-i]=tx;py[count-1-i]=ty;
+          }
+        }
+       int out=0;
+       int remaining=count;
+       int guard=0;
+       while (remaining>3&&guard++<4096)
+        {bool clipped=false;
+         for (int i=0;i<remaining;++i)
+          {int prev=(i+remaining-1)%remaining,cur=i,next=(i+1)%remaining;
+           float cross=(px[cur]-px[prev])*(py[next]-py[prev])
+                      -(py[cur]-py[prev])*(px[next]-px[prev]);
+           if (cross<=0)
+             continue;
+           bool ear=true;
+           for (int k=0;k<remaining&&ear;++k)
+            {if (k==prev||k==cur||k==next)
+               continue;
+             if (pointInTri(px[k],py[k],
+                            px[prev],py[prev],px[cur],py[cur],
+                            px[next],py[next]))
+               ear=false;
+            }
+           if (!ear)
+             continue;
+           outPairs[out++]=px[prev];outPairs[out++]=py[prev];
+           outPairs[out++]=px[cur]; outPairs[out++]=py[cur];
+           outPairs[out++]=px[next];outPairs[out++]=py[next];
+           for (int k=cur;k<remaining-1;++k)
+            {px[k]=px[k+1];py[k]=py[k+1];
+            }
+           --remaining;
+           clipped=true;
+           break;
+          }
+         if (!clipped)
+           break;
+        }
+       if (remaining==3)
+        {outPairs[out++]=px[0];outPairs[out++]=py[0];
+         outPairs[out++]=px[1];outPairs[out++]=py[1];
+         outPairs[out++]=px[2];outPairs[out++]=py[2];
+        }
+       return out/6;
       }
 
     void handleStall_(const char* what)

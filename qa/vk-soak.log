@@ -133,3 +133,79 @@ vksoak: SOAK REPORT
 vksoak: re-bootstrap ENGAGED (1 rebuild(s)); cycle continued for 800 frame(s) after it
   final extent: 920x640 (framebuffer 920x640)
 vksoak: PASS
+
+================ RUN T41-1 (wt-t41, task 41 VK pipelines) 2026-08-25T10:02:27Z ================
+--- vkpipe (pipelines + thick-line + transform + live-draw soak, validation LIVE) ---
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+[vk-loader-error:Loader Message] loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so".  Skipping layer.
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vkBackend: 4 shaders compiled from source at init (glslc clean)
+vkBackend: 4 shader module(s) loaded
+vkpipe: init: 4 shader module(s) compiled from source at init, compiledAtInit=1
+vkpipe: pipelines: line=ok tri=ok outline=ok tex=ok
+vkpipe: A thin-line px               got=200
+vkpipe: A tri-fill px                got=6000
+vkpipe: A outline px                 got=200
+vkpipe: A thick5 interior            got=1
+vkpipe: A rect-outline top edge      got=21
+vkpipe: A rect-outline interior black got=1
+vkpipe: A tex left-half white        got=1
+vkpipe: A tex right-half black       got=1
+vkpipe: A alpha .5 gray              got=1
+vkpipe: A drawTriangles red          got=1
+vkpipe: B width-3 cross-section rows=3 total=900 (301x3=903 butt-capped)
+vkpipe: C1 setTransform(0,0,0) vs reference: 0 differing byte values
+vkpipe: C2 R90+translate bar: inside=1 right-clear=1 above-clear=1
+vkpipe: C3 resetTransform vs reference: 0 differing byte values
+vkpipe: D soak: 606/600 frames in 3.55s (170.7 fps), re-bootstraps 0->1, stalls 0
+vkpipe: D re-bootstrap ENGAGED x1 WITH live draws every frame (pipelines survived)
+vkpipe: validation errors (VUID-/UNASSIGNED): 0 (layer LIVE)
+vkpipe: PASS
+vkpipe rc=0
+--- vkpass regression (task-40 scissor proof through the 41 frame split) ---
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+[vk-loader-error:Loader Message] loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so".  Skipping layer.
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vkBackend: 4 shaders compiled from source at init (glslc clean)
+vkBackend: 4 shader module(s) loaded
+vkpass: swapchain 688x702, 3 image(s), format 44
+vkpass: render pass created: yes
+vkpass: phase A: 800/800 frames in 4.78s (167.4 fps), re-bootstraps 0->1, stalls 0
+vkpass: re-bootstrap ENGAGED x1 under validation; framebuffers recreated
+vkpass: B1 scissored rect {100,80,320,256}: inside 81920/81920 white, outside 506880/506880 black
+vkpass: B1 PASS — scissor CLIPPED the clear (0 px outside, 81920 px inside all white)
+vkpass: B2 nullptr scissor: 588800/588800 pixels white
+vkpass: B2 PASS — full-extent behavior restored
+vkpass: validation errors (VUID-/UNASSIGNED): 0 (layer LIVE)
+vkpass: PASS
+vkpass rc=0
+--- vksoak regression (4200 frames + forced resize) ---
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+[vk-loader-error:Loader Message] loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so".  Skipping layer.
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vkBackend: 4 shaders compiled from source at init (glslc clean)
+vkBackend: 4 shader module(s) loaded
+vksoak: config: frames-in-flight=2 acquire-timeout=100ms fence-timeout=125ms stall-limit=100
+vksoak: plan: 3600 frames + resize at 1440 + 600 post-resize
+vksoak: SOAK REPORT
+  frames completed (submit+present): 4200 / 4200
+  wall time: 27.96s -> 150.2 frames/s
+  re-bootstraps: 1 (was 0 before the resize)
+  recovered stalls skipped: 0
+  presentation suspended: no
+  validation layer enabled: yes
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+vksoak: re-bootstrap ENGAGED (1 rebuild(s)); cycle continued for 4200 frame(s) after it
+  final extent: 920x640 (framebuffer 920x640)
+vksoak: PASS
+vksoak rc=0
+--- vksurface + vkprobe regressions ---
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vksurface: PASS
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vkprobe: PASS

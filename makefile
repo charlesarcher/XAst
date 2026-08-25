@@ -254,6 +254,16 @@ obj/VK/vkpass: test/vk/vkpass.C utilities/rendering/vkBackend.H utilities/render
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
 
+# Task 41: pipeline proof driver (test/vk/vkpipe.C -> line/tri/outline/tex
+# pipelines + thick-line geometry + transform identity + live-draw soak).
+# Same run recipe as vksoak.
+.PHONY: vkpipe
+vkpipe: obj/VK/vkpipe
+
+obj/VK/vkpipe: test/vk/vkpipe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+	$(VK_LOADER_GATE)
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 
