@@ -32,9 +32,16 @@ ifneq ($(filter $(BACKEND),GL VK),)
 BACKEND_CXXFLAGS=$(VENDOR_INCS)
 endif
 # Task 31: the GL leg compiles main()'s GL backend branch (GLBackend engine +
-# paced stub loop). VK stays macro-free until vkBackend lands (task 37).
+# paced stub loop). VK stays macro-free: task 37 lands vkBackend.H WITHOUT any
+# backend define (domain stays macro-free), so XAsteroids.C compiles
+# guards-closed on VK and main() falls through to the stub return 0.
 ifeq ($(BACKEND),GL)
 BACKEND_CXXFLAGS+=-DGL_BACKEND
+endif
+# Task 37: the VK leg adds ONLY the vendored Vulkan C headers (-I). No macro,
+# nothing else — GL/X11 compile lines stay byte-identical.
+ifeq ($(BACKEND),VK)
+BACKEND_CXXFLAGS+=-Ivendor/vulkan/include
 endif
 
 # Objects feeding the X11 link always carry the X11 macro, whatever BACKEND says.
@@ -151,21 +158,43 @@ OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon.xbm \
 $(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
-# --- Link rules (task 29, F3/D10/U23) ---------------------------------------
+# --- Link rules (task 29, F3/D10/U23; three-way since task 37) --------------
 # F3 asserts each backend's link line BY RECIPE INSPECTION (make V=1), not by
-# eyeball: GL links -lglfw -lGL with NO -lXm/-lXt/-lX11; the X11 line keeps
-# -lXm -lXt -lX11 byte-identical to the pre-task-29 tree. The VK link rule
-# lands at Phase 4 task 37 (until then BACKEND=VK supports `objects` only).
-# Both legs link the two D14 units ($(GAME_OBJECTS)): since task 27 they
-# compile on EVERY leg (guards-closed engine branches on GL) and DEFINE the
-# RotatorDisplayData-subclass / CPU-composite symbols the domain references.
+# eyeball: GL links -lglfw -lGL with NO -lXm/-lXt/-lX11; VK (task 37) links
+# -lglfw -lvulkan with NO -lXm/-lXt/-lX11; the X11 line keeps -lXm -lXt -lX11
+# byte-identical to the pre-task-29 tree. Both GPU legs link the two D14 units
+# ($(GAME_OBJECTS)): since task 27 they compile on EVERY leg (guards-closed
+# engine branches on GL/VK) and DEFINE the RotatorDisplayData-subclass /
+# CPU-composite symbols the domain references.
+#
+# U15 gate (task 37): $(VK_LOADER_GATE) is the FIRST recipe line of BOTH VK
+# link rules — a machine without libvulkan.so.1 aborts BEFORE any link. The
+# check is loader-presence ONLY (no vulkaninfo/probe-exe dependency: the
+# probe's own build must not be gated on itself).
+VK_LOADER_GATE=@qa/vk-probe.sh --link-check || exit 1
+
 ifeq ($(BACKEND),GL)
 XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS)
 	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) ${LDFLAGS} -lglfw -lGL -o XAsteroids
+else ifeq ($(BACKEND),VK)
+XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS)
+	$(VK_LOADER_GATE)
+	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) ${LDFLAGS} -lglfw -lvulkan -o XAsteroids
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
 endif
+
+# Task 37: pass-0 probe driver (test/vk/vkprobe.C -> VKBackend::
+# probeStandalone). Links -lglfw because vkBackend.H references glfw symbols
+# even in standalone mode (no glfwInit call at runtime, but the TU needs them
+# at link time). Gated like every other VK link.
+.PHONY: vkprobe
+vkprobe: obj/VK/vkprobe
+
+obj/VK/vkprobe: test/vk/vkprobe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H | obj/VK
+	$(VK_LOADER_GATE)
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< ${LDFLAGS} -lglfw -lvulkan -o $@
 
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn

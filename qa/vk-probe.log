@@ -1,0 +1,163 @@
+# qa/vk-probe.log — task 37 (REBUILD wt-t37b) archived probe runs, 2026-08-25T01:30:06Z
+# Machine facts re-probed fresh on this rebuild; loader vulkan-icd-loader 1.4.357.0-1.1, glslc present, /usr/include/vulkan: ABSENT
+
+================================================================
+= RUN 1: qa/vk-probe.sh (full mode: loader + vulkaninfo --summary)
+================================================================
+== vk-probe: full run 2026-08-25T01:30:07Z ==
+loader: vulkan-icd-loader 1.4.357.0-1.1
+	libvulkan.so.1 (libc6,x86-64) => /usr/lib/libvulkan.so.1
+	libvulkan.so.1 (libc6) => /usr/lib32/libvulkan.so.1
+-- vulkaninfo --summary --
+ERROR: [Loader Message] Code 0 : loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+'DISPLAY' environment variable not set... skipping surface info
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+ERROR: [Loader Message] Code 0 : loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so".  Skipping layer.
+ERROR: [Loader Message] Code 0 : loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so".  Skipping layer.
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.4.357
+
+
+Instance Extensions: count = 27
+-------------------------------
+VK_EXT_acquire_drm_display             : extension revision 1
+VK_EXT_acquire_xlib_display            : extension revision 1
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_direct_mode_display             : extension revision 1
+VK_EXT_display_surface_counter         : extension revision 1
+VK_EXT_headless_surface                : extension revision 1
+VK_EXT_layer_settings                  : extension revision 2
+VK_EXT_surface_maintenance1            : extension revision 1
+VK_EXT_swapchain_colorspace            : extension revision 5
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_display                         : extension revision 23
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_display_properties2         : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_get_surface_capabilities2       : extension revision 1
+VK_KHR_portability_enumeration         : extension revision 1
+VK_KHR_surface                         : extension revision 25
+VK_KHR_surface_maintenance1            : extension revision 1
+VK_KHR_surface_protected_capabilities  : extension revision 1
+VK_KHR_wayland_surface                 : extension revision 6
+VK_KHR_xcb_surface                     : extension revision 6
+VK_KHR_xlib_surface                    : extension revision 6
+VK_LUNARG_direct_driver_loading        : extension revision 1
+VK_NV_display_stereo                   : extension revision 1
+
+Instance Layers: count = 9
+--------------------------
+VK_LAYER_FROG_gamescope_wsi_x86_64 Gamescope WSI (XWayland Bypass) Layer (x86_64)               1.3.221  version 1
+VK_LAYER_LSFGVK_frame_generation   Lossless Scaling frame generation layer                      1.4.328  version 2
+VK_LAYER_MANGOHUD_overlay_x86      Vulkan Hud Overlay                                           1.3.0    version 1
+VK_LAYER_MANGOHUD_overlay_x86_64   Vulkan Hud Overlay                                           1.3.0    version 1
+VK_LAYER_MESA_anti_lag             Open-source implementation of the VK_AMD_anti_lag extension. 1.4.303  version 1
+VK_LAYER_MESA_device_select        Linux device selection layer                                 1.4.303  version 1
+VK_LAYER_NV_optimus                NVIDIA Optimus layer                                         1.4.341  version 1
+VK_LAYER_NV_present                NVIDIA Presentation Layer                                    1.4.341  version 1
+VK_LAYER_VKBASALT_post_processing  a post processing layer                                      1.3.223  version 1
+
+Devices:
+========
+GPU0:
+	apiVersion         = 1.4.341
+	driverVersion      = 610.57.4.0
+	vendorID           = 0x10de
+	deviceID           = 0x2b85
+	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName         = NVIDIA GeForce RTX 5090
+	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+	driverName         = NVIDIA
+	driverInfo         = 610.57.04
+	conformanceVersion = 1.4.3.3
+	deviceUUID         = da7d0e9f-367e-2a8c-e695-568216311d81
+	driverUUID         = 9992f558-9329-580d-a9f3-a38ee24bc64d
+GPU1:
+	apiVersion         = 1.4.354
+	driverVersion      = 26.2.1
+	vendorID           = 0x1002
+	deviceID           = 0x7550
+	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName         = AMD Radeon RX 9070 XT (RADV GFX1201)
+	driverID           = DRIVER_ID_MESA_RADV
+	driverName         = radv
+	driverInfo         = Mesa 26.2.1-arch3.1
+	conformanceVersion = 1.4.5.3
+	deviceUUID         = 00000000-0500-0000-0000-000000000000
+	driverUUID         = 414d442d-4d45-5341-2d44-525600000000
+vulkaninfo rc=0
+-- compiled probe (obj/VK/vkprobe) --
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vkprobe: PASS-0 REPORT
+  instance: created (header pin 1.4.357)
+  device: NVIDIA GeForce RTX 5090 (discrete, apiVersion 1.4.341)
+  graphics queue family: 0
+  debug utils available: yes, messenger: created
+  validation layer: instance-present=no device-present=no enabled=no
+  swapchain ext available: yes (NOT enabled until task 38)
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 1
+vkprobe: PASS
+compiled probe rc=0
+vk-probe: PASS
+rc=0
+
+================================================================
+= RUN 2: m15 DEFAULT branch (no VK_LAYER_PATH; KHRONOS_validation absent -> clean continue)
+================================================================
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vkprobe: PASS-0 REPORT
+  instance: created (header pin 1.4.357)
+  device: NVIDIA GeForce RTX 5090 (discrete, apiVersion 1.4.341)
+  graphics queue family: 0
+  debug utils available: yes, messenger: created
+  validation layer: instance-present=no device-present=no enabled=no
+  swapchain ext available: yes (NOT enabled until task 38)
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 1
+vkprobe: PASS
+rc=0
+
+================================================================
+= RUN 3: m15 LAYER-PRESENT branch (VK_LAYER_PATH -> extracted vulkan-validation-layers 1.4.357.0-1.1)
+================================================================
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vkprobe: PASS-0 REPORT
+  instance: created (header pin 1.4.357)
+  device: NVIDIA GeForce RTX 5090 (discrete, apiVersion 1.4.341)
+  graphics queue family: 0
+  debug utils available: yes, messenger: created
+  validation layer: instance-present=yes device-present=yes enabled=yes
+  swapchain ext available: yes (NOT enabled until task 38)
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 1
+vkprobe: PASS
+rc=0
+
+================================================================
+= RUN 4: XAST_VK_VALIDATION=off escape (layer present but forced off)
+================================================================
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vkprobe: PASS-0 REPORT
+  instance: created (header pin 1.4.357)
+  device: NVIDIA GeForce RTX 5090 (discrete, apiVersion 1.4.341)
+  graphics queue family: 0
+  debug utils available: yes, messenger: created
+  validation layer: instance-present=yes device-present=no enabled=no
+  swapchain ext available: yes (NOT enabled until task 38)
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 1
+vkprobe: PASS
+rc=0
