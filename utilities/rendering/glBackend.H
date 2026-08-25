@@ -60,6 +60,12 @@
 #include"stb_truetype.h"  // vendor/stb v1.26; implementation expands in
                           // stbTruetypeImpl.C (extern "C") — NOT here.
 
+
+// ---- TEMP task-36 instrumentation (XAST_GL_TRACE) — REMOVE BEFORE COMMIT ----
+inline bool glTraceOn()
+ {static int on=-1; if(on<0) on=getenv("XAST_GL_TRACE")?1:0; return on==1;}
+// -----------------------------------------------------------------------------
+
 class GLBackend : public RenderingEngine
  {public:
     GLBackend()
@@ -251,8 +257,11 @@ class GLBackend : public RenderingEngine
       glBindTexture(GL_TEXTURE_2D,t);
       glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,
                    nullptr);
-      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+      // Task-36 Defect B: pixel-exact blits (X11 XCopyArea parity) demand
+      // nearest-neighbor sampling — LINEAR blended edge texels into 1px
+      // rings around every rotated decor bitmap.
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
       glBindTexture(GL_TEXTURE_2D,0);
       glGenFramebuffers(1,&fbo);
       glBindFramebuffer(GL_FRAMEBUFFER,fbo);
@@ -338,6 +347,7 @@ class GLBackend : public RenderingEngine
       // (first exercise: the real-game main constructs the globals).
       if (!window)
         return;
+      if (glTraceOn()) fprintf(stderr,"[TRACE] drawLine (%.1f,%.1f)-(%.1f,%.1f) w%.1f color %.2f,%.2f,%.2f\n",x1,y1,x2,y2,width,r,g,b);
       float verts[30];
       int count;
       GLenum mode;
@@ -357,6 +367,7 @@ class GLBackend : public RenderingEngine
                              float r,float g,float b,bool fill) override
      {if (!window||!verts||count<2)
         return;
+      if (glTraceOn()) {fprintf(stderr,"[TRACE] drawPolygon n=%d fill=%d color %.2f,%.2f,%.2f:",count,(int)fill,r,g,b); for(int i=0;i<count&&i<12;++i) fprintf(stderr," (%.1f,%.1f)",verts[2*i],verts[2*i+1]); fprintf(stderr,"\n");}
       if (!fill)
        {float line[5*260];
         for (int i=0;i<count&&i<260;++i)
@@ -387,7 +398,8 @@ class GLBackend : public RenderingEngine
 
     virtual void drawRect(float x,float y,float w,float h,
                           float r,float g,float b,bool fill) override
-     {float quad[10]={x,y, x+w,y, x+w,y+h, x,y+h};
+     {if (glTraceOn()) fprintf(stderr,"[TRACE] drawRect (%.1f,%.1f) %.1fx%.1f fill=%d\n",x,y,w,h,(int)fill);
+      float quad[10]={x,y, x+w,y, x+w,y+h, x,y+h};
       if (fill)
        {static const int idx[6]={0,1,2,0,2,3};
         float tris[30];
@@ -431,6 +443,7 @@ class GLBackend : public RenderingEngine
      {// XDrawImageString mapping (D12): cell background quad THEN glyphs.
       if (!window||!validFont(fontId)||!text||!*text)
         return;
+      if (glTraceOn()) fprintf(stderr,"[TRACE] drawStringOpaque \"%s\" (%.1f,%.1f) f%d\n",text,x,y,fontId);
       float w=measureText(text,fontId);
       FontMetrics fm;
       getFontMetrics(fontId,fm);
@@ -445,6 +458,7 @@ class GLBackend : public RenderingEngine
      {// XDrawString mapping (D12): glyphs only, no background cell.
       if (!window||!validFont(fontId)||!text||!*text)
         return;
+      if (glTraceOn()) fprintf(stderr,"[TRACE] drawStringTransparent \"%s\" (%.1f,%.1f) f%d\n",text,x,y,fontId);
       drawGlyphs(text,x,y,fontId,r,g,b);
      }
 
@@ -517,6 +531,7 @@ class GLBackend : public RenderingEngine
       auto it=textures_.find(tex);
       if (!window||it==textures_.end())
         return;
+      if (glTraceOn()) fprintf(stderr,"[TRACE] drawTexture tex=%llu (%.1f,%.1f) %.1fx%.1f a%.2f\n",(unsigned long long)tex,x,y,w,h,alpha);
       float uv[4]={0.0f,0.0f,1.0f,1.0f};
       drawTexturedQuad(it->second.tex,x,y,w,h,uv,alpha);
      }
@@ -528,6 +543,7 @@ class GLBackend : public RenderingEngine
       auto m=textures_.find(mask);
       if (!window||c==textures_.end()||m==textures_.end())
         return;
+      if (glTraceOn()) fprintf(stderr,"[TRACE] drawTextureMasked c=%llu m=%llu (%.1f,%.1f) %.1fx%.1f\n",(unsigned long long)content,(unsigned long long)mask,x,y,w,h);
       glUseProgram(maskedProgram_);
       glUniformMatrix4fv(maskedMvpLocation_,1,GL_FALSE,presentMVP());
       glActiveTexture(GL_TEXTURE0);
@@ -582,6 +598,7 @@ class GLBackend : public RenderingEngine
      {// GL/VK-only semantics (m19): model translate+rotate applied BEFORE the
       // present transform. Rotation sign convention gets pinned against the
       // X11 rotator at task 35's Q1 gate; mechanism lands here (task 32).
+      if (glTraceOn()) fprintf(stderr,"[TRACE] setTransform (%.1f,%.1f) ang=%.4f\n",tx,ty,angleRadians);
       tx_=tx;ty_=ty;angle_=angleRadians;
      }
 
@@ -1299,7 +1316,12 @@ class GLBackend : public RenderingEngine
        }
       (void)scale;(void)ox;(void)oy;   // MVP carries the transform
       float penX=x;
-      float verts[4*4*512];            // up to 512 quads per call
+      // 6 expanded triangle verts x 4 floats per quad. Task-36 Defect A fix:
+      // this loop previously advanced 16 floats/quad while writing 24 — each
+      // quad stomped the next one's head and every glyph's second triangle
+      // stretched to the following glyph's origin (diagonal streaks across
+      // every text run).
+      float verts[6*4*512];            // up to 512 quads per call
       int quads=0;
       for (const char* p=text;*p&&quads<512;++p)
        {GlyphInfo& g=glyphs_[fontId][(unsigned char)*p];
@@ -1313,7 +1335,7 @@ class GLBackend : public RenderingEngine
           const float fv[4]={u[1],u[1],u[3],u[3]};
           static const int idx[6]={0,1,2,0,2,3};
           for (int i=0;i<6;++i)
-           {float* v=verts+16*quads+4*i;
+           {float* v=verts+24*quads+4*i;
             v[0]=fx[idx[i]];v[1]=fy[idx[i]];
             v[2]=fu[idx[i]];v[3]=fv[idx[i]];
            }
@@ -1331,7 +1353,7 @@ class GLBackend : public RenderingEngine
       glUniform1i(textAtlasLocation_,0);
       glBindVertexArray(textVao_);
       glBindBuffer(GL_ARRAY_BUFFER,textVbo_);
-      glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)(16*sizeof(float)*quads),
+      glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)(24*sizeof(float)*quads),
                    verts,GL_STREAM_DRAW);
       glDrawArrays(GL_TRIANGLES,0,6*quads);
       glBindVertexArray(0);

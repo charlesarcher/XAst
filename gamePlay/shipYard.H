@@ -6,13 +6,41 @@
 #endif
 #include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
+#ifndef X11_BACKEND
+#include<vector>
+#endif
 
-#ifdef X11_BACKEND
 // Yard background: the exact Stage::shipYardBg value (16-bit component 28527,
 // i.e. 111/255 scaled). The engine fill path allocates the color or falls back
 // to white — the same semantics as the colormap allocations this file retains
 // solely to feed pixel arguments to its raw colored stamps.
 static const float yardGray=28527.0f/65535.0f;
+
+#ifndef X11_BACKEND
+// Task-36 (GL yard leg): XBM -> opaque RGBA8 tile with the raw colored-stamp
+// fg/bg semantics — set bits carry the foreground color, clear bits the
+// background. Rows are ceil(w/8)-byte strided, LSB-first (bit 0 = leftmost
+// pixel). All ship/yard colors are byte-exact (n*257), so the float
+// round-trip is lossless (T17 exhaustive-sweep precedent).
+inline TextureId glUploadColoredStamp(RenderingEngine& engine,
+                                      const unsigned char* bits,const int w,
+                                      const int h,const float fr,
+                                      const float fgn,const float fb,
+                                      const float br,const float bg,
+                                      const float bb)
+ {const int stride=(w+7)/8;
+  std::vector<uint8_t> rgba(static_cast<size_t>(w)*h*4);
+  for(int j=0;j<h;++j)
+   for(int i=0;i<w;++i)
+    {const bool set=(bits[j*stride+i/8]>>(i%8))&1;
+     uint8_t* px=&rgba[(static_cast<size_t>(j)*w+i)*4];
+     px[0]=uint8_t((set?fr:br)*255.0f+0.5f);
+     px[1]=uint8_t((set?fgn:bg)*255.0f+0.5f);
+     px[2]=uint8_t((set?fb:bb)*255.0f+0.5f);
+     px[3]=255;
+    }
+  return engine.createTextureFromBitmap(rgba.data(),w,h,4);
+ }
 #endif
 
 class ShipYard
@@ -117,16 +145,29 @@ inline ShipYard::ShipYard(RenderingEngine& engine,
    // bitmap seam or task-26 decoder + fixed RGBA upload.
    ship=XCreatePixmapFromBitmapData(display,yard,(char*)shipBits,shipBitsWidth,shipBitsHeight,
                                     shipColor,yardColor,DefaultDepth(display,screen));
+   #else
+   // GL leg (task 36): the yard is a render target filled with the Stage
+   // shipYardBg gray; the ship stamp is the XBM decoded to an opaque RGBA8
+   // tile — set bits carry the ship color, clear bits the yard gray (the
+   // raw stamp's fg/bg mapping).
+   yard=engine.createRenderTarget(yWidth,yHeight);
+   engine.beginRenderTo(yard);
+   engine.drawRect(0,0,yWidth,yHeight,yardGray,yardGray,yardGray,true);
+   engine.endRenderTo();
+   shipErase=engine.createRenderTarget(shipBitsWidth,shipBitsHeight);
+   engine.beginRenderTo(shipErase);
+   engine.drawRect(0,0,shipBitsWidth,shipBitsHeight,yardGray,yardGray,yardGray,true);
+   engine.endRenderTo();
+   ship=glUploadColoredStamp(engine,shipBits,shipBitsWidth,shipBitsHeight,
+                             sr/65535.0f,sg/65535.0f,sb/65535.0f,
+                             yardGray,yardGray,yardGray);
    #endif
   }
 
 inline ShipYard::~ShipYard()
- {
-  #ifdef X11_BACKEND
-  engine.deleteTexture(ship);
+ {engine.deleteTexture(ship);
   engine.deleteTexture(shipErase);
   engine.deleteTexture(yard);
-  #endif
  }
 
 inline ShipYard& ShipYard::AddShip()
@@ -136,11 +177,9 @@ inline ShipYard& ShipYard::AddShip()
      {shipRow=rowStartOffset;
       shipCol+=shipHeight;
      }
-    #ifdef X11_BACKEND
     engine.beginRenderTo(yard);
     engine.drawTexture(ship,shipRow,shipCol,shipWidth,shipHeight,1.0f);
     engine.endRenderTo();
-    #endif
    }
   return *this;
  }
@@ -148,11 +187,9 @@ inline ShipYard& ShipYard::AddShip()
 inline ShipYard& ShipYard::RemoveShip()
   {if (numShips&&numShips--<=maxVisibleShips)
    {
-    #ifdef X11_BACKEND
     engine.beginRenderTo(yard);
     engine.drawTexture(shipErase,shipRow,shipCol,shipWidth,shipHeight,1.0f);
     engine.endRenderTo();
-    #endif
     shipRow-=shipWidth;
     if (shipRow<rowStartOffset)
      {shipRow=lastShipInRowOffset;
@@ -172,11 +209,9 @@ inline const TextureId& ShipYard::GetYard() const
 
 inline ShipYard& ShipYard::ClearYard()
  {
-  #ifdef X11_BACKEND
   engine.beginRenderTo(yard);
   engine.drawRect(0,0,yardWidth,yardHeight,yardGray,yardGray,yardGray,true);
   engine.endRenderTo();
-  #endif
   shipRow=rowStartOffset-shipWidth;
   shipCol=colStartOffset;
   numShips=0;
