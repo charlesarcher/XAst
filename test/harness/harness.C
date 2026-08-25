@@ -16,6 +16,13 @@
 //     increasing frame counter into _XAST_FRAME_COUNTER (CARDINAL) on its
 //     window inside endFrame(); the harness samples exactly ONCE per published
 //     value. A stalled or non-monotonic counter aborts as a hang/corruption.
+//   frame (task 36 trajectory lock): the game rewrites a per-run counter
+//     file once per completed gameplay frame (env-gated publisher in
+//     playingField.H) and blocks on a gate file until the harness
+//     acknowledges — script boundaries become exact simulation-step indices
+//     on every backend, and captures/injections are load-independent. This
+//     is the cross-leg (X11-vs-GL) alignment mechanism; see
+//     qa/phase3-evidence.md §Task 36.
 //
 // Build:  make harness            (produces obj/harness; links -lX11 -lXtst)
 // Usage:  obj/harness --seed N --script file --out dir [--ref dir]
@@ -74,11 +81,15 @@ struct Config {
     std::string geometry = "1280x1024x24";
     std::string gamePath;               // resolved against repo root
     std::string hiscoreFixture;         // copied into game cwd as hiScore.data
+    std::string maskDir;                // empty => masks resolve against refDir
+    std::string counterFile;            // frame mode: published-index file (workDir)
+    std::string gateFile;               // frame mode: lockstep ack file (workDir)
     int settleSecs = 10;
     int pollMs = 10;
     int stability = 3;
     int tickGapMs = 30;
     int idleEscapeMs = 150;             // stillness beyond any inter-frame gap => static screen
+    int staticIdleMs = 500;             // frame mode: counter-frozen floor before idle ticks
     int stallTimeoutMs = 5000;          // counter mode
     int maxRunSecs = 900;
     bool keepWork = false;
@@ -423,7 +434,7 @@ static bool cropPng(const std::string& src, const CropRect& r,
 static std::vector<Checkpoint> g_checkpoints;
 
 static void writeManifest(const std::string& path, const std::string& workDir,
-                          double runMs, int gameExitRc,
+                          double runMs, int gameExitRc, long frameBase,
                           bool haveDiff, bool diffPass) {
     FILE* f = fopen(path.c_str(), "w");
     if (!f) return;
@@ -444,6 +455,11 @@ static void writeManifest(const std::string& path, const std::string& workDir,
             g_clientW, g_clientH, g_border, g_depth, g_absX, g_absY);
     fprintf(f, "sync_params: poll_ms=%d stability=%d tick_gap_ms=%d\n",
             cfg.pollMs, cfg.stability, cfg.tickGapMs);
+    if (!cfg.counterFile.empty())
+        fprintf(f, "frame_counter_file: %s\nframe_base: %ld\n",
+                cfg.counterFile.c_str(), frameBase);
+    if (!cfg.maskDir.empty())
+        fprintf(f, "mask_dir: %s\n", cfg.maskDir.c_str());
     fprintf(f, "run_ms: %.0f\n", runMs);
     fprintf(f, "game_exit_rc: %d\n", gameExitRc);
     fprintf(f, "checkpoints: %zu\n", g_checkpoints.size());
@@ -549,6 +565,10 @@ static void launchGame(const std::string& gameAbs, const std::string& workDir) {
     if (pid == 0) {
         setenv("DISPLAY", cfg.display.c_str(), 1);
         setenv("XAST_SEED", std::to_string(cfg.seed).c_str(), 1);
+        if (!cfg.counterFile.empty())
+            setenv("XAST_FRAME_COUNTER_FILE", cfg.counterFile.c_str(), 1);
+        if (!cfg.gateFile.empty())
+            setenv("XAST_FRAME_GATE_FILE", cfg.gateFile.c_str(), 1);
         if (chdir(workDir.c_str()) != 0) _exit(126);
         const int fd = open(gameLog.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         dup2(fd, STDOUT_FILENO);
@@ -615,6 +635,7 @@ static void findGameWindow(int settleSecs) {
 // ------------------------------------------------------------------ execution
 struct RunStats {
     long boundaries = 0;
+    long frameBase = -1;
     double runMs = 0;
     int gameExitRc = -1;
     bool gameExited = false;
@@ -865,6 +886,164 @@ static void runCounter(const std::vector<Line>& lines, RunStats& stats) {
     LOG("counter run done at frame " + std::to_string(seen));
 }
 
+// --- published-frame-index handshake (task 36 trajectory lock) --------------
+//
+// The game rewrites cfg.counterFile once per completed gameplay frame
+// (playingField.H xastQaPublishFrame, env-gated). A publish means the
+// frame's pixels are already observable (GL: post-swap; X11: the present
+// copies were flushed before the write), so reacting to value v captures
+// exactly simulation step v — no visibility classification in the loop,
+// which is what kills the quiescence handshake's load-sensitive boundary↔
+// frame drift under llvmpipe. Static screens never publish; there an idle
+// escape ticks boundaries on the stillness timer exactly like quiescence
+// mode (any injection instant is equivalent while nothing simulates).
+// Script targets keep their authored numbers: during play boundary =
+// base + v with base fixed at the first publish, so checkpoint N maps to
+// the same sim frame on every leg. The base is recorded in the manifest.
+static long readFrameCounter(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) return -1;
+    char buf[64] = {0};
+    const size_t got = fread(buf, 1, sizeof buf - 1, f);
+    fclose(f);
+    if (!got) return -1;
+    char* end = nullptr;
+    const long v = strtol(buf, &end, 10);
+    return (end == buf) ? -1 : v;
+}
+
+// Lockstep ack: the game blocks after publishing frame v until this file
+// reads >= v. Writing it AFTER the boundary's script lines (captures first)
+// means injections are queued before the next drain opens and captures see
+// a frozen post-present frame.
+static void writeGate(const std::string& path, long v) {
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f) return;
+    fprintf(f, "%ld\n", v);
+    fclose(f);
+}
+
+static void runFrame(const std::vector<Line>& lines, RunStats& stats) {
+    size_t li = 0;
+    long boundary = 0, lastV = -1;
+    double frameBase = -1;
+    Frame prev, cur, scratch;
+    const double t0 = nowMs();
+    double lastAdvanceAt = t0, lastChangeAt = t0, lastTickAt = 0;
+    int stableRun = 0;
+    bool stopNow = false, waitForExit = false;
+
+    LOG("frame mode: locking boundaries to published sim-frame indices (" +
+        cfg.counterFile + ")");
+    while (true) {
+        if (nowMs() - t0 > cfg.maxRunSecs * 1000.0)
+            die("max run time exceeded");
+        if (g_gamePid > 0 && waitpid(g_gamePid, nullptr, WNOHANG) == g_gamePid) {
+            g_gamePid = -1;
+            stats.gameExited = true;
+            LOG("game process exited");
+            break;
+        }
+        sleepMs(cfg.pollMs);
+
+        const long v = readFrameCounter(cfg.counterFile);
+        if (v > lastV) {
+            if (lastV < 0) {
+                frameBase = (double)boundary;
+                LOG("first published frame " + std::to_string(v) +
+                    " -> frame_base=" + std::to_string(frameBase));
+            } else if (v > lastV + 1) {
+                LOG("warning: skipped publishes " + std::to_string(lastV + 1) +
+                    ".." + std::to_string(v - 1));
+            }
+            lastV = v;
+            boundary = (long)frameBase + v;
+            stats.boundaries = boundary;
+            stats.frameBase = (long)frameBase;
+            lastAdvanceAt = nowMs();
+            lastChangeAt = lastAdvanceAt;
+            stableRun = 0;
+            while (li < lines.size() && lines[li].target <= boundary) {
+                if (lines[li].target < boundary)
+                    LOG("note: line " + std::to_string(lines[li].srcLine) +
+                        " fired late (target " + std::to_string(lines[li].target) +
+                        " < boundary " + std::to_string(boundary) + ")");
+                executeAction(lines[li], boundary, scratch, stopNow, waitForExit);
+                ++li;
+            }
+            if (!cfg.gateFile.empty()) writeGate(cfg.gateFile, v);
+            if (stopNow || li >= lines.size()) break;
+            continue;
+        }
+
+        // No publish progress: track stillness for the static-screen escape.
+        if (!grabClient(cur)) {
+            int st = 0;
+            bool reaped = false;
+            const double tGone = nowMs();
+            while (nowMs() - tGone < 20000.0) {
+                if (g_gamePid > 0 && waitpid(g_gamePid, &st, WNOHANG) == g_gamePid) {
+                    reaped = true;
+                    break;
+                }
+                sleepMs(cfg.pollMs);
+            }
+            if (reaped) {
+                stats.gameExited = true;
+                stats.gameExitRc = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+                g_gamePid = -1;
+                LOG("game process exited (rc=" + std::to_string(stats.gameExitRc) + ")");
+                break;
+            }
+            die("XGetImage failed (window gone?)");
+        }
+        const bool changed = !cur.identicalTo(prev);
+        if (changed) {
+            stableRun = 0;
+            lastChangeAt = nowMs();
+        } else {
+            ++stableRun;
+        }
+        prev.release();
+        std::swap(prev.img, cur.img);
+        prev.w = cur.w;
+        prev.h = cur.h;
+
+        const double t = nowMs();
+        const bool still = stableRun >= cfg.stability &&
+                           (t - lastChangeAt) >= cfg.idleEscapeMs;
+        if (still && (t - lastAdvanceAt) >= cfg.staticIdleMs &&
+            (t - lastTickAt) >= cfg.tickGapMs) {
+            lastTickAt = t;
+            ++boundary;
+            stats.boundaries = boundary;
+            while (li < lines.size() && lines[li].target <= boundary) {
+                executeAction(lines[li], boundary, scratch, stopNow, waitForExit);
+                ++li;
+            }
+            if (stopNow || li >= lines.size()) break;
+        }
+    }
+    stats.runMs = nowMs() - t0;
+
+    if (waitForExit && !stats.gameExited && g_gamePid > 0) {
+        LOG("waiting up to 20s for natural game exit...");
+        for (int i = 0; i < 200 && !stats.gameExited; ++i) {
+            int st = 0;
+            const pid_t r = waitpid(g_gamePid, &st, WNOHANG);
+            if (r == g_gamePid) {
+                stats.gameExited = true;
+                stats.gameExitRc = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+                g_gamePid = -1;
+            } else sleepMs(100);
+        }
+        if (!stats.gameExited) LOG("game did not exit after 'exit'; will be terminated");
+    }
+    LOG("frame run done: " + std::to_string(stats.boundaries) + " boundaries in " +
+        std::to_string(stats.runMs / 1000.0) + "s, checkpoints " +
+        std::to_string(g_checkpoints.size()));
+}
+
 // ------------------------------------------------------------------ main
 int main(int argc, char** argv) {
     signal(SIGINT, onSignal);
@@ -902,6 +1081,7 @@ int main(int argc, char** argv) {
         else if (a == "--geometry") cfg.geometry = need("WxHxD");
         else if (a == "--game") cfg.gamePath = need("path");
         else if (a == "--hiscore") cfg.hiscoreFixture = need("fixture");
+        else if (a == "--mask-dir") cfg.maskDir = need("dir");
         else if (a == "--mine-rect") { if (!parseCropRect(need("X,Y,W,H"), g_mineCrop)) die("bad --mine-rect"); }
         else if (a == "--ref-rect") { if (!parseCropRect(need("X,Y,W,H"), g_refCrop)) die("bad --ref-rect"); }
         else if (a == "--settle") cfg.settleSecs = atoi(need("secs").c_str());
@@ -909,6 +1089,7 @@ int main(int argc, char** argv) {
         else if (a == "--stability") cfg.stability = atoi(need("N").c_str());
         else if (a == "--tick-gap-ms") cfg.tickGapMs = atoi(need("ms").c_str());
         else if (a == "--idle-escape-ms") cfg.idleEscapeMs = atoi(need("ms").c_str());
+        else if (a == "--static-idle-ms") cfg.staticIdleMs = atoi(need("ms").c_str());
         else if (a == "--stall-timeout-ms") cfg.stallTimeoutMs = atoi(need("ms").c_str());
         else if (a == "--max-run") cfg.maxRunSecs = atoi(need("secs").c_str());
         else if (a == "--keep") cfg.keepWork = true;
@@ -921,8 +1102,9 @@ int main(int argc, char** argv) {
         const char* env = ::getenv("XAST_HANDSHAKE");
         cfg.handshake = env ? env : "quiescence";
     }
-    if (cfg.handshake != "quiescence" && cfg.handshake != "counter")
-        die("--handshake must be quiescence|counter");
+    if (cfg.handshake != "quiescence" && cfg.handshake != "counter" &&
+        cfg.handshake != "frame")
+        die("--handshake must be quiescence|counter|frame");
     if (cfg.gamePath.empty()) cfg.gamePath = repoRoot + "/XAsteroids";
     if (!fileExists(cfg.gamePath))
         die("game binary not found: " + cfg.gamePath + " (make XAsteroids first)");
@@ -946,6 +1128,10 @@ int main(int argc, char** argv) {
 
         const std::string workDir = makeWorkDir();
         LOG("work dir: " + workDir + (cfg.keepWork ? " (kept)" : ""));
+        if (cfg.handshake == "frame") {
+            cfg.counterFile = workDir + "/framecount";
+            cfg.gateFile = workDir + "/framegate";
+        }
         if (!cfg.hiscoreFixture.empty()) {
             if (!fileExists(cfg.hiscoreFixture))
                 die("hi-score fixture not found: " + cfg.hiscoreFixture);
@@ -977,6 +1163,7 @@ int main(int argc, char** argv) {
         const std::vector<Line> lines = loadScript(cfg.scriptPath);
         RunStats stats;
         if (cfg.handshake == "counter") runCounter(lines, stats);
+        else if (cfg.handshake == "frame") runFrame(lines, stats);
         else                            runQuiescence(lines, stats);
 
         // ---- diff phase
@@ -1011,6 +1198,10 @@ int main(int argc, char** argv) {
                     }
                 }
                 if (fileExists(mask)) c.maskPath = mask;
+                else if (!cfg.maskDir.empty()) {
+                    const std::string alt = cfg.maskDir + "/" + c.name + ".mask.png";
+                    if (fileExists(alt)) c.maskPath = alt;
+                }
                 double ae = -1;
                 if (!diffAgainstRef(mineCmp, refCmp, c.maskPath, ae)) {
                     ERR("compare failed for " + c.name);
@@ -1027,7 +1218,7 @@ int main(int argc, char** argv) {
         }
 
         writeManifest(cfg.outDir + "/manifest.txt", workDir, stats.runMs,
-                      stats.gameExitRc, haveDiff, diffPass);
+                      stats.gameExitRc, stats.frameBase, haveDiff, diffPass);
         LOG("manifest: " + cfg.outDir + "/manifest.txt");
 
         cleanupAll();

@@ -408,3 +408,133 @@ mask, pre-computed pure-bitmap, NonRot static-texture degenerate path (m13)`
 - Orchestrator fix-up: glBackend font paths now resolve via /proc/self/exe
   (harness chdirs the game into a scratch work dir; repo-relative paths broke
   font loading — the worker had documented this as needing a cd-wrapper).
+
+## Task 36 — GL identity gate: trajectory alignment + Tier-2 mask infrastructure + Q10
+
+**Date:** 2026-08-24. **HEAD at start:** 59e5870. **Result: Q10 Tier-2 PASS
+(13/13 checkpoints AE=0.000000, masked cropped GL-vs-X11), trajectory proven by
+object-state hashes (435/435 frames identical across X11 + GL×2), X11 Q13
+re-verified PASS.**
+
+### 1. Trajectory alignment mechanism (chosen, implemented, proven)
+
+**Chosen mechanism: option (a) — frame-index-locked handshake — implemented as
+an env-gated domain-side frame publisher plus a lockstep gate, consumed by a new
+harness `--handshake frame` mode.** Deviation from the task text, documented:
+the task presumed "the game already publishes a monotonic frame counter in
+endFrame (D17.3)" — it does NOT: harness.C's counter mode exists but nothing
+publishes `_XAST_FRAME_COUNTER` (x11Backend.H task-12 staging note: "endFrame()
+publishes none (zero risk accepted: skipped)"). With x11Backend.H off-limits,
+the publisher lives in the shared domain header instead:
+
+- `playingField.H` QA block (all env-gated, inert when unset → Q13 byte-identity
+  path never executes a changed line):
+  - `XAST_FRAME_COUNTER_FILE` — rewritten once per completed gameplay frame
+    with the frame index (`xastQaPublishFrame`). One index per PresentFrame on
+    BOTH RunGame variants; publish lands AFTER the frame is observable
+    (GL: after `endFrame`'s swap; X11: after an explicit gated `XFlush` of the
+    queued present copies — the flush MUST stay gated or it perturbs the
+    Q13-sampled visible-frame sequence, the T14 hazard class).
+  - `XAST_FRAME_GATE_FILE` — lockstep ack: after publishing frame v the game
+    blocks until the file reads ≥v (2s self-heal timeout). This makes every
+    scripted input land in the NEXT drain and every capture see a frozen
+    post-present frame regardless of render load.
+  - `XAST_STATE_HASH_FILE` — per-frame FNV-1a over all three object lists
+    (box center/w/h, velocity, rotator angle/angular-velocity/radius for the
+    Rock/Enemy/Bullet/Ship/Thrust families — everything else inherits the
+    aborting base `MovableObject::ObjectRotator`) + score/ships/frame counters.
+  - `XAST_DRAWDUMP_FILE` / `XAST_TEXTDUMP_FILE` — deferred-draw records with
+    bitmap/masked/transformed/outline class, and help/table text-block rects
+    (mask sources, §2).
+- `harness.C --handshake frame`: boundary = frame_base + published frame index;
+  static screens (which never publish) idle-escape on stillness timers exactly
+  like quiescence mode. `frame_base` recorded in the manifest.
+
+**Proof (qa/task36-evidence/*.state.hash):** full seeded session, seed 12345,
+session.script — X11-run1, GL-run1, GL-run2 (plus GL q10c/q10d from the final
+binary): **435/435 frames hash-identical across all runs and across legs**
+(`cmp` of `{frame hash}` streams = clean). Includes rotation/thrust/fire/
+hyperspace inputs, bullet wraps, rock splits, deaths. A no-input coast probe
+additionally matched 427/427.
+
+**Bugs found BY the mechanism (all fixed):**
+1. `ShipBullet`/`EnemyBullet` ctor-order defect: the group bakes its sprite
+   texture in its ctor BODY, after the bullet member ctors captured it as 0 →
+   GL bullets never drew AND never wrapped (the wrap teleport lives inside the
+   draw arguments — T24's "wrap is physics"). X11 wrapped at f84/f85, GL did
+   not → permanent trajectory divergence from the first shot. Fix: lazy-bind at
+   fire time (enemyGroup ensure-texture idiom) in both bullet classes.
+2. GLFW pump/drain order: events injected during the gate window were consumed
+   one frame LATER on GL than X11 (GLFW only delivers via glfwPollEvents, which
+   ran inside PresentFrame — after the drain). Fix: `engine.beginFrame()` pump
+   at iteration head before the drain in the shared RunGame loop.
+3. GL canvas-domain offset missing (§2): every world/help/table draw was placed
+   ~(−56,+96) px away from X11's position because GL has no canvas indirection.
+
+### 2. Tier-2 mask infrastructure
+
+`qa/gen-masks.py` (+ committed masks under `qa/masks/`). Sources: the env-gated
+draw-class dumps — NEVER pixel diffs. Masked classes (unioned across legs):
+1. Re-rasterized content: GL `o` wireframe outlines and `t` transformed
+   composites (rock decor, ship body); t expanded by the √2 rotation bound.
+2. GXor-overlap regions: ALL pairwise record-bbox intersections per frame
+   (X11 world sprites XOR-composite; GL blends — overlap pixels are
+   blend-dependent on both legs).
+3. Text: help-screen and score-table blocks dumped at the draw sites, unioned
+   across legs (stb metrics ≠ server fonts).
+
+Coordinates: dump coords are LOGICAL play-area space (`playArea.NorthWestCorner`
+= (80,80)); crop-local = v−80 on every leg (verified against sprite pixels:
+mean brightness 55.8 vs 0.0 for the two candidate translations).
+
+Coverage (union-exact, boolean-grid measured; honest-gate bound 50%):
+
+| checkpoint | rects | masked px | coverage |
+|---|---|---|---|
+| help | 5 | 109792 | 33.51% |
+| start | 75 | 23872 | 7.29% |
+| gp1 | 298 | 20951 | 6.39% |
+| gp2 | 81 | 15689 | 4.79% |
+| gp3 | 81 | 11892 | 3.63% |
+| gp4 | 121 | 19928 | 6.08% |
+| gp5 | 93 | 23977 | 7.32% |
+| gp6..gp10, hiscore | 3 | 150600 | 45.96% |
+
+Regeneration command (dumps archived alongside):
+`python3 qa/gen-masks.py --out qa/masks --leg <x11-dump-dir>:<gl-dump-dir>...`
+with `--checkpoint name=frame` (frame = manifest boundary − frame_base) and
+`--text-on help=help --text-on hiscore=table ...`.
+
+### 3. Q10 Tier-2 result
+
+Fresh paired runs, final binary: X11 reference (frame handshake, dumps on) vs
+GL (same), each cropped to its play rect (X11 40,179,640,512; GL 24,175,640,512
+— re-derived from the dumps' play-rect headers), diffed with per-checkpoint
+masks:
+
+```
+help AE=0.000000   start AE=0.000000  gp1 AE=0.000000  gp2 AE=0.000000
+gp3 AE=0.000000    gp4 AE=0.000000    gp5 AE=0.000000  gp6 AE=0.000000
+gp7 AE=0.000000    gp8 AE=0.000000    gp9 AE=0.000000  gp10 AE=0.000000
+hiscore AE=0.000000   RESULT: PASS (all checkpoints AE=0)
+```
+
+Run hashes also matched X11 (435/435) — the compared bitmap content is
+pixel-identical at identical simulation states. Manifest archived as
+`qa/task36-evidence/q10-tier2.manifest.txt`.
+
+### 4. X11 Q13 re-verification
+
+Canonical invocation (quiescence handshake, no env vars) after ALL game/harness
+changes: **RESULT: PASS, 13/13 checkpoints AE=0.000000** (/tmp/opencode/t36ii-q13-final).
+Warning budgets unchanged: X11 XAsteroids.o 308 (= HEAD, set-identical), GL leg
+215 (≤268), VK XAsteroids.o 214 (= HEAD like-for-like).
+
+### 5. Notes for future tasks
+- The instrumentation is PERMANENT infrastructure (env-gated; documented in
+  playingField.H). It costs nothing when unset and is the regression gate for
+  VK (task 42+): same frame handshake works backend-agnostically.
+- `--mask-dir` harness option: masks resolve refDir first, then maskDir.
+- Known cosmetic gap (documented, maskable class): GL stb text renders ~5px
+  off X11 server-font positions; thick-line caps differ (CapNotLast/JoinRound).
+  Both live inside the text/vector mask classes by design.

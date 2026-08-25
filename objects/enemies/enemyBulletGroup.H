@@ -174,6 +174,22 @@ inline void EnemyBullet::SetInterceptVector(Enemy& shooter,
                           rotator->PixWidth(),
                           rotator->PixHeight());
   #endif
+  #ifndef X11_BACKEND
+  // Same ctor-order trap as ShipBullet: the group bakes glBulletTex in its
+  // ctor BODY, after this bullet's ctor captured it as 0. Lazy-bind at fire
+  // time; the wrap inside the draw arguments is physics and must run.
+  if (!glTex)
+   {glTex=enemyBulletGroup->glBulletTex;
+    glW=enemyBulletGroup->glBulletW;
+    glH=enemyBulletGroup->glBulletH;
+   }
+  playingField->DeferDraw(glTex,
+                          CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                     ObjectLiner().Velocity())
+                                      .NorthWestCorner().x+.5,
+                          CurrentBox().NorthWestCorner().y+.5,
+                          (float)glW,(float)glH);
+  #endif
   frameTimer.Reset().TimerAlarm();
  }
 

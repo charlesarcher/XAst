@@ -173,7 +173,7 @@ void ShipBullet::MissScript(Intersector& intersector, const double createTime,
                               (float)glW,(float)glH);
     #endif
    }
- }
+  }
 
 void ShipBullet::HitScript(Intersector& intersector, const double createTime,
                                                   const double existTime,
@@ -214,13 +214,22 @@ inline void ShipBullet::PositionBullet(Intersector& intersector,
                           rotator->PixHeight());
   #endif
   #ifndef X11_BACKEND
-  if (glTex)
-    playingField->DeferDraw(glTex,
-                            CurrentBox().WrapMovingBox(PlayingField::playArea,
-                                                       ObjectLiner().Velocity())
-                                        .NorthWestCorner().x+.5,
-                            CurrentBox().NorthWestCorner().y+.5,
-                            (float)glW,(float)glH);
+  // The group bakes its sprite texture in ITS ctor body — after the bullet
+  // members' ctors captured it as 0. Lazy-bind here (fire time), the
+  // enemyGroup ensure-texture idiom. The bind MUST precede the draw below:
+  // the WrapMovingBox inside the draw arguments is physics (the wrap
+  // teleport), and skipping the draw skips the wrap.
+  if (!glTex)
+   {glTex=shipBulletGroup->glBulletTex;
+    glW=shipBulletGroup->glBulletW;
+    glH=shipBulletGroup->glBulletH;
+   }
+  playingField->DeferDraw(glTex,
+                          CurrentBox().WrapMovingBox(PlayingField::playArea,
+                                                     ObjectLiner().Velocity())
+                                      .NorthWestCorner().x+.5,
+                          CurrentBox().NorthWestCorner().y+.5,
+                          (float)glW,(float)glH);
   #endif
   frameTimer.Reset().TimerAlarm();
  }
@@ -288,8 +297,8 @@ inline ShipBulletGroup::ShipBulletGroup(RenderingEngine& eng): engine(eng), fire
                          color.red,color.green,color.blue,
                          shipBulletDecor_bits,
                          shipBulletDecor_width,shipBulletDecor_height);
-  glBulletTex=engine.createTextureFromBitmap(rgba.data(),side,side,4);
-  glBulletW=side;
+   glBulletTex=engine.createTextureFromBitmap(rgba.data(),side,side,4);
+   glBulletW=side;
   glBulletH=side;
   #endif
  }

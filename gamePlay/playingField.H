@@ -16,6 +16,8 @@
 #include<iomanip>
 #include<string.h>
 #include<sys/time.h>
+#include<unistd.h>
+#include<fcntl.h>
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #include<X11/Xutil.h>
@@ -183,8 +185,217 @@ class PlayingField
      }
 #endif
 
+    // ---- Task-36 QA instrumentation (env-gated; inert by default) ----------
+    // Cross-leg identity-gate plumbing; every entry point no-ops unless its
+    // env var is set, so Q13 byte-identity runs never execute a changed
+    // line. Contract (consumed by test/harness/harness.C --handshake frame
+    // and qa/gen-masks.py):
+    //   XAST_FRAME_COUNTER_FILE  rewritten once per completed gameplay frame
+    //     ("N\n") — script boundaries become exact simulation-step indices
+    //     on EVERY backend (drift-proof vs visibility-ticked sampling).
+    //   XAST_STATE_HASH_FILE  per-frame object-state hash = trajectory-
+    //     alignment PROOF (same seed+script => identical across legs/runs).
+    //   XAST_DRAWDUMP_FILE  deferred-draw records + bitmap/transformed/
+    //     outline class = Tier-2 mask source (NEVER pixel diffs).
+    //   XAST_TEXTDUMP_FILE  help/game-over text-block rects = text mask.
+    // One index per PresentFrame on both RunGame variants (1 = pre-loop
+    // present). Publish lands AFTER the frame is observable: GL after
+    // endFrame's swap, X11 after flushing the queued present copies — the
+    // flush itself MUST stay gated or it perturbs the Q13-sampled visible-
+    // frame sequence (T14 hazard class). Static screens never publish.
+    inline static const char* xastQaPath(const char* env)
+     {const char* v=getenv(env);
+      return (v&&*v)?v:(const char*)0;
+     }
+    inline static long xastQaFrameNo=0;
+
+    inline void xastQaRecordFrameState()
+     {const bool wantDraws=xastQaPath("XAST_DRAWDUMP_FILE")!=0,
+                 wantHash=xastQaPath("XAST_STATE_HASH_FILE")!=0;
+      if (!wantDraws&&!wantHash)
+        return;
+      ++xastQaFrameNo;
+      if (wantHash)
+       {unsigned long h=1469598103934665603UL;
+        auto mixU=[&h](unsigned long long v)
+          {h^=v;
+           h*=1099511628211UL;
+          };
+        auto mixI=[&mixU](long i)
+          {mixU((unsigned long long)i);
+          };
+        auto mixD=[&mixU](double d)
+          {unsigned long long u=0;
+           memcpy(&u,&d,sizeof u);
+           mixU(u);
+          };
+        auto mixObj=[&mixD,&mixU](MovableObject* o)
+          {const Box& b=o->CurrentBox();
+           mixD(b.Center().x);
+           mixD(b.Center().y);
+           mixD(b.Width());
+           mixD(b.Height());
+           const Vector2d& vel=o->ObjectLiner().Velocity();
+           mixD(vel.x);
+           mixD(vel.y);
+           // Only these families override ObjectRotator(); every other
+           // MovableObject leaf (Explosion/BulletExplosion/Hyper) inherits
+           // the aborting base. A fixed sentinel keeps the hash stream
+           // aligned either way; classification is identical on both legs,
+           // which is all the equality proof needs.
+           const bool hasRotator=
+            dynamic_cast<Rock* const>(o)!=nullptr||
+            dynamic_cast<Enemy* const>(o)!=nullptr||
+            dynamic_cast<Bullet* const>(o)!=nullptr||
+            dynamic_cast<Ship* const>(o)!=nullptr||
+            dynamic_cast<Thrust* const>(o)!=nullptr;
+           if (hasRotator)
+            {Rotator& rot=o->ObjectRotator();
+             mixD(rot.Angle());
+             mixD((double)rot.AngularVelocity());
+             mixD(rot.Radius());
+            }
+           else
+             mixU(0x4570C510ULL);
+          };
+        mixI(score->CurrentScore());
+        mixI(shipYard->NumShips());
+        mixI(framesThisLevel);
+        mixI(framesSinceLastBullet);
+        mixI(framesSinceEnemy);
+        LinkedArray<MovableObject*>* lists[3]=
+          {&nonPermeableList,&selfPermeableList,&permeableList};
+        for (int l=0;l<3;++l)
+         {LinkedArray<MovableObject*>& L=*lists[l];
+          mixI(L.GetNumItems());
+          L.SetCurrentAtHead();
+          for (int i=0;i<L.GetNumItems();++i)
+           {mixObj(L.GetData());
+            L.Next();
+           }
+         }
+        xastQaPendingHash=h;
+       }
+      if (wantDraws)
+       {FILE* f=fopen(xastQaPath("XAST_DRAWDUMP_FILE"),"a");
+        if (f)
+         {fprintf(f,"p %d %d %d %d\n",stage->playAreaX,stage->playAreaY,
+                  (int)playArea.Width(),(int)playArea.Height());
+          fprintf(f,"f %ld %d\n",xastQaFrameNo,numFrameDraws);
+          for (int i=0;i<numFrameDraws;++i)
+           {const FrameDrawRecord& r=frameDraws[i];
+            #ifdef X11_BACKEND
+            fprintf(f,"r %c %.1f %.1f %.1f %.1f\n",
+                    r.mask?'m':'b',r.x,r.y,r.w,r.h);
+            #else
+            if (r.outline)
+             {// wireframe: bbox of the quantized verts under the translation
+              float minx=r.oVerts[0],maxx=minx,miny=r.oVerts[1],maxy=miny;
+              for (int k=1;k<r.oCount;++k)
+               {if (r.oVerts[2*k]<minx) minx=r.oVerts[2*k];
+                if (r.oVerts[2*k]>maxx) maxx=r.oVerts[2*k];
+                if (r.oVerts[2*k+1]<miny) miny=r.oVerts[2*k+1];
+                if (r.oVerts[2*k+1]>maxy) maxy=r.oVerts[2*k+1];
+               }
+              fprintf(f,"r o %.1f %.1f %.1f %.1f\n",
+                      r.tx+minx,r.ty+miny,maxx-minx,maxy-miny);
+             }
+            else if (r.tx!=0.0f||r.ty!=0.0f||r.angle!=0.0f)
+             // transformed composite: dest rect is centered on (tx,ty); the
+             // generator expands by the rotation bound (sqrt2 on the side).
+             fprintf(f,"r t %.1f %.1f %.1f %.1f\n",r.tx,r.ty,r.w,r.h);
+            else
+             fprintf(f,"r %c %.1f %.1f %.1f %.1f\n",
+                     r.mask?'m':'b',r.x,r.y,r.w,r.h);
+            #endif
+           }
+          fclose(f);
+         }
+       }
+     }
+
+    inline void xastQaPublishFrame()
+     {const char* cp=xastQaPath("XAST_FRAME_COUNTER_FILE");
+      const char* hp=xastQaPath("XAST_STATE_HASH_FILE");
+      if (!cp&&!hp)
+        return;
+      #ifdef X11_BACKEND
+      // Observability barrier BEFORE publishing: PresentFrame queued the
+      // present copies into this client's output buffer; flushing them
+      // guarantees any grab issued after the counter is read executes
+      // after those copies in server request order.
+      XFlush(stage->display);
+      #endif
+      if (cp)
+       {char buf[32];
+        const int len=snprintf(buf,sizeof buf,"%ld\n",xastQaFrameNo);
+        const int fd=open(cp,O_WRONLY|O_CREAT,0644);
+        if (fd>=0)
+         {pwrite(fd,buf,(size_t)len,0);
+          ftruncate(fd,(off_t)len);
+          close(fd);
+         }
+       }
+      if (hp)
+       {FILE* f=fopen(hp,"a");
+        if (f)
+         {fprintf(f,"p %d %d %d %d\n",stage->playAreaX,stage->playAreaY,
+                  (int)playArea.Width(),(int)playArea.Height());
+          fprintf(f,"h %ld %016llx %d %d %d %d %d\n",
+                  xastQaFrameNo,xastQaPendingHash,
+                  nonPermeableList.GetNumItems(),selfPermeableList.GetNumItems(),
+                  permeableList.GetNumItems(),score->CurrentScore(),
+                  shipYard->NumShips());
+          fclose(f);
+         }
+       }
+      // Lockstep gate: hold the simulation until the harness acknowledges
+      // this frame, so scripted inputs always land in the NEXT drain and
+      // captures see a frozen post-present frame regardless of render load
+      // (the quiescence-era drift was exactly this race). Self-heals after
+      // 2s if the harness dies.
+      const char* gp=xastQaPath("XAST_FRAME_GATE_FILE");
+      if (gp)
+       {timeval start,end;
+        gettimeofday(&start,NULL);
+        for (;;)
+         {FILE* f=fopen(gp,"r");
+          long g=-1;
+          if (f)
+           {if (fscanf(f,"%ld",&g)!=1)
+              g=-1;
+            fclose(f);
+           }
+          if (g>=xastQaFrameNo)
+            break;
+          gettimeofday(&end,NULL);
+          if ((end.tv_sec-start.tv_sec)*1000000+(end.tv_usec-start.tv_usec)
+              >2000000)
+            break;
+          usleep(1000);
+         }
+       }
+     }
+
+    // One rect covering a whole text block (help screen / game-over table):
+    // union semantics make per-string precision unnecessary; the generator
+    // pads and clips to the play rect. tag ∈ {help, table}.
+    inline void xastQaTextBlock(const char* tag,float x,float yTop,
+                                float w,float h)
+     {const char* tp=xastQaPath("XAST_TEXTDUMP_FILE");
+      if (!tp)
+        return;
+      FILE* f=fopen(tp,"a");
+      if (!f)
+        return;
+      fprintf(f,"p %d %d %d %d\n",stage->playAreaX,stage->playAreaY,
+              (int)playArea.Width(),(int)playArea.Height());
+      fprintf(f,"t %s %.1f %.1f %.1f %.1f\n",tag,x,yTop,w,h);
+      fclose(f);
+     }
 
   private:
+    unsigned long long xastQaPendingHash=0;
 
 #ifdef X11_BACKEND
     Boolean RunGame(Options& options);
@@ -434,10 +645,19 @@ inline void PlayingField::PresentFrame()
   const int playRect[4]={stage->playAreaX,stage->playAreaY,
                          (int)playArea.Width(),(int)playArea.Height()};
   engine.setScissorRect(playRect);
-  // (5) world pass — ORIGINAL per-object emission order verbatim on X11
-  // (O5-M4: the canonical order is a GL/VK-only contract); replay of the
-  // records captured at the old mid-physics draw points;
-  RenderFrameDraws();
+   // (5) world pass — ORIGINAL per-object emission order verbatim on X11
+   // (O5-M4: the canonical order is a GL/VK-only contract); replay of the
+   // records captured at the old mid-physics draw points;
+   #ifdef GL_BACKEND
+   // Canvas-domain shift: record coords are X11-canvas-relative (80-based);
+   // GL has no canvas indirection, so translate by playAreaXY-80.
+   static_cast<GLBackend&>(engine).setCanvasOffset(
+       (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+   #endif
+   RenderFrameDraws();
+   #ifdef GL_BACKEND
+   static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+   #endif
   engine.setScissorRect(nullptr);
   engine.endRenderTo();
   // (6) HUD lives outside the play rect;
@@ -764,7 +984,9 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
        }
       SetGravityAcceleration();
       intersector.Intersect();
+      xastQaRecordFrameState();
       PresentFrame();
+      xastQaPublishFrame();
       gettimeofday(&endTime,NULL);
       unsigned int diffTime=endTime.tv_usec-startTime.tv_usec+(endTime.tv_sec-startTime.tv_sec)*1000000;
       if (diffTime<uSecondsPerFrame)
@@ -805,6 +1027,10 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   engine.drawStringTransparent("        H -- help",(float)xPos,
                                (float)(yPos+=fontHeight),
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
+  xastQaTextBlock("table",(float)xPos,
+                  (float)(yPosSave-stage->hiScoreInfo->ascent),
+                  (float)(stage->hiScoreInfo->max_bounds.width*22),
+                  (float)(15*fontHeight));
   engine.endRenderTo();
   stage->DrawPlayingField();
   return off;
@@ -842,6 +1068,13 @@ inline PlayingField::Boolean PlayingField::RunGame()
       NewRocksAndEnemy();
       if (ShipBulletGroup::autoFire&&firing)
         shipBulletGroup->fireThisFrame=ShipBulletGroup::on;
+      // Pump BEFORE the drain: events injected while this loop sat gated
+      // after the previous publish must be visible to THIS frame's drain.
+      // X11's pollEvents reads the server queue directly, but GLFW only
+      // delivers through glfwPollEvents, which otherwise first fires
+      // inside PresentFrame — one full frame after X11 consumes the same
+      // injection (the task-36 trajectory divergence).
+      engine.beginFrame();
       int numEvents=engine.pollEvents(events,256);
 #ifdef GL_BACKEND
       // GL-only until task 42: bridge drain + close latch need the concrete
@@ -945,8 +1178,10 @@ inline PlayingField::Boolean PlayingField::RunGame()
        }
       SetGravityAcceleration();
       intersector.Intersect();
+      xastQaRecordFrameState();
       PresentFrame();
       engine.endFrame();
+      xastQaPublishFrame();
       gettimeofday(&endTime,NULL);
       unsigned int diffTime=endTime.tv_usec-startTime.tv_usec+(endTime.tv_sec-startTime.tv_sec)*1000000;
       if (diffTime<uSecondsPerFrame)
@@ -967,9 +1202,13 @@ inline PlayingField::Boolean PlayingField::RunGame()
   char str[23];
   engine.beginRenderTo((TextureId)pixmap);
   engine.clear();
-  // Task-36: base+chrome BEFORE the table (clear() wiped the whole window
-  // on this leg).
-  DrawHudChrome();
+   // Task-36: base+chrome BEFORE the table (clear() wiped the whole window
+   // on this leg).
+   DrawHudChrome();
+   #ifdef GL_BACKEND
+   static_cast<GLBackend&>(engine).setCanvasOffset(
+       (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+   #endif
   for(int i=0;i<score->NumScores();++i)
    {const int nameWidth=12-(int)strlen(score->TopTenName(i));
     snprintf(str,sizeof(str),"%s%*s%10d",
@@ -988,6 +1227,13 @@ inline PlayingField::Boolean PlayingField::RunGame()
    engine.drawStringTransparent("        H -- help",(float)xPos,
                                 (float)(yPos+=fontHeight),
                                 EngineFont_HiScore,1.0f,1.0f,1.0f);
+   xastQaTextBlock("table",(float)xPos,
+                   (float)(yPosSave-hiScoreFm.max_bounds.ascent),
+                   (float)(hiScoreFm.max_bounds.width*22),
+                   (float)(15*fontHeight));
+   #ifdef GL_BACKEND
+   static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+   #endif
    engine.endRenderTo();
    stage->DrawPlayingField();
    engine.endFrame();
@@ -1151,15 +1397,21 @@ void PlayingField::GenHelpScreen()
   engine.drawStringTransparent("space bar -- hyperspace",(float)xPos,
                                (float)(yPos+=fontHeight),
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.drawStringTransparent("        N -- new game",(float)xPos,
-                               (float)(yPos+=2*fontHeight),
-                               EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
-                               (float)(yPos+=2*fontHeight),
-                               EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.endRenderTo();
-  #endif
-  #ifndef X11_BACKEND
+   engine.drawStringTransparent("        N -- new game",(float)xPos,
+                                 (float)(yPos+=2*fontHeight),
+                                 EngineFont_HiScore,1.0f,1.0f,1.0f);
+   engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
+                                (float)(yPos+=2*fontHeight),
+                                EngineFont_HiScore,1.0f,1.0f,1.0f);
+   xastQaTextBlock("help",(float)xPos,
+                   (float)(playArea.NorthWestCorner().y
+                           +(playArea.Height()-12*fontHeight+4)/2),
+                   engine.measureText("        H -- help (this screen)",
+                                      EngineFont_HiScore),
+                   (float)(12*fontHeight));
+   engine.endRenderTo();
+   #endif
+   #ifndef X11_BACKEND
   // GL leg: the canvas indirection collapses (pixmap=0 → beginRenderTo is a
   // no-op), so the text draws straight onto the window; metrics come from
   // the engine instead of stage's guarded font structs.
@@ -1176,6 +1428,10 @@ void PlayingField::GenHelpScreen()
   // Task-36: base+chrome BEFORE the text — clear() wiped the whole window
   // and the strings must land on the restored surface.
   DrawHudChrome();
+  #ifdef GL_BACKEND
+  static_cast<GLBackend&>(engine).setCanvasOffset(
+      (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+  #endif
   engine.drawStringTransparent("        S -- start",(float)xPos,(float)yPos,
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
   engine.drawStringTransparent("        Q -- quit",(float)xPos,
@@ -1196,12 +1452,21 @@ void PlayingField::GenHelpScreen()
   engine.drawStringTransparent("space bar -- hyperspace",(float)xPos,
                                (float)(yPos+=fontHeight),
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
-  engine.drawStringTransparent("        N -- new game",(float)xPos,
+   engine.drawStringTransparent("        N -- new game",(float)xPos,
+                                 (float)(yPos+=2*fontHeight),
+                                 EngineFont_HiScore,1.0f,1.0f,1.0f);
+  engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
                                (float)(yPos+=2*fontHeight),
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
-   engine.drawStringTransparent("        H -- help (this screen)",(float)xPos,
-                                (float)(yPos+=2*fontHeight),
-                                EngineFont_HiScore,1.0f,1.0f,1.0f);
+  xastQaTextBlock("help",(float)xPos,
+                  (float)(playArea.NorthWestCorner().y
+                          +(playArea.Height()-12*fontHeight+4)/2),
+                  engine.measureText("        H -- help (this screen)",
+                                     EngineFont_HiScore),
+                  (float)(12*fontHeight));
+  #ifdef GL_BACKEND
+  static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+  #endif
    engine.endRenderTo();
    #endif
   }

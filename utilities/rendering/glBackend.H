@@ -222,6 +222,14 @@ class GLBackend : public RenderingEngine
       return 0;
      }
 
+    // Task-36: canvas-domain translation (logical units, added inside
+    // presentMVP). playingField brackets the passes whose coordinates are
+    // X11-canvas-relative (world replay, help text, score table) with
+    // (stage->playAreaXY - 80) so GL places them exactly where the X11
+    // canvas blit does; window-domain chrome stays unbracketed.
+    void setCanvasOffset(float dx,float dy)
+     {canvasOffX_=dx;canvasOffY_=dy;}
+
     virtual void setScissorRect(const int* xywh) override
      {// D7/v6.1: LOGICAL CLIENT coords in; the backend applies the present
       // transform (scale+offset, y-flip) on the way to glScissor's window-
@@ -755,8 +763,11 @@ class GLBackend : public RenderingEngine
       float cs=cosf(angle_),sn=sinf(angle_);
       // M: logical = R*local + t (the object rotates about its OWN origin,
       // then translates to (tx,ty) — the D2 rotator placement semantic).
-      float ma=cs,mb=-sn,mc=tx_;
-      float md=sn,me=cs,mf=ty_;
+      // Task-36: canvas-domain draws carry the X11 canvas-origin shift
+      // (playAreaXY - 80) so world/help/table content lands where the X11
+      // canvas blit puts it; set by playingField via setCanvasOffset().
+      float ma=cs,mb=-sn,mc=tx_+canvasOffX_;
+      float md=sn,me=cs,mf=ty_+canvasOffY_;
       // L = P*M (apply M first)
       float la=a*ma,lb=a*mb,lc=a*mc+c;
       float ld=b*md,le=b*me,lf=b*mf+d;
@@ -1372,6 +1383,7 @@ class GLBackend : public RenderingEngine
     bool presentDirty_;
     float presentScale_;
     int presentOffX_,presentOffY_;
+    float canvasOffX_=0.0f,canvasOffY_=0.0f;   // task-36 canvas-domain shift
     bool closeRequested_;
     bool shutdownDone_;
     bool glfwInitialized_;
