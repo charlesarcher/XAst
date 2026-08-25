@@ -1,0 +1,60 @@
+# qa/vk-soak.log — task-39 frame-sync soak + forced-OUT_OF_DATE evidence
+# Driver: test/vk/vksoak.C (make BACKEND=VK vksoak). Machine: RTX 5090 under Xvfb :98 (1280x1024x24).
+# Validation LIVE: VK_LAYER_PATH=/tmp/opencode/vvl/usr/share/vulkan/explicit_layer.d (vulkan-validation-layers 1.4.357.0-1.1).
+# Loader noise ([vk-loader-error:Loader Message] x2 from broken liblsfg-vk) is tagged+uncounted per vkBackend.H.
+
+## RUN T39-1: default soak 3600+600 frames
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vksoak: config: frames-in-flight=2 acquire-timeout=100ms fence-timeout=125ms stall-limit=100
+vksoak: plan: 3600 frames + resize at 1440 + 600 post-resize
+vksoak: SOAK REPORT
+  frames completed (submit+present): 4200 / 4200
+  wall time: 28.10s -> 149.5 frames/s
+  re-bootstraps: 1 (was 0 before the resize)
+  recovered stalls skipped: 0
+  presentation suspended: no
+  validation layer enabled: yes
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+vksoak: re-bootstrap ENGAGED (1 rebuild(s)); cycle continued for 4200 frame(s) after it
+  final extent: 920x640 (framebuffer 920x640)
+vksoak: PASS
+
+## RUN T39-2: full plan-scale soak 9000+600=9600 frames (the plan's 10-min row at measured rate)
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vksoak: config: frames-in-flight=2 acquire-timeout=100ms fence-timeout=125ms stall-limit=100
+vksoak: plan: 9000 frames + resize at 3600 + 600 post-resize
+vksoak: SOAK REPORT
+  frames completed (submit+present): 9600 / 9600
+  wall time: 65.32s -> 147.0 frames/s
+  re-bootstraps: 1 (was 0 before the resize)
+  recovered stalls skipped: 0
+  presentation suspended: no
+  validation layer enabled: yes
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+vksoak: re-bootstrap ENGAGED (1 rebuild(s)); cycle continued for 9600 frame(s) after it
+  final extent: 920x640 (framebuffer 920x640)
+vksoak: PASS
+
+## RUN T39-3: vksurface regression after frame-sync landing
+vksurface: SURFACE+SWAPCHAIN REPORT
+  window: 688x702 requested, framebuffer 688x702
+  surface: created
+  present queue family: 0 (graphics family also presents)
+  swapchain: 3 images, VK_FORMAT_B8G8R8A8_UNORM, extent 688x702
+  validation layer: enabled=yes
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vksurface: PASS
+
+## RUN T39-4: vkprobe surfaceless regression
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+vkprobe: PASS-0 REPORT
+  instance: created (header pin 1.4.357)
+  device: NVIDIA GeForce RTX 5090 (discrete, apiVersion 1.4.341)
+  graphics queue family: 0
+  debug utils available: yes, messenger: created
+  validation layer: instance-present=no device-present=no enabled=no
+  swapchain ext available: yes (standalone device: NOT enabled; the windowed path enables it post-surface)
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vkprobe: PASS

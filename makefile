@@ -233,6 +233,17 @@ obj/VK/vksurface: test/vk/vksurface.C utilities/rendering/vkBackend.H utilities/
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
 
+# Task 39: frame-sync soak driver (test/vk/vksoak.C -> beginFrame/endFrame
+# acquire/submit/present cycle + forced-resize re-bootstrap exercise). Run
+# under Xvfb with DISPLAY set; copy to the repo root first (font paths
+# resolve via /proc/self/exe).
+.PHONY: vksoak
+vksoak: obj/VK/vksoak
+
+obj/VK/vksoak: test/vk/vksoak.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+	$(VK_LOADER_GATE)
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 

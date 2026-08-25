@@ -27,6 +27,49 @@
 //     gate — without it nothing observes messages between instance and
 //     messenger creation. Strictly more capture coverage than task 37.
 //
+// Task-39 frame sync (this revision): ONE transient command pool +
+// kMaxFramesInFlight primary command buffers, one fence per in-flight
+// frame (created SIGNALED), per-frame image-available + render-finished
+// semaphores. beginFrame/endFrame own the real acquire/submit/present
+// cycle (GLFW pump lives in beginFrame, glBackend precedent):
+//   - B4 fix: vkAcquireNextImageKHR timeout is FINITE — kAcquireTimeoutMs
+//     (100 ms = one frame-period margin over D4's 62.5 ms pacing, m16).
+//     This is the ONLY acquire timeout in the tree (grep gate).
+//   - OUT_OF_DATE/SUBOPTIMAL from acquire OR present re-bootstraps the
+//     swapchain (fresh caps query, oldSwapchain-chained rebuild at the
+//     current extent, fresh views) and the cycle continues. From ACQUIRE
+//     the possibly-signaled semaphore is recycled by DESTROY+RECREATE
+//     (never reused while possibly signaled — no double-wait, no
+//     double-signal; R6 spec rule 1).
+//   - Fence-wait timeout (>2 frame periods, kFenceTimeoutMs=125 ms) and
+//     acquire VK_TIMEOUT ride the SAME recovered-stall path: log + skip
+//     the frame; kStallShutdownFrames (100) consecutive stalls force a
+//     clean shutdown — the failure mode is defined, never a hang.
+//   - Degenerate surface (caps.currentExtent width or height == 0,
+//     minimized window) SKIPS re-bootstrap and presentation until a
+//     non-degenerate size arrives (vkCreateSwapchainKHR needs >= 1x1).
+//   - swapchainDirty_ (task-38 framebuffer-size callback) is consumed
+//     HERE, at the top of beginFrame, via the same re-bootstrap path —
+//     resize needs no separate mechanism (S2/D17.4a).
+//   - endFrame submits a MINIMAL CLEAR-ONLY command buffer (layout
+//     barriers + vkCmdClearColorImage — no render pass, no pipeline;
+//     those are tasks 40/41) so the cycle is real end-to-end.
+// FRAMES-IN-FLIGHT CHOICE: 2. The swapchain itself stays triple-buffered
+// (3 images, task 38); 2 frames-in-flight is the classic CPU/GPU overlap
+// point — the CPU never laps the GPU by more than one frame, halving the
+// sync-object count vs 3 with no throughput loss under FIFO pacing.
+// Sync objects are DEVICE-level and independent of the swapchain:
+// re-bootstrap never recreates them.
+// TASK 40 CONTRACT (leave intact): beginFrame acquires into
+// acquiredImageIndex_ and records commandBuffers_[currentFrame_]
+// (pool: commandPool_, TRANSIENT + RESET_COMMAND_BUFFER); endFrame
+// submits with wait=imageAvailableSemaphores_[currentFrame_] at
+// COLOR_ATTACHMENT_OUTPUT, signal=renderFinishedSemaphores_[
+// acquiredImageIndex_] (per swapchain image — VUID-
+// vkQueueSubmit-pSignalSemaphores-00067), fence=inFlightFences_[
+// currentFrame_]. Render-pass/framebuffer creation slots in around
+// recordClearCommands_.
+//
 //   - ONE public init entry point: initInstanceAndDevice(bool
 //     withGlfwExtensions). initWindow(title) calls it with true and returns;
 //     task 38 inserts pass 1 (stb fonts) + pass 2 (GLFW_NO_API window +
@@ -70,6 +113,8 @@
 //   | GLFWwindow              | VKBackend| pass 2a; dies before the device  |
 //   | VkSurfaceKHR            | VKBackend| pass 2a; after window, b4 device |
 //   | VkSwapchainKHR + views  | VKBackend| pass 2b; FIRST things destroyed  |
+//   | VkCommandPool/buffers   | VKBackend| task 39; freed before the device |
+//   | fences/semaphores (x2f) | VKBackend| task 39; freed before the device |
 //
 // Zero X11 includes; zero census symbols (F1-neutral new GPU code).
 // NO backend macro: nothing here defines or tests VK_BACKEND (domain stays
@@ -104,6 +149,13 @@
 
 class VKBackend : public RenderingEngine
  {public:
+    // Task-39 frame-sync tuning constants (public: soak/probe drivers print
+    // them; the B4 grep gate keys on kAcquireTimeoutMs).
+    static constexpr int kMaxFramesInFlight=2;       // see header comment
+    static constexpr uint32_t kAcquireTimeoutMs=100; // B4: FINITE (m16)
+    static constexpr uint32_t kFenceTimeoutMs=125;   // >2 frame periods
+    static constexpr unsigned kStallShutdownFrames=100;
+
     VKBackend()
       :instance(VK_NULL_HANDLE),
         physicalDevice(VK_NULL_HANDLE),
@@ -134,14 +186,31 @@ class VKBackend : public RenderingEngine
         closeRequested_(false),
         fbWidth_(0),fbHeight_(0),
         canonicalWidth_(0),canonicalHeight_(0),
+        commandPool(VK_NULL_HANDLE),
+        frameCount_(0),
+        rebootstrapCount_(0),
+        stallSkipCount_(0),
+        presentationSuspended_(false),
+        fatalStallShutdown_(false),
         shutdownDone_(false),
         vkDestroyDebugUtilsMessengerEXT_(NULL),
         canonicalPlayAreaWidth_(0),canonicalPlayAreaHeight_(0),
-        canonicalMaxIconHeight_(0)
+        canonicalMaxIconHeight_(0),
+        acquiredImageIndex_(0),
+        currentFrame_(0),
+        frameAcquired_(false),
+        sessionDead_(false),
+        swapchainTransferDstSupported_(false),
+        consecutiveStallCount_(0)
       {deviceName_[0]='\0';
        for (int i=0;i<4;++i)
         {fontInfo_[i]=NULL;fontData_[i]=NULL;
          fontDataLen_[i]=0;fontScale_[i]=0.0f;maxAsciiAdvance_[i]=0.0f;
+        }
+       for (int i=0;i<kMaxFramesInFlight;++i)
+        {commandBuffers_[i]=VK_NULL_HANDLE;
+         inFlightFences_[i]=VK_NULL_HANDLE;
+         imageAvailableSemaphores_[i]=VK_NULL_HANDLE;
         }
        s_instance=this;   // debug callback routes here (exactly one engine)
       }
@@ -545,11 +614,15 @@ class VKBackend : public RenderingEngine
         {shutdown();
          return false;
         }
-       if (!createSwapchain_())
-        {shutdown();
-         return false;
-        }
-       return true;
+        if (!createSwapchain_(VK_NULL_HANDLE))
+         {shutdown();
+          return false;
+         }
+        if (!initFrameSync_())
+         {shutdown();
+          return false;
+         }
+        return true;
       }
 
     virtual void shutdown() override
@@ -560,15 +633,22 @@ class VKBackend : public RenderingEngine
        // D15 release order (task-38 extension): swapchain views -> swapchain
        // -> surface -> window, THEN the task-37 chain: device -> messenger
        // -> instance -> GLFW library.
-       for (size_t i=0;i<swapchainImageViews_.size();++i)
-         vkDestroyImageView(device,swapchainImageViews_[i],NULL);
-       swapchainImageViews_.clear();
-       swapchainImages_.clear();
-       if (swapchain!=VK_NULL_HANDLE)
-         {vkDestroySwapchainKHR(device,swapchain,NULL);
-          swapchain=VK_NULL_HANDLE;
-         }
-       if (surface!=VK_NULL_HANDLE)
+        // Task-39 frame-sync teardown: drain pending presents FIRST (the
+        // presentation engine holds the last-presented images/semaphores
+        // beyond queue execution), then free device-level objects BEFORE
+        // the device.
+        drainPresentEngine_();
+        for (size_t i=0;i<swapchainImageViews_.size();++i)
+          vkDestroyImageView(device,swapchainImageViews_[i],NULL);
+        swapchainImageViews_.clear();
+        swapchainImages_.clear();
+        if (swapchain!=VK_NULL_HANDLE)
+          {vkDestroySwapchainKHR(device,swapchain,NULL);
+           swapchain=VK_NULL_HANDLE;
+          }
+        destroyRenderFinishedSemaphores_();   // per-image (task 39)
+        destroyFrameSync_();
+        if (surface!=VK_NULL_HANDLE)
          {vkDestroySurfaceKHR(instance,surface,NULL);
           surface=VK_NULL_HANDLE;
          }
@@ -616,16 +696,139 @@ class VKBackend : public RenderingEngine
       }
 
     // ------------------------------------------------------------------
-    // (2) Frame lifecycle — benign seams until tasks 38/42
+    // (2) Frame lifecycle — task-39 real cycle.
+    //   beginFrame: GLFW pump (callbacks fire here, glBackend precedent)
+    //   -> consume swapchainDirty_ via re-bootstrap -> degenerate-extent
+    //   guard -> fence wait (recovered-stall path) -> FINITE acquire
+    //   (kAcquireTimeoutMs; B4) with OUT_OF_DATE/SUBOPTIMAL handling ->
+    //   record the clear-only command buffer for this in-flight slot.
+    //   endFrame: fence-armed submit + present, then advance the slot.
+    //   Skipped frames (stall/suspend/re-bootstrap) make endFrame a no-op
+    //   via frameAcquired_.
     // ------------------------------------------------------------------
     virtual void beginFrame() override
-      {// TODO(task 39): acquire (finite 100ms timeout) + render-pass begin.
-       // The swapchainDirty_ flag set by the framebuffer-size callback is
-       // consumed by task 39's re-bootstrap — nothing else touches it here.
+      {if (sessionDead_||shutdownDone_)
+         return;
+        if (window)                     // GLFW requires a regular pump or
+          glfwPollEvents();             // resize/close callbacks never fire
+        if (swapchainDirty_)            // task-38 resize flag consumed HERE
+         {if (!rebootstrapSwapchain_())
+            return;
+         }
+        if (presentationSuspended_)
+          return;
+        VkResult wr=vkWaitForFences(device,1,
+                                    &inFlightFences_[currentFrame_],
+                                    VK_TRUE,
+                                    (uint64_t)kFenceTimeoutMs*1000000ull);
+        if (wr==VK_TIMEOUT)
+         {handleStall_("fence wait timeout");
+          return;
+         }
+        if (wr!=VK_SUCCESS)
+         {fprintf(stderr,"vkBackend: vkWaitForFences failed: %d (%s)\n",
+                  (int)wr,vkResultName(wr));
+          handleFatalStall_("fence wait failed");
+          return;
+         }
+        VkResult ar=vkAcquireNextImageKHR(device,swapchain,
+                                          (uint64_t)kAcquireTimeoutMs
+                                                    *1000000ull,
+                                          imageAvailableSemaphores_[
+                                                      currentFrame_],
+                                          VK_NULL_HANDLE,
+                                          &acquiredImageIndex_);
+        if (ar==VK_ERROR_OUT_OF_DATE_KHR)
+         {// R6 rule 1: on OUT_OF_DATE from ACQUIRE the semaphore MAY be
+          // signaled per spec — recycle by destroy+recreate (never reused
+          // while possibly signaled), then rebuild and retry once.
+          if (!recreateAcquireSemaphore_())
+            return;
+          if (!rebootstrapSwapchain_())
+            return;
+          ar=vkAcquireNextImageKHR(device,swapchain,
+                                   (uint64_t)kAcquireTimeoutMs*1000000ull,
+                                   imageAvailableSemaphores_[currentFrame_],
+                                   VK_NULL_HANDLE,&acquiredImageIndex_);
+          if (ar==VK_ERROR_OUT_OF_DATE_KHR)
+           {if (!recreateAcquireSemaphore_())
+              return;
+            fprintf(stderr,"vkBackend: acquire OUT_OF_DATE twice in one "
+                            "frame — skipping\n");
+            return;
+           }
+         }
+        if (ar==VK_SUBOPTIMAL_KHR)
+         {// A suboptimal image still presents: use THIS one, rebuild at the
+          // next beginFrame.
+          fprintf(stderr,"vkBackend: acquire SUBOPTIMAL — deferring "
+                          "re-bootstrap to next beginFrame\n");
+          swapchainDirty_=true;
+         }
+        else if (ar==VK_TIMEOUT)
+         {handleStall_("acquire timeout");   // R6 rule 2: same stall path
+          return;
+         }
+        if (!vkCheck(ar,"vkAcquireNextImageKHR"))
+         {handleFatalStall_("acquire failed");
+          return;
+         }
+        if (!recordClearCommands_(acquiredImageIndex_))
+          return;
+        frameAcquired_=true;
       }
 
     virtual void endFrame() override
-      {// TODO(task 39/42): queue submit + present land here.
+      {if (!frameAcquired_||sessionDead_||shutdownDone_)
+         return;
+       // Arm the fence JUST before submit (not at wait time): a skipped
+       // frame must leave the fence signaled so the next beginFrame's wait
+       // succeeds instantly instead of false-stalling.
+       if (!vkCheck(vkResetFences(device,1,
+                  &inFlightFences_[currentFrame_]),"vkResetFences"))
+        {handleFatalStall_("fence reset failed");
+         return;
+        }
+       VkPipelineStageFlags waitStage=
+         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+       VkSubmitInfo si{};
+       si.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO;
+       si.waitSemaphoreCount=1;
+       si.pWaitSemaphores=&imageAvailableSemaphores_[currentFrame_];
+       si.pWaitDstStageMask=&waitStage;
+       si.commandBufferCount=1;
+       si.pCommandBuffers=&commandBuffers_[currentFrame_];
+       si.signalSemaphoreCount=1;
+       si.pSignalSemaphores=
+         &renderFinishedSemaphores_[acquiredImageIndex_];
+       if (!vkCheck(vkQueueSubmit(graphicsQueue,1,&si,
+                  inFlightFences_[currentFrame_]),"vkQueueSubmit"))
+        {handleFatalStall_("queue submit failed");
+         return;
+        }
+       VkPresentInfoKHR pi{};
+       pi.sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+       pi.waitSemaphoreCount=1;
+       pi.pWaitSemaphores=&renderFinishedSemaphores_[acquiredImageIndex_];
+       pi.swapchainCount=1;
+       pi.pSwapchains=&swapchain;
+       pi.pImageIndices=&acquiredImageIndex_;
+       VkResult pr=vkQueuePresentKHR(presentQueue,&pi);
+       if (pr==VK_ERROR_OUT_OF_DATE_KHR||pr==VK_SUBOPTIMAL_KHR)
+        {// Present-side invalidation re-bootstraps now; the frame still
+         // counts (submit + present both happened).
+         fprintf(stderr,"vkBackend: present %s — re-bootstrapping\n",
+                 pr==VK_ERROR_OUT_OF_DATE_KHR?"OUT_OF_DATE":"SUBOPTIMAL");
+         rebootstrapSwapchain_();
+        }
+       else if (!vkCheck(pr,"vkQueuePresentKHR"))
+        {handleFatalStall_("present failed");
+         return;
+        }
+       ++frameCount_;
+       consecutiveStallCount_=0;
+       currentFrame_=(currentFrame_+1)%kMaxFramesInFlight;
+       frameAcquired_=false;
       }
 
     // ------------------------------------------------------------------
@@ -833,6 +1036,13 @@ class VKBackend : public RenderingEngine
     int fbWidth_,fbHeight_;              // last-known framebuffer size
     int canonicalWidth_,canonicalHeight_; // WindowSizeFormula result (the
                                          // requested client size)
+    VkCommandPool commandPool;           // task 39: TRANSIENT+RESET_COMMAND_
+                                         // BUFFER, graphicsFamily
+    unsigned frameCount_;                // completed submit+present cycles
+    unsigned rebootstrapCount_;          // swapchain rebuilds performed
+    unsigned stallSkipCount_;            // recovered stalls (skipped frames)
+    bool presentationSuspended_;         // degenerate extent (minimized)
+    bool fatalStallShutdown_;            // stall-limit shutdown has run
 
    private:
     bool shutdownDone_;
@@ -846,6 +1056,25 @@ class VKBackend : public RenderingEngine
     float maxAsciiAdvance_[4];
     std::vector<VkImage> swapchainImages_;
     std::vector<VkImageView> swapchainImageViews_;
+
+    // Task-39 frame-sync objects (device-level; independent of the
+    // swapchain — re-bootstrap never recreates them). EXCEPTION:
+    // renderFinishedSemaphores_ is PER SWAPCHAIN IMAGE (indexed by the
+    // acquired image index, not the frame slot) — VUID-
+    // vkQueueSubmit-pSignalSemaphores-00067: a present-wait semaphore may
+    // still be in use by the presentation engine when a per-frame scheme
+    // would re-signal it; per-image indexing is the spec-recommended fix
+    // (created/destroyed with the swapchain in createSwapchain_).
+    VkCommandBuffer commandBuffers_[kMaxFramesInFlight];
+    VkFence inFlightFences_[kMaxFramesInFlight];
+    VkSemaphore imageAvailableSemaphores_[kMaxFramesInFlight];
+    std::vector<VkSemaphore> renderFinishedSemaphores_;
+    uint32_t acquiredImageIndex_;
+    uint32_t currentFrame_;
+    bool frameAcquired_;
+    bool sessionDead_;
+    bool swapchainTransferDstSupported_;
+    int consecutiveStallCount_;
 
     static VKBackend* s_instance;        // callback routing (single instance)
 
@@ -987,8 +1216,13 @@ class VKBackend : public RenderingEngine
     //           framebuffer size clamped into [minImageExtent,
     //           maxImageExtent]. Recorded as swapchainExtent_ == the window
     //           framebuffer size at creation (QA assert).
+    //   task 39: oldSwapchain-chained rebuilds pass the live swapchain in;
+    //           the new one is built fully (images + views) BEFORE the old
+    //           is retired/destroyed at the commit point. TRANSFER_DST
+    //           usage is added when the surface supports it so the task-39
+    //           clear-only command buffer can vkCmdClearColorImage.
     // ------------------------------------------------------------------
-    bool createSwapchain_()
+    bool createSwapchain_(VkSwapchainKHR oldSwapchain)
       {VkSurfaceCapabilitiesKHR caps{};
        if (!vkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice,
                     surface,&caps),
@@ -998,6 +1232,8 @@ class VKBackend : public RenderingEngine
         {fprintf(stderr,"vkBackend: surface lacks COLOR_ATTACHMENT usage\n");
          return false;
         }
+       swapchainTransferDstSupported_=
+         (caps.supportedUsageFlags&VK_IMAGE_USAGE_TRANSFER_DST_BIT)!=0;
 
        uint32_t nfmt=0;
        if (!vkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice,
@@ -1083,7 +1319,9 @@ class VKBackend : public RenderingEngine
        sci.imageColorSpace=chosen.colorSpace;
        sci.imageExtent=ext;
        sci.imageArrayLayers=1;
-       sci.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+       sci.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                      |(swapchainTransferDstSupported_
+                         ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0);
        uint32_t families[2]={graphicsFamily,presentFamily};
        if (presentFamily!=graphicsFamily)
         {sci.imageSharingMode=VK_SHARING_MODE_CONCURRENT;
@@ -1100,24 +1338,28 @@ class VKBackend : public RenderingEngine
           : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
        sci.presentMode=VK_PRESENT_MODE_FIFO_KHR;
        sci.clipped=VK_TRUE;
-       sci.oldSwapchain=VK_NULL_HANDLE; // re-bootstrap chains old handles (39)
-       if (!vkCheck(vkCreateSwapchainKHR(device,&sci,NULL,&swapchain),
+       sci.oldSwapchain=oldSwapchain;   // task-39 re-bootstrap chains here
+       VkSwapchainKHR newSwapchain=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateSwapchainKHR(device,&sci,NULL,&newSwapchain),
                     "vkCreateSwapchainKHR"))
          return false;
 
        uint32_t nimgs=0;
-       if (!vkCheck(vkGetSwapchainImagesKHR(device,swapchain,&nimgs,NULL),
+       if (!vkCheck(vkGetSwapchainImagesKHR(device,newSwapchain,&nimgs,
+                    NULL),
                     "vkGetSwapchainImagesKHR(count)"))
          return false;
-       swapchainImages_.resize(nimgs);
-       if (!vkCheck(vkGetSwapchainImagesKHR(device,swapchain,&nimgs,
-                    swapchainImages_.data()),
+       std::vector<VkImage> newImages(nimgs);
+       if (!vkCheck(vkGetSwapchainImagesKHR(device,newSwapchain,&nimgs,
+                    newImages.data()),
                     "vkGetSwapchainImagesKHR"))
          return false;
+       std::vector<VkImageView> newViews;
+       newViews.reserve(nimgs);
        for (uint32_t i=0;i<nimgs;++i)
         {VkImageViewCreateInfo vci{};
          vci.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-         vci.image=swapchainImages_[i];
+         vci.image=newImages[i];
          vci.viewType=VK_IMAGE_VIEW_TYPE_2D;
          vci.format=chosen.format;
          vci.components.r=VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -1130,9 +1372,41 @@ class VKBackend : public RenderingEngine
          VkImageView view=VK_NULL_HANDLE;
          if (!vkCheck(vkCreateImageView(device,&vci,NULL,&view),
                       "vkCreateImageView"))
-          {return false;
+          {vkDestroySwapchainKHR(device,newSwapchain,NULL);
+           for (size_t v=0;v<newViews.size();++v)
+             vkDestroyImageView(device,newViews[v],NULL);
+           return false;
           }
-         swapchainImageViews_.push_back(view);
+         newViews.push_back(view);
+        }
+
+       // Commit point: everything for the new swapchain exists — retire the
+       // old one (the implementation defers its actual destruction until
+       // the presentation engine is done with retired images) and publish.
+       for (size_t i=0;i<swapchainImageViews_.size();++i)
+         vkDestroyImageView(device,swapchainImageViews_[i],NULL);
+       swapchainImageViews_.clear();
+       swapchainImages_.clear();
+       if (oldSwapchain!=VK_NULL_HANDLE)
+         vkDestroySwapchainKHR(device,oldSwapchain,NULL);
+       destroyRenderFinishedSemaphores_();
+       swapchain=newSwapchain;
+       swapchainImages_.swap(newImages);
+       swapchainImageViews_.swap(newViews);
+
+       // Per-image render-finished semaphores (VUID-
+       // vkQueueSubmit-pSignalSemaphores-00067 fix): one per swapchain
+       // image, indexed by the acquired image index in endFrame.
+       VkSemaphoreCreateInfo ssi{};
+       ssi.sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+       renderFinishedSemaphores_.resize(nimgs,VK_NULL_HANDLE);
+       for (uint32_t i=0;i<nimgs;++i)
+        {if (!vkCheck(vkCreateSemaphore(device,&ssi,NULL,
+                       &renderFinishedSemaphores_[i]),
+                      "vkCreateSemaphore(render-finished)"))
+          {renderFinishedSemaphores_.clear();
+           return false;
+          }
         }
 
        swapchainImageCount_=nimgs;
@@ -1141,6 +1415,224 @@ class VKBackend : public RenderingEngine
        swapchainExtent_=ext;
        swapchainDirty_=false;
        return true;
+      }
+
+    // ------------------------------------------------------------------
+    // Task-39 frame sync — object creation/teardown + re-bootstrap.
+    // ------------------------------------------------------------------
+    bool initFrameSync_()
+      {VkCommandPoolCreateInfo pci{};
+       pci.sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+       pci.flags=VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+                |VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+       pci.queueFamilyIndex=graphicsFamily;
+       if (!vkCheck(vkCreateCommandPool(device,&pci,NULL,&commandPool),
+                    "vkCreateCommandPool"))
+         return false;
+       VkCommandBufferAllocateInfo cai{};
+       cai.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+       cai.commandPool=commandPool;
+       cai.level=VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+       cai.commandBufferCount=(uint32_t)kMaxFramesInFlight;
+       if (!vkCheck(vkAllocateCommandBuffers(device,&cai,commandBuffers_),
+                    "vkAllocateCommandBuffers"))
+         return false;
+       VkFenceCreateInfo fci{};
+       fci.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+       fci.flags=VK_FENCE_CREATE_SIGNALED_BIT;   // first wait passes
+       VkSemaphoreCreateInfo sci{};
+       sci.sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+       for (int i=0;i<kMaxFramesInFlight;++i)
+        {if (!vkCheck(vkCreateFence(device,&fci,NULL,
+                     &inFlightFences_[i]),"vkCreateFence"))
+           return false;
+         if (!vkCheck(vkCreateSemaphore(device,&sci,NULL,
+                      &imageAvailableSemaphores_[i]),"vkCreateSemaphore"))
+           return false;
+        }
+       return true;
+      }
+
+    void destroyRenderFinishedSemaphores_()
+      {for (size_t i=0;i<renderFinishedSemaphores_.size();++i)
+        {if (renderFinishedSemaphores_[i]!=VK_NULL_HANDLE)
+           vkDestroySemaphore(device,renderFinishedSemaphores_[i],NULL);
+        }
+       renderFinishedSemaphores_.clear();
+      }
+
+    void drainPresentEngine_()
+      {// vkDeviceWaitIdle covers queue submissions but NOT presentation-
+       // engine consumption (the present op waits on a render-finished
+       // semaphore outside queue execution). Re-acquiring every image
+       // returns ownership to the application, completing all uses —
+       // required before destroying the swapchain/semaphores (VUID-
+       // vkDestroySwapchainKHR-swapchain-01282 and VUID-
+       // vkDestroySemaphore-semaphore-05149). Acquire needs at least one
+       // sync object (VUID-vkAcquireNextImageKHR-semaphore-01780), so a
+       // throwaway semaphore rides along; any non-SUCCESS result
+       // (TIMEOUT/NOT_READY/OUT_OF_DATE/SUBOPTIMAL) means drained or
+       // invalidated, and the finite 1ms timeout keeps this bounded.
+       if (device==VK_NULL_HANDLE||swapchain==VK_NULL_HANDLE)
+         return;
+       vkDeviceWaitIdle(device);
+       // Fresh unsignaled semaphore per attempt (an acquire SIGNALS it, so
+       // reuse would trip VUID-vkAcquireNextImageKHR-semaphore-01286).
+       for (unsigned guard=0;guard<32;++guard)
+        {VkSemaphoreCreateInfo tsi{};
+         tsi.sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+         VkSemaphore tmp=VK_NULL_HANDLE;
+         if (!vkCheck(vkCreateSemaphore(device,&tsi,NULL,&tmp),
+                      "vkCreateSemaphore(drain)"))
+           return;
+         uint32_t idx=0;
+         VkResult rc=vkAcquireNextImageKHR(device,swapchain,1000000,tmp,
+                                           VK_NULL_HANDLE,&idx);
+         vkDestroySemaphore(device,tmp,NULL);
+         if (rc!=VK_SUCCESS)
+           break;
+        }
+      }
+
+    void destroyFrameSync_()
+      {for (int i=0;i<kMaxFramesInFlight;++i)
+        {if (imageAvailableSemaphores_[i]!=VK_NULL_HANDLE)
+          {vkDestroySemaphore(device,imageAvailableSemaphores_[i],NULL);
+           imageAvailableSemaphores_[i]=VK_NULL_HANDLE;
+          }
+         if (inFlightFences_[i]!=VK_NULL_HANDLE)
+          {vkDestroyFence(device,inFlightFences_[i],NULL);
+           inFlightFences_[i]=VK_NULL_HANDLE;
+          }
+         commandBuffers_[i]=VK_NULL_HANDLE;   // freed with the pool
+        }
+       if (device!=VK_NULL_HANDLE&&commandPool!=VK_NULL_HANDLE)
+        {vkDestroyCommandPool(device,commandPool,NULL);
+         commandPool=VK_NULL_HANDLE;
+        }
+      }
+
+    bool recreateAcquireSemaphore_()
+      {// R6 rule 1 helper: after OUT_OF_DATE from ACQUIRE the semaphore
+       // may be left signaled (spec allows either) — destroy+recreate so
+       // it can never be double-waited or double-signaled.
+       vkDestroySemaphore(device,imageAvailableSemaphores_[currentFrame_],
+                          NULL);
+       imageAvailableSemaphores_[currentFrame_]=VK_NULL_HANDLE;
+       VkSemaphoreCreateInfo sci{};
+       sci.sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+       return vkCheck(vkCreateSemaphore(device,&sci,NULL,
+                      &imageAvailableSemaphores_[currentFrame_]),
+                      "vkCreateSemaphore(acquire-recycle)");
+      }
+
+    bool rebootstrapSwapchain_()
+      {VkSurfaceCapabilitiesKHR caps{};
+       if (!vkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice,
+                    surface,&caps),
+                    "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"
+                    "(rebootstrap)"))
+        {handleFatalStall_("surface-capability query failed");
+         return false;
+        }
+       if (caps.currentExtent.width==0||caps.currentExtent.height==0)
+        {// R6 rule 3: minimized/degenerate surface — vkCreateSwapchainKHR
+         // needs extent >= 1x1, so SKIP the rebuild and presentation until
+         // a non-degenerate size arrives.
+         fprintf(stderr,"vkBackend: degenerate surface extent %ux%u — "
+                        "presentation suspended until resized\n",
+                 caps.currentExtent.width,caps.currentExtent.height);
+         presentationSuspended_=true;
+         swapchainDirty_=false;
+         return false;
+        }
+       drainPresentEngine_();   // pending presents release old images/semaphores
+       if (!createSwapchain_(swapchain))
+        {handleFatalStall_("swapchain re-bootstrap failed");
+         return false;
+        }
+       ++rebootstrapCount_;
+       presentationSuspended_=false;
+       fprintf(stderr,"vkBackend: swapchain re-bootstrapped at %ux%u "
+                      "(count %u)\n",swapchainExtent_.width,
+               swapchainExtent_.height,rebootstrapCount_);
+       return true;
+      }
+
+    bool recordClearCommands_(uint32_t imageIndex)
+      {// Minimal CLEAR-ONLY submit (sanctioned for task 39; render
+       // passes/framebuffers/pipelines are tasks 40-41): barrier to
+       // TRANSFER_DST, vkCmdClearColorImage(black), barrier to PRESENT_SRC.
+       // Without TRANSFER_DST usage this degrades to the single
+       // UNDEFINED->PRESENT_SRC barrier — still a real submit.
+       VkCommandBuffer cb=commandBuffers_[currentFrame_];
+       if (!vkCheck(vkResetCommandBuffer(cb,0),"vkResetCommandBuffer"))
+         return false;
+       VkCommandBufferBeginInfo bi{};
+       bi.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+       bi.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+       if (!vkCheck(vkBeginCommandBuffer(cb,&bi),
+                    "vkBeginCommandBuffer"))
+         return false;
+       VkImageMemoryBarrier bar{};
+       bar.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+       bar.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       bar.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       bar.image=swapchainImages_[imageIndex];
+       bar.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+       bar.subresourceRange.levelCount=1;
+       bar.subresourceRange.layerCount=1;
+       if (swapchainTransferDstSupported_)
+        {bar.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+         bar.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+         bar.srcAccessMask=0;
+         bar.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+         vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,
+                              0,NULL,1,&bar);
+         VkClearColorValue black{};
+         black.float32[3]=1.0f;
+         vkCmdClearColorImage(cb,bar.image,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&black,
+                              1,&bar.subresourceRange);
+         bar.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+         bar.newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+         bar.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+         bar.dstAccessMask=0;
+         vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,
+                              NULL,0,NULL,1,&bar);
+        }
+       else
+        {bar.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+         bar.newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+         bar.srcAccessMask=0;
+         bar.dstAccessMask=0;
+         vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,
+                              NULL,0,NULL,1,&bar);
+        }
+       return vkCheck(vkEndCommandBuffer(cb),"vkEndCommandBuffer");
+      }
+
+    void handleStall_(const char* what)
+      {// Recovered-stall path (R6 rule 2): fence-wait timeout AND acquire
+       // VK_TIMEOUT land here — log, skip the frame; kStallShutdownFrames
+       // consecutive stalls force a clean shutdown instead of a hang.
+       ++consecutiveStallCount_;
+       ++stallSkipCount_;
+       fprintf(stderr,"vkBackend: recovered stall (%s): %d consecutive "
+                      "(shutdown at %u)\n",what,consecutiveStallCount_,
+               kStallShutdownFrames);
+       if (consecutiveStallCount_>=(int)kStallShutdownFrames)
+         handleFatalStall_("stall persisted 100 consecutive frames");
+      }
+
+    void handleFatalStall_(const char* why)
+      {fprintf(stderr,"vkBackend: FATAL: %s — clean shutdown\n",why);
+       fatalStallShutdown_=true;
+       sessionDead_=true;
+       shutdown();
       }
 
     // D17.4a hook: the framebuffer-size callback records the new size and
@@ -1222,6 +1714,8 @@ class VKBackend : public RenderingEngine
          case VK_ERROR_FORMAT_NOT_SUPPORTED: return "VK_ERROR_FORMAT_NOT_SUPPORTED";
          case VK_ERROR_FRAGMENTED_POOL:     return "VK_ERROR_FRAGMENTED_POOL";
          case VK_ERROR_UNKNOWN:             return "VK_ERROR_UNKNOWN";
+         case VK_ERROR_OUT_OF_DATE_KHR:     return "VK_ERROR_OUT_OF_DATE_KHR";
+         case VK_SUBOPTIMAL_KHR:            return "VK_SUBOPTIMAL_KHR";
          default:                           return "VK_RESULT_(see spec)";
         }
       }
