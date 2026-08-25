@@ -82,6 +82,13 @@ endif
 ifeq ($(BACKEND),GL)
 GL_OBJECTS=$(OBJDIR)/glad.o $(OBJDIR)/stbTruetypeImpl.o
 endif
+# Task 44a: the ImGuiOptionsMenu unit lands on the GL leg ONLY (44a); any
+# VK-leg menu-unit additions belong to 44b. The seam header itself is
+# include-guarded and only reaches TUs that ask for it.
+MENU_OBJECTS=
+ifeq ($(BACKEND),GL)
+MENU_OBJECTS=$(OBJDIR)/optionsMenu.o
+endif
 # Task 38: the VK leg consumes stb font METRICS (pass-1 window sizing via the
 # shared D15 formula) — the SAME impl TU as GL; glad stays GL-only.
 ifeq ($(BACKEND),VK)
@@ -93,7 +100,7 @@ endif
 # branches compile guards-closed on GL/VK, macro'd on X11) + the
 # backend-agnostic self-test/vendor units on the GPU legs.
 GAME_OBJECTS=$(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o
-objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT)
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MENU_OBJECTS)
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
@@ -122,6 +129,10 @@ $(OBJDIR)/stbTruetypeImpl.o: utilities/rendering/stbTruetypeImpl.C vendor/stb/st
 $(IMGUI_OBJECTS): $(OBJDIR)/%.o: vendor/dear_imgui/%.cpp vendor/dear_imgui/imgui.h vendor/dear_imgui/imconfig.h vendor/dear_imgui/imgui_internal.h $(wildcard vendor/dear_imgui/imstb_*.h) | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
+# Task 44a: ImGuiOptionsMenu implementation (GL leg only — see MENU_OBJECTS).
+$(OBJDIR)/optionsMenu.o: gamePlay/optionsMenu.C gamePlay/optionsMenu.H utilities/rendering/menuAdapter.H vendor/dear_imgui/imgui.h | $(OBJDIR)
+	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
+
 # Host utility: build + run the XBM decode self-test (pure std-C++, no backend).
 #   make xbm-selftest && ./obj/xbmDecodeSelfTest > qa/xbm-golden/goldens.txt
 .PHONY: xbm-selftest
@@ -140,6 +151,17 @@ harness: obj/harness
 
 obj/harness: test/harness/harness.C
 	${CXX} ${CXXFLAGS} $< ${LDFLAGS} -lX11 -lXtst -o $@
+
+# Task 45b: numeric QA lane (test/numeric/) — backend-agnostic test target.
+# Unit legs (53-golden diff vs the PRE-task-24 pins, gravity FP-guard asserts,
+# 500-angle seeded suite on the X11 flavor AND the guards-closed GL-leg domain
+# config) + seeded full-game state-hash parity on the X11 and GL binaries.
+# Kept in the test-target region, disjoint from the VK link rules below.
+#   make test-numeric                        # full lane
+#   XAST_NUMERIC_SKIP_GAME=1 make test-numeric   # unit legs only
+.PHONY: test-numeric
+test-numeric:
+	test/numeric/lane.sh
 
 # XBM dependency list — refreshed at task 29 (D10/D13; was stale). Reconciliation:
 # 32 datasets on disk = 26 game datasets consumed by this TU chain (incl. the
@@ -160,7 +182,7 @@ OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon.xbm \
  bitmaps/ENEMYScoringIcon.xbm bitmaps/rockScoringIcon.xbm bitmaps/ROckScoringIcon.xbm \
  bitmaps/ROCKScoringIcon.xbm
 
-$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
+$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H gamePlay/optionsMenu.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 # --- Link rules (task 29, F3/D10/U23; three-way since task 37) --------------
@@ -179,8 +201,8 @@ $(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/
 VK_LOADER_GATE=@qa/vk-probe.sh --link-check || exit 1
 
 ifeq ($(BACKEND),GL)
-XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS)
-	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) ${LDFLAGS} -lglfw -lGL -o XAsteroids
+XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS)
+	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} -lglfw -lGL -o XAsteroids
 else ifeq ($(BACKEND),VK)
 XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT)
 	$(VK_LOADER_GATE)

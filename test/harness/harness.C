@@ -84,6 +84,7 @@ struct Config {
     std::string maskDir;                // empty => masks resolve against refDir
     std::string counterFile;            // frame mode: published-index file (workDir)
     std::string gateFile;               // frame mode: lockstep ack file (workDir)
+    std::string stateHashFile;          // frame mode: per-frame state hashes (workDir)
     int settleSecs = 10;
     int pollMs = 10;
     int stability = 3;
@@ -569,6 +570,8 @@ static void launchGame(const std::string& gameAbs, const std::string& workDir) {
             setenv("XAST_FRAME_COUNTER_FILE", cfg.counterFile.c_str(), 1);
         if (!cfg.gateFile.empty())
             setenv("XAST_FRAME_GATE_FILE", cfg.gateFile.c_str(), 1);
+        if (!cfg.stateHashFile.empty())
+            setenv("XAST_STATE_HASH_FILE", cfg.stateHashFile.c_str(), 1);
         if (chdir(workDir.c_str()) != 0) _exit(126);
         const int fd = open(gameLog.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         dup2(fd, STDOUT_FILENO);
@@ -1131,6 +1134,7 @@ int main(int argc, char** argv) {
         if (cfg.handshake == "frame") {
             cfg.counterFile = workDir + "/framecount";
             cfg.gateFile = workDir + "/framegate";
+            cfg.stateHashFile = workDir + "/statehash";
         }
         if (!cfg.hiscoreFixture.empty()) {
             if (!fileExists(cfg.hiscoreFixture))

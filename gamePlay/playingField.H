@@ -36,6 +36,12 @@
 #include"../objects/movableObject.H"
 #include"../utilities/intersection2d.H"
 
+#ifdef X11_BACKEND
+class OptionsMenu;                       // unused on this leg (Motif dialog)
+#else
+#include"optionsMenu.H"                  // D9 seam: complete type needed for
+#endif                                   // the virtual menu calls below
+
 class PlayingField
  {friend class Options;
 
@@ -50,7 +56,13 @@ class PlayingField
 
     PlayingField(RenderingEngine& engine);
     ~PlayingField();
+#ifdef X11_BACKEND
     int PlayTheGame(const int level, int argc, char** argv);
+#else
+    // Task 44a (D9): the GL/VK loop takes the backend-constructed menu.
+    int PlayTheGame(const int level, int argc, char** argv,
+                    OptionsMenu& menu);
+#endif
     PlayingField& AddShip();
     PlayingField& RemoveShip();
     void AlterExtraShipScore(const int newExtraShipScore);
@@ -400,7 +412,7 @@ class PlayingField
 #ifdef X11_BACKEND
     Boolean RunGame(Options& options);
 #else
-    Boolean RunGame();
+    Boolean RunGame(OptionsMenu& menu);
 #endif
     void DrawGame();
     void NewRocksAndEnemy();
@@ -1036,11 +1048,16 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   return off;
   }
 #else
-inline PlayingField::Boolean PlayingField::RunGame()
+inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
  {// GL mirror of the guarded loop: same simulation order and event handling,
-  // minus the Motif Options dialog, the click-session state machine and
-  // frameClockSync (no X11 frame clock exists here; the tail usleep paces).
-  // Events come from engine.pollEvents PLUS the GLFW key bridge above.
+   // minus the Motif Options dialog, the click-session state machine and
+   // frameClockSync (no X11 frame clock exists here; the tail usleep paces).
+   // Events come from engine.pollEvents PLUS the GLFW key bridge above.
+   // Task 44a (D9): every polled GameEvent feeds menu.handleGameEvent FIRST
+   // (no second pump); while the menu is open the simulation pauses — the
+   // frozen world is re-presented each iteration with the overlay drawn on
+   // top in WINDOW space — and closing re-arms startTime=ResumePlay exactly
+   // like the X11 modal pause.
   nonPermeableList.Reset();
   selfPermeableList.Reset();
   permeableList.Reset();
@@ -1084,6 +1101,29 @@ inline PlayingField::Boolean PlayingField::RunGame()
       if (static_cast<GLBackend&>(engine).closeRequested_)
         return on;
 #endif
+      // Task 44a: the menu consumes the SAME drained stream before the game
+      // table sees anything (D9 input mapping; io queues, NewFrame applies).
+      for (int i=0;i<numEvents;++i)
+        menu.handleGameEvent(events[i]);
+      if (menu.isOpen())
+       {// Paused: no simulation, no state-hash record/publish (the frame
+        // counter freezes — the QA pause gate reads that freeze). The last
+        // simulated frame's draw records replay verbatim, then the overlay
+        // renders on top in WINDOW space, then one swap.
+        PresentFrame();
+        menu.tick();
+        if (menu.isOpen())
+          menu.renderOverlay(engine);
+        engine.endFrame();
+        if (!menu.isOpen())
+          startTime=ResumePlay(intersector);   // D16 re-arm (X11 modal exit)
+        gettimeofday(&endTime,NULL);
+        int pausedDiff=endTime.tv_usec-startTime.tv_usec
+                       +(endTime.tv_sec-startTime.tv_sec)*1000000;
+        if (pausedDiff<uSecondsPerFrame)
+          usleep(uSecondsPerFrame-pausedDiff);
+        continue;
+       }
       for (int i=0;i<numEvents;++i)
        {const GameEvent& event=events[i];
         switch(event.type)
@@ -1168,20 +1208,33 @@ inline PlayingField::Boolean PlayingField::RunGame()
                                                         shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
                                                         shipGroup->thrust->thrusting=Thrust::off;
                                                         break;
-                                              case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::off;
-                                                        firing=off;
-                                                        break;
-                                             }
+                                               case 'p': shipBulletGroup->fireThisFrame=ShipBulletGroup::off;
+                                                         firing=off;
+                                                         break;
+                                              }
+                                         break;
+          case GameEvent::MouseDown:    if (event.key==1/*Button1*/)
+                                          if (button->PointerOnButton(event.x,event.y))
+                                            button->PressButton();
                                         break;
-          default:                      break;
-         }
-       }
-      SetGravityAcceleration();
-      intersector.Intersect();
-      xastQaRecordFrameState();
-      PresentFrame();
-      engine.endFrame();
-      xastQaPublishFrame();
+          case GameEvent::MouseUp:      if (event.key==1/*Button1*/)
+                                         {if (button->PointerOnButton(event.x,event.y))
+                                           {menu.open();       // 44a: the
+                                            button->ReleaseButton(); // Options click
+                                           }
+                                          else
+                                            button->ReleaseButton();
+                                         }
+                                        break;
+           default:                      break;
+          }
+        }
+       SetGravityAcceleration();
+       intersector.Intersect();
+       xastQaRecordFrameState();
+       PresentFrame();
+       engine.endFrame();
+       xastQaPublishFrame();
       gettimeofday(&endTime,NULL);
       unsigned int diffTime=endTime.tv_usec-startTime.tv_usec+(endTime.tv_sec-startTime.tv_sec)*1000000;
       if (diffTime<uSecondsPerFrame)
@@ -1241,8 +1294,14 @@ inline PlayingField::Boolean PlayingField::RunGame()
    }
 #endif
 
+#ifdef X11_BACKEND
 inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
- {
+  {
+#else
+inline int PlayingField::PlayTheGame(const int l, int argc, char** argv,
+                                     OptionsMenu& menu)
+  {
+#endif
   #ifdef X11_BACKEND
   // The WM-hints block (naming, protocol registration, input selection,
   // map-and-raise) relocated into the backend's pass-2 init at task 15
@@ -1315,10 +1374,15 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
     }
   #endif
   #ifndef X11_BACKEND
-  // GL outer loop: mirrors the guarded one minus Options (Motif dialog) and
-  // the mouse legs; keys arrive through engine.pollEvents + the GLFW bridge.
+  // GL outer loop: mirrors the guarded one minus the Motif dialog; keys
+  // arrive through engine.pollEvents + the GLFW bridge, mouse events through
+  // the task-44a backend bridge. The Options button click opens the menu
+  // (the X11 leg realizes the Motif shell instead); while it is open the
+  // base screen is redrawn every iteration with the overlay on top.
   int localHighScore=0;
   GameEvent events[64];
+  Boolean pointerButtonReleased=on,
+          buttonActivated=off;
   // Task-36 initial present: full surface = base+chrome+help text. The
   // guarded branch gets this composite from the Expose-driven Stage::Refresh
   // after the ctor's GenHelpScreen; no damage events exist on this leg, and
@@ -1339,24 +1403,68 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv)
       return localHighScore;
 #endif
     for (int i=0;i<numEvents;++i)
+      menu.handleGameEvent(events[i]);
+    if (menu.isOpen())
+     {// Menu open on a static screen: redraw the base every iteration (D8),
+      // tick, overlay after the frame, one swap. Closing erases the overlay
+      // via this same clean redraw (tick's Render emits nothing then).
+      menu.tick();
+      GenHelpScreen();
+      stage->DrawPlayingField();
+      if (menu.isOpen())
+        menu.renderOverlay(engine);
+      engine.endFrame();
+      if (!numEvents)
+        usleep(1000);
+      continue;
+     }
+    for (int i=0;i<numEvents;++i)
      {const GameEvent& event=events[i];
-      if (event.type==GameEvent::KeyDown)
-        switch(event.character)
-         {case 's': level=l;
-                    Boolean earlyExit;
-                    earlyExit=RunGame();
-                    if (localHighScore<score->CurrentScore())
-                      localHighScore=score->CurrentScore();
-                    if (earlyExit)
-                      return localHighScore;
-                    break;
-          case 'q': return localHighScore;
-                    break;
-          case 'h': GenHelpScreen();
-                    stage->DrawPlayingField();
-                    engine.endFrame();
-                    break;
-         }
+      switch(event.type)
+       {case GameEvent::KeyDown:    if (pointerButtonReleased)
+                                     switch(event.character)
+                                       {case 's': level=l;
+                                                  Boolean earlyExit;
+                                                  earlyExit=RunGame(menu);
+                                                  if (localHighScore<score->CurrentScore())
+                                                    localHighScore=score->CurrentScore();
+                                                  if (earlyExit)
+                                                    return localHighScore;
+                                                  break;
+                                        case 'q': return localHighScore;
+                                                  break;
+                                        case 'h': GenHelpScreen();
+                                                  stage->DrawPlayingField();
+                                                  engine.endFrame();
+                                                  break;
+                                       }
+                                    break;
+        case GameEvent::MouseDown:  if (event.key==1/*Button1*/)
+                                     {pointerButtonReleased=off;
+                                      if (button->PointerOnButton(event.x,event.y))
+                                       {button->PressButton();
+                                        buttonActivated=on;
+                                       }
+                                     }
+                                    break;
+        case GameEvent::MouseUp:    if (event.key==1/*Button1*/)
+                                     {if (buttonActivated&&
+                                          button->PointerOnButton(event.x,event.y))
+                                       {menu.open();           // 44a: Options click
+                                        button->ReleaseButton();
+                                       }
+                                      buttonActivated=off;
+                                      pointerButtonReleased=on;
+                                     }
+                                    break;
+        case GameEvent::MouseMove:  if (buttonActivated&&
+                                        button->PointerOnButton(event.x,event.y))
+                                      button->PressButton();
+                                    else
+                                      button->ReleaseButton();
+                                    break;
+        default:                    break;
+       }
      }
     if (!numEvents)
       usleep(1000);
@@ -1479,5 +1587,403 @@ inline void PlayingField::AlterUSecondsPerFrame(const int newUSecondsPerFrame)
  {uSecondsPerFrame=newUSecondsPerFrame;
   speedAdjust=uSecondsPerFrame/125E3;
  }
+
+#ifndef X11_BACKEND
+// ---------------------------------------------------------------------------
+// Task-44a OptionsMenuHost implementation (D9). Lives HERE because this
+// header's include point is where the whole domain chain (groups, bullets,
+// rocks) is complete — optionsMenu.* stays domain-free so it can link as its
+// own TU under the repo's one-TU-per-link convention. The three operations
+// mirror the X11 Motif callbacks statement-for-statement:
+//   applyFramesPerSecondPath == Options::AlterFramesPerSecond
+//   writePreferencesFile     == Options::WriteOptions
+//   readPreferencesFile      == Options::ReadOptions (minus widget updates;
+//                               filedShipType parsed but NOT applied — the
+//                               icon half of AlterShipShape,
+//                               shipYard->AlterIcon, is an X11-guarded body,
+//                               so a GL shape swap would leave the yard icon
+//                               stale; every numeric value applies).
+// Documented deviation: volume/mute are session-scoped menu state (the game
+// is silent; no sound domain exists to persist), so the file holds exactly
+// the 29 options.H values and nothing else.
+// ---------------------------------------------------------------------------
+class PlayingFieldOptionsMenuHost : public OptionsMenuHost
+ {public:
+    inline int canonicalClientWidth() const override
+     {FontMetrics titleFm,hiScoreFm,scoreFm;
+      int width=0,height=0;
+      RecomputeFormula(titleFm,hiScoreFm,scoreFm,width,height);
+      return width;
+     }
+    inline int canonicalClientHeight() const override
+     {FontMetrics titleFm,hiScoreFm,scoreFm;
+      int width=0,height=0;
+      RecomputeFormula(titleFm,hiScoreFm,scoreFm,width,height);
+      return height;
+     }
+    inline int currentFramesPerSecond() const override
+     {return int(1E6/PlayingField::uSecondsPerFrame+.5);
+     }
+    inline void applyFramesPerSecondPath(
+                  const double newUSecondsPerFrame) override
+     {if (newUSecondsPerFrame==(double)PlayingField::uSecondsPerFrame)
+        return;
+      double velocityAdjustRatio=
+               newUSecondsPerFrame/PlayingField::uSecondsPerFrame,
+             scaledMaxVel=PlayingField::maxLinearVelocity*velocityAdjustRatio;
+
+      playingField->AlterUSecondsPerFrame((int)newUSecondsPerFrame);
+
+      AlterGlobalMaxVel(.5*(double)PlayingField::playArea.Height());
+      if (!PlayingField::universalGravitationalConst)
+        shipGroup->ResetVelocityLimits(.5*(double)PlayingField::playArea.Height());
+
+      shipGroup->AdjustFramesPerSec(velocityAdjustRatio);
+      Ship::maxVelocity*=velocityAdjustRatio;
+      Ship::acceleration*=velocityAdjustRatio*velocityAdjustRatio;
+      Ship::angularVelocity*=velocityAdjustRatio;
+
+      shipBulletGroup->AdjustFramesPerSec(velocityAdjustRatio);
+      ShipBullet::velocity*=velocityAdjustRatio;
+      ShipBullet::numFrames/=velocityAdjustRatio;
+
+      enemyGroup->AdjustFramesPerSec(velocityAdjustRatio);
+      ENEMY::minVelocity*=velocityAdjustRatio;
+      ENEMY::maxVelocity*=velocityAdjustRatio;
+      enemy::minVelocity*=velocityAdjustRatio;
+      enemy::maxVelocity*=velocityAdjustRatio;
+
+      enemyBulletGroup->AdjustFramesPerSec(velocityAdjustRatio);
+      EnemyBullet::velocity*=velocityAdjustRatio;
+      EnemyBullet::numFrames/=velocityAdjustRatio;
+
+      rockGroup->AdjustFramesPerSec(velocityAdjustRatio);
+      ROCK::minVelocity*=velocityAdjustRatio;
+      ROCK::maxVelocity*=velocityAdjustRatio;
+      ROCK::maxAngularVelocity*=velocityAdjustRatio;
+
+      AlterGlobalMaxVel(scaledMaxVel);
+      if (!PlayingField::universalGravitationalConst)
+        shipGroup->ResetVelocityLimits(Ship::maxVelocity);
+     }
+    inline void writePreferencesFile() override
+     {std::ofstream ofile(preferencesFileName(),std::ios::out);
+      if (!ofile)
+       {fprintf(stderr,"OptionsMenuHost: cannot write %s\n",
+                preferencesFileName());
+        return;
+       }
+      ofile.setf(std::ios::scientific,std::ios::floatfield);
+      ofile.precision(16);
+      ofile <<PlayingField::uSecondsPerFrame            <<'\n'
+            <<PlayingField::maxLinearVelocity           <<'\n'
+            <<PlayingField::universalGravitationalConst <<'\n'
+            <<PlayingField::relativisticMass            <<'\n'
+            <<(shipGroup->ship==&shipGroup->NCC1701D
+                 ? 2
+                 : shipGroup->ship==&shipGroup->NCC1701A
+                   ? 1
+                   : 0)                                 <<'\n'
+            <<Ship::maxVelocity                         <<'\n'
+            <<Ship::acceleration                        <<'\n'
+            <<Ship::angularVelocity                     <<'\n'
+            <<Hyper::percentDestructRate                <<'\n'
+            <<PlayingField::initialShips                <<'\n'
+            <<PlayingField::extraShipScore              <<'\n'
+            <<ShipBulletGroup::autoFire                 <<'\n'
+            <<ShipBullet::velocity                      <<'\n'
+            <<ShipBullet::numFrames                     <<'\n'
+            <<ShipBulletGroup::numBullets               <<'\n'
+            <<ROCK::maxVelocity                         <<'\n'
+            <<ROCK::minVelocity                         <<'\n'
+            <<ROCK::maxAngularVelocity                  <<'\n'
+            <<RockGroup::initialROCKs                   <<'\n'
+            <<RockGroup::ROCKsPerLevel                  <<'\n'
+            <<RockGroup::opaqueRocks                    <<'\n'
+            <<PlayingField::enemiesExist                <<'\n'
+            <<ENEMY::maxVelocity                        <<'\n'
+            <<ENEMY::minVelocity                        <<'\n'
+            <<enemy::maxVelocity                        <<'\n'
+            <<enemy::minVelocity                        <<'\n'
+            <<EnemyBullet::velocity                     <<'\n'
+            <<EnemyBullet::numFrames                    <<'\n'
+            <<EnemyBulletGroup::numBullets              <<'\n';
+      if (!ofile.good())
+        fprintf(stderr,"OptionsMenuHost: short write on %s\n",
+                preferencesFileName());
+     }
+    inline void readPreferencesFile() override
+     {std::ifstream ifile(preferencesFileName(),std::ios::in);
+      if (!ifile)
+       {fprintf(stderr,"OptionsMenuHost: cannot read %s\n",
+                preferencesFileName());
+        return;
+       }
+      double filedGlobalMaxVel,
+             filedUniversalGravitationalConstant,
+             filedHyperspaceDestructRate,
+             filedShipAccel,
+             filedShipMaxVel,
+             filedShipRotationalVel,
+             filedShipBulletVel,
+             filedROCKMinVel,
+             filedROCKMaxVel,
+             filedROCKMaxRotationalVel,
+             filedENEMYMinVel,
+             filedENEMYMaxVel,
+             filedenemyMinVel,
+             filedenemyMaxVel,
+             filedEnemyBulletVel;
+      int filedUSecondsPerFrame,
+          filedShipType,
+          filedInitialShips,
+          filedExtraShipScore,
+          filedShipBulletDuration,
+          filedNumShipBullets,
+          filedInitialROCKs,
+          filedNewROCKsPerLevel,
+          filedEnemyBulletDuration,
+          filedNumEnemyBullets;
+      int filedRelativisticMass,
+          filedOpaqueRocks,
+          filedAutoFire,
+          filedEnemiesExist;
+      if (!(ifile >>filedUSecondsPerFrame
+                  >>filedGlobalMaxVel
+                  >>filedUniversalGravitationalConstant
+                  >>filedRelativisticMass
+                  >>filedShipType
+                  >>filedShipMaxVel
+                  >>filedShipAccel
+                  >>filedShipRotationalVel
+                  >>filedHyperspaceDestructRate
+                  >>filedInitialShips
+                  >>filedExtraShipScore
+                  >>filedAutoFire
+                  >>filedShipBulletVel
+                  >>filedShipBulletDuration
+                  >>filedNumShipBullets
+                  >>filedROCKMaxVel
+                  >>filedROCKMinVel
+                  >>filedROCKMaxRotationalVel
+                  >>filedInitialROCKs
+                  >>filedNewROCKsPerLevel
+                  >>filedOpaqueRocks
+                  >>filedEnemiesExist
+                  >>filedENEMYMaxVel
+                  >>filedENEMYMinVel
+                  >>filedenemyMaxVel
+                  >>filedenemyMinVel
+                  >>filedEnemyBulletVel
+                  >>filedEnemyBulletDuration
+                  >>filedNumEnemyBullets))
+       {fprintf(stderr,"OptionsMenuHost: malformed %s\n",
+                preferencesFileName());
+        return;
+       }
+      // Apply-if-different, mirroring Options::ReadOptions.
+      if (PlayingField::uSecondsPerFrame!=filedUSecondsPerFrame)
+        applyFramesPerSecondPath((double)filedUSecondsPerFrame);
+      if (PlayingField::maxLinearVelocity!=filedGlobalMaxVel)
+        AlterGlobalMaxVel(filedGlobalMaxVel);
+      if (PlayingField::universalGravitationalConst
+          !=filedUniversalGravitationalConstant)
+        PlayingField::universalGravitationalConst=
+            filedUniversalGravitationalConstant<-15.0
+              ? -15.0
+              : filedUniversalGravitationalConstant>15.0
+                ? 15.0
+                : filedUniversalGravitationalConstant;
+      PlayingField::relativisticMass=filedRelativisticMass
+                                       ? PlayingField::on
+                                       : PlayingField::off;
+      if (Ship::maxVelocity!=filedShipMaxVel)
+        shipGroup->ResetVelocityLimits(Ship::maxVelocity=
+            filedShipMaxVel>PlayingField::maxLinearVelocity
+              ? PlayingField::maxLinearVelocity
+              : filedShipMaxVel);
+      if (Ship::acceleration!=filedShipAccel)
+        shipGroup->ResetAccelerationLimits(Ship::acceleration=
+            filedShipAccel>PlayingField::maxLinearVelocity
+              ? PlayingField::maxLinearVelocity
+              : filedShipAccel);
+      if (Ship::angularVelocity!=filedShipRotationalVel)
+        shipGroup->ResetAngularVelocity(Ship::angularVelocity=
+            filedShipRotationalVel
+              >shipGroup->ship->ObjectRotator().MaxAngularVelocity()
+              ? shipGroup->ship->ObjectRotator().MaxAngularVelocity()
+              : filedShipRotationalVel);
+      if (Hyper::percentDestructRate!=filedHyperspaceDestructRate)
+       {Hyper::percentDestructRate=
+            filedHyperspaceDestructRate>100.0?100.0
+                                             :filedHyperspaceDestructRate;
+        Hyper::destructRate=RAND_MAX_16*Hyper::percentDestructRate/100;
+       }
+      if (PlayingField::initialShips!=filedInitialShips)
+        PlayingField::initialShips=filedInitialShips<1?1:filedInitialShips;
+      if (PlayingField::extraShipScore!=filedExtraShipScore)
+        playingField->AlterExtraShipScore(PlayingField::extraShipScore=
+            filedExtraShipScore<5000
+              ? 5000
+              : filedExtraShipScore>1000000
+                ? 1000000
+                : filedExtraShipScore);
+      ShipBulletGroup::autoFire=filedAutoFire;
+      if (ShipBullet::velocity!=filedShipBulletVel)
+       {ShipBullet::velocity=
+            filedShipBulletVel>PlayingField::maxLinearVelocity
+              ? PlayingField::maxLinearVelocity
+              : filedShipBulletVel<0.0?0.0:filedShipBulletVel;
+        shipBulletGroup->ResetVelocity(ShipBullet::velocity);
+       }
+      if (ShipBullet::numFrames!=filedShipBulletDuration)
+        shipBulletGroup->ResetBulletDuration(ShipBullet::numFrames=
+            filedShipBulletDuration>1000
+              ? 1000
+              : filedShipBulletDuration<1?1:filedShipBulletDuration);
+      ShipBulletGroup::numBullets=filedNumShipBullets;
+      if (ROCK::maxVelocity!=filedROCKMaxVel)
+       {rockGroup->ResetMaxVelocity(ROCK::maxVelocity=
+            filedROCKMaxVel>PlayingField::maxLinearVelocity
+              ? PlayingField::maxLinearVelocity
+              : filedROCKMaxVel);
+        if (ROCK::minVelocity>ROCK::maxVelocity)
+          rockGroup->ResetMinVelocity(ROCK::minVelocity=ROCK::maxVelocity);
+       }
+      if (ROCK::minVelocity!=filedROCKMinVel)
+        rockGroup->ResetMinVelocity(ROCK::minVelocity=
+            filedROCKMinVel>ROCK::maxVelocity
+              ? ROCK::maxVelocity
+              : filedROCKMinVel);
+      if (ROCK::maxAngularVelocity!=filedROCKMaxRotationalVel)
+        rockGroup->ResetMaxAngularVelocity(ROCK::maxAngularVelocity=
+            filedROCKMaxRotationalVel
+              >PlayingField::maxLinearVelocity/(4*ROCK::scale)
+              ? PlayingField::maxLinearVelocity/(4*ROCK::scale)
+              : filedROCKMaxRotationalVel);
+      RockGroup::initialROCKs=filedInitialROCKs;
+      RockGroup::ROCKsPerLevel=filedNewROCKsPerLevel<0
+                                  ? 0
+                                  : filedNewROCKsPerLevel>8?8
+                                                           :filedNewROCKsPerLevel;
+      RockGroup::opaqueRocks=filedOpaqueRocks;
+      PlayingField::enemiesExist=filedEnemiesExist;
+      if (ENEMY::maxVelocity!=filedENEMYMaxVel)
+       {enemyGroup->ResetENEMYMaxVelocity(ENEMY::maxVelocity=
+            filedENEMYMaxVel>PlayingField::maxLinearVelocity
+              ? PlayingField::maxLinearVelocity
+              : filedENEMYMaxVel);
+        if (ENEMY::minVelocity>ENEMY::maxVelocity)
+          enemyGroup->ResetENEMYMinVelocity(ENEMY::minVelocity=
+                                              ENEMY::maxVelocity);
+       }
+      if (ENEMY::minVelocity!=filedENEMYMinVel)
+        enemyGroup->ResetENEMYMinVelocity(ENEMY::minVelocity=
+            filedENEMYMinVel>ENEMY::maxVelocity
+              ? ENEMY::maxVelocity
+              : filedENEMYMinVel);
+      if (enemy::maxVelocity!=filedenemyMaxVel)
+       {enemyGroup->ResetenemyMaxVelocity(enemy::maxVelocity=
+            filedenemyMaxVel>PlayingField::maxLinearVelocity
+              ? PlayingField::maxLinearVelocity
+              : filedenemyMaxVel);
+        if (enemy::minVelocity>enemy::maxVelocity)
+          enemyGroup->ResetenemyMinVelocity(enemy::minVelocity=
+                                              enemy::maxVelocity);
+       }
+      if (enemy::minVelocity!=filedenemyMinVel)
+        enemyGroup->ResetenemyMinVelocity(enemy::minVelocity=
+            filedenemyMinVel>enemy::maxVelocity
+              ? enemy::maxVelocity
+              : filedenemyMinVel);
+      if (EnemyBullet::velocity!=filedEnemyBulletVel)
+       {EnemyBullet::velocity=
+            filedEnemyBulletVel>PlayingField::maxLinearVelocity
+              ? PlayingField::maxLinearVelocity
+              : filedEnemyBulletVel<0.0?0.0:filedEnemyBulletVel;
+        enemyBulletGroup->ResetVelocity(EnemyBullet::velocity);
+       }
+      if (EnemyBullet::numFrames!=filedEnemyBulletDuration)
+        enemyBulletGroup->ResetBulletDuration(EnemyBullet::numFrames=
+            filedEnemyBulletDuration>1000
+              ? 1000
+              : filedEnemyBulletDuration<1?1:filedEnemyBulletDuration);
+      EnemyBulletGroup::numBullets=filedNumEnemyBullets;
+     }
+
+  private:
+    static const char* preferencesFileName()
+     {// cwd-relative like score.H's hiScore.data: the QA harness chdirs the
+      // game into its scratch work dir, keeping runs hermetic.
+      return "XAsteroids.prefs";
+     }
+    static void RecomputeFormula(FontMetrics& titleFm,FontMetrics& hiScoreFm,
+                                 FontMetrics& scoreFm,int& width,int& height)
+     {// Same formula, same inputs as the Stage ctor / glBackend pass 2 —
+      // one formula, no divergence (task-12 rule). Stage keeps its copies
+      // private, so the host recomputes instead of asking.
+      playingField->engine.getFontMetrics(EngineFont_Title,titleFm);
+      playingField->engine.getFontMetrics(EngineFont_HiScore,hiScoreFm);
+      playingField->engine.getFontMetrics(EngineFont_Score,scoreFm);
+      WindowSizeFormula::Compute(titleFm,hiScoreFm,scoreFm,
+                                 (int)playingField->engine.measureText(
+                                     "Asteroids",EngineFont_Title),
+                                 PlayingField::playArea.Width(),
+                                 PlayingField::playArea.Height(),
+                                 shipGroup->maxIconHeight,width,height);
+     }
+    static void AlterGlobalMaxVel(const double newMV)
+     {double newMaxVel=newMV;
+      if (newMaxVel>.5*(double)PlayingField::playArea.Height())
+        newMaxVel=.5*(double)PlayingField::playArea.Height();
+      PlayingField::maxLinearVelocity=newMaxVel;
+
+      if (Ship::maxVelocity>newMaxVel||
+          PlayingField::universalGravitationalConst)
+       {shipGroup->ResetVelocityLimits(newMaxVel);
+        Ship::maxVelocity=newMaxVel;
+        if (Ship::acceleration>newMaxVel)
+          Ship::acceleration=newMaxVel;
+        if (Ship::angularVelocity>
+            shipGroup->ship->ObjectRotator().MaxAngularVelocity())
+          Ship::angularVelocity=
+            shipGroup->ship->ObjectRotator().MaxAngularVelocity();
+       }
+
+      shipBulletGroup->ResetVelocityLimits(newMaxVel);
+      if (ShipBullet::velocity>newMaxVel)
+        ShipBullet::velocity=newMaxVel;
+
+      enemyGroup->ResetVelocityLimits(newMaxVel);
+      if (ENEMY::minVelocity>newMaxVel)
+        ENEMY::minVelocity=newMaxVel;
+      if (ENEMY::maxVelocity>newMaxVel)
+        ENEMY::maxVelocity=newMaxVel;
+      if (enemy::minVelocity>newMaxVel)
+        enemy::minVelocity=newMaxVel;
+      if (enemy::maxVelocity>newMaxVel)
+        enemy::maxVelocity=newMaxVel;
+
+      enemyBulletGroup->ResetVelocityLimits(newMaxVel);
+      if (EnemyBullet::velocity>newMaxVel)
+        EnemyBullet::velocity=newMaxVel;
+
+      rockGroup->ResetVelocityLimits(newMaxVel);
+      if (ROCK::minVelocity>newMaxVel)
+        ROCK::minVelocity=newMaxVel;
+      if (ROCK::maxVelocity>newMaxVel)
+        ROCK::maxVelocity=newMaxVel;
+      if (ROCK::maxAngularVelocity>newMaxVel/(4*ROCK::scale))
+        ROCK::maxAngularVelocity=newMaxVel/(4*ROCK::scale);
+     }
+ };
+
+inline OptionsMenuHost& playingFieldOptionsMenuHost()
+ {// Function-local static: constructed on first use (after main() built the
+  // globals the host reads through).
+  static PlayingFieldOptionsMenuHost host;
+  return host;
+ }
+#endif
 
 #endif

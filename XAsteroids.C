@@ -9,6 +9,7 @@
 #elif defined(GL_BACKEND)
 #include"utilities/rendering/glBackend.H"
 #include"utilities/pixmaps/xbmDecode.H"
+#include"gamePlay/optionsMenu.H"
 #endif
 #include"gamePlay/stage.H"
 #include"gamePlay/score.H"
@@ -272,6 +273,15 @@ int main (int argc, char *argv[])
   new (enemyBulletGroup) EnemyBulletGroup(engine);
   playingField = new PlayingField(engine);
 
+  // Task 44a (D9): main() constructs the backend-appropriate OptionsMenu
+  // (task-13 pattern) and hands it to PlayTheGame; RunGame feeds it every
+  // polled GameEvent, ticks it once per frame, and renders its overlay after
+  // the letterboxed game frame. Opening the menu pauses the simulation;
+  // closing re-arms startTime = ResumePlay(...) like the X11 modal pause.
+  ImGuiOptionsMenu* menu=new ImGuiOptionsMenu(engine,
+                                             playingFieldOptionsMenuHost());
+  engine.installMenuInputBridge();
+
   // Initial present: the ctor-drawn help screen reaches the window here
   // (the guarded branch's stage present legs own this step on X11).
   engine.beginFrame();
@@ -279,8 +289,10 @@ int main (int argc, char *argv[])
 
   cout<<"Your highest score this game was "<<playingField->PlayTheGame(argc>1 ? atoi(argv[1])
                                                                                     : 1,
-                                                                           argc, argv)<<'.'<<endl;
+                                                                           argc, argv,
+                                                                           *menu)<<'.'<<endl;
 
+  delete menu;
   delete playingField;
   delete enemyBulletGroup;
   delete enemyGroup;

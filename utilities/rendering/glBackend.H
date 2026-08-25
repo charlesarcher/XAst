@@ -57,6 +57,9 @@
 #include"renderingEngine.H"
 #include"windowSize.H"    // WindowSizeFormula::Compute + EngineFontId enum
 
+#include"imgui.h"         // task 44a: menu-glue platform half (clipboard
+                          // stubs); the renderer half lives in menuAdapter.H
+
 #include"stb_truetype.h"  // vendor/stb v1.26; implementation expands in
                           // stbTruetypeImpl.C (extern "C") — NOT here.
 
@@ -215,11 +218,33 @@ class GLBackend : public RenderingEngine
     // (3) Seams
     // ------------------------------------------------------------------
     virtual int pollEvents(GameEvent* out,int maxCount) override
-     {(void)out;(void)maxCount;
-      // TODO(task 25-reuse/menu integration): drain through the D16 key->action
-      // state machine fixtures (test/harness/d16-state-machine.md). The
-      // underlying pump runs in beginFrame().
-      return 0;
+     {// Task 44a: drains the GLFW mouse bridge (cursor position + Button1,
+      // inverse-present-transformed to LOGICAL client coords at enqueue).
+      // Keyboard events keep arriving through the task-35 key trampoline in
+      // XAsteroids.C (glDrainEvents) — RunGame merges both drains. GLFW_REPEAT
+      // never reaches this queue: only PRESS/RELEASE actions are enqueued
+      // (D16 repeat drop; safe — the menu has no text fields).
+      int count=0;
+      while (mouseHead_!=mouseTail_&&count<maxCount)
+       {out[count++]=mouseQueue_[mouseHead_];
+        mouseHead_=(mouseHead_+1)%maxMouseQueue_;
+       }
+      return count;
+     }
+
+    // ------------------------------------------------------------------
+    // Menu/input glue (task 44a, D9). The Dear ImGui PLATFORM half that the
+    // engine owns: raw mouse capture -> typed GameEvents, plus clipboard
+    // stubs for the ImGui context the menu adapter creates.
+    // ------------------------------------------------------------------
+    void installMenuInputBridge()
+     {// Called once by ImGuiOptionsMenu after adapter init created the ImGui
+      // context (the input callbacks themselves ride initWindow pass 2).
+      // Clipboard stubs: no clipboard domain exists; explicit no-ops.
+      ImGuiIO& io=ImGui::GetIO();
+      io.BackendPlatformName="glBackend_XAsteroids_GameEvents";
+      io.SetClipboardTextFn=clipboardSetStub;
+      io.GetClipboardTextFn=clipboardGetStub;
      }
 
     // Task-36: canvas-domain translation (logical units, added inside
@@ -1142,6 +1167,12 @@ class GLBackend : public RenderingEngine
       // REQUESTS shutdown via flag — never tears down in-callback (M13).
       glfwSetFramebufferSizeCallback(window,framebufferSizeTrampoline);
       glfwSetWindowCloseCallback(window,windowCloseTrampoline);
+      // Task 44a: raw mouse capture feeds pollEvents' typed ring (installed
+      // unconditionally — the title-screen Options button consumes clicks
+      // before any menu exists).
+      glfwSetCursorPosCallback(window,cursorPosTrampoline);
+      glfwSetMouseButtonCallback(window,mouseButtonTrampoline);
+      glfwSetCursorEnterCallback(window,cursorEnterTrampoline);
       int fbw=0,fbh=0;
       glfwGetFramebufferSize(window,&fbw,&fbh);
       fbWidth_=fbw;fbHeight_=fbh;
@@ -1186,6 +1217,74 @@ class GLBackend : public RenderingEngine
      {(void)win;
       if (s_instance)
         s_instance->closeRequested_=true;   // M13: flag only, no teardown
+     }
+
+    // ---- task 44a mouse bridge trampolines --------------------------------
+    // Raw cursor coords are WINDOW space; GameEvent x/y are LOGICAL client
+    // coords — enqueue applies the INVERSE present transform so the domain
+    // and the menu adapter both speak logical (the adapter forward-maps
+    // back for ImGui). Window-vs-framebuffer scale is 1:1 on this platform
+    // family (X11/Xvfb); documented assumption.
+    static void cursorPosTrampoline(GLFWwindow*,double x,double y)
+     {if (s_instance)
+        s_instance->enqueueMouseMove(x,y);
+     }
+
+    static void mouseButtonTrampoline(GLFWwindow*,int button,int action,int)
+     {if (s_instance&&button==GLFW_MOUSE_BUTTON_LEFT)
+        s_instance->enqueueMouseButton(action==GLFW_PRESS);
+     }
+
+    static void cursorEnterTrampoline(GLFWwindow*,int entered)
+     {if (s_instance)
+        s_instance->enqueueCursorEnter(entered==GLFW_TRUE);
+     }
+
+    static void clipboardSetStub(void*,const char*)
+     {}
+
+    static const char* clipboardGetStub(void*)
+     {return "";
+     }
+
+    void enqueueMouseMove(double x,double y)
+     {float scale=1.0f;
+      int offsetX=0,offsetY=0;
+      getPresentTransform(scale,offsetX,offsetY);
+      lastCursorX_=x;lastCursorY_=y;cursorValid_=true;
+      enqueueEvent(GameEvent::MouseMove,
+                   (int)((x-offsetX)/scale),(int)((y-offsetY)/scale));
+     }
+
+    void enqueueMouseButton(bool pressed)
+     {int x=0,y=0;
+      if (cursorValid_)
+       {float scale=1.0f;
+        int offsetX=0,offsetY=0;
+        getPresentTransform(scale,offsetX,offsetY);
+        x=(int)((lastCursorX_-offsetX)/scale);
+        y=(int)((lastCursorY_-offsetY)/scale);
+       }
+      enqueueEvent(pressed?GameEvent::MouseDown:GameEvent::MouseUp,x,y,1);
+     }
+
+    void enqueueCursorEnter(bool entered)
+     {enqueueEvent(entered?GameEvent::CursorEnter:GameEvent::CursorLeave,
+                   cursorValid_?(int)lastCursorX_:0,
+                   cursorValid_?(int)lastCursorY_:0);
+     }
+
+    void enqueueEvent(GameEvent::Type type,int x,int y,int key=0)
+     {const int next=(mouseTail_+1)%maxMouseQueue_;
+      if (next==mouseHead_)
+        return;                              // overflow drops (never blocks)
+      GameEvent& event=mouseQueue_[mouseTail_];
+      event.type=type;
+      event.key=key;
+      event.character=0;
+      event.x=x;
+      event.y=y;
+      mouseTail_=next;
      }
 
     bool validFont(int fontId) const
@@ -1422,6 +1521,13 @@ class GLBackend : public RenderingEngine
     GLuint triVao_,triVbo_;
     bool rtActive_=false;
     int rtWidth_=0,rtHeight_=0;
+
+    // ---- task 44a: GLFW mouse bridge (typed GameEvent ring) ---------------
+    static const int maxMouseQueue_=256;
+    GameEvent mouseQueue_[maxMouseQueue_];
+    int mouseHead_=0,mouseTail_=0;
+    double lastCursorX_=0.0,lastCursorY_=0.0;
+    bool cursorValid_=false;
 
     static GLBackend* s_instance;            // callback routing (single instance)
  };

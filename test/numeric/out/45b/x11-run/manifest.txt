@@ -1,0 +1,31 @@
+# harness manifest (task 9, D17.3)
+seed: 12345
+handshake: frame
+display: :9511
+xvfb_geometry: 1280x1024x24
+script: test/harness/scripts/session.script
+binary: /home/archerc/code/XAst/XAsteroids
+binary_size_mtime: 429848 1787637315
+hiscore_fixture: test/harness/fixtures/hiScore.nul.data
+game_cwd: /tmp/xast-harness.SHgnhI
+client_geometry: 720x706 border=5 depth=24 at +285+164
+sync_params: poll_ms=10 stability=3 tick_gap_ms=30
+frame_counter_file: /tmp/xast-harness.SHgnhI/framecount
+frame_base: 3
+run_ms: 68402
+game_exit_rc: 0
+checkpoints: 13
+  cp help boundary=1 t=381434633ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/help.png
+  cp start boundary=40 t=381436959ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/start.png
+  cp gp1 boundary=120 t=381441969ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp1.png
+  cp gp2 boundary=200 t=381446976ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp2.png
+  cp gp3 boundary=240 t=381449477ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp3.png
+  cp gp4 boundary=340 t=381455736ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp4.png
+  cp gp5 boundary=400 t=381459496ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp5.png
+  cp gp6 boundary=600 t=381467443ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp6.png
+  cp gp7 boundary=800 t=381473734ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp7.png
+  cp gp8 boundary=1000 t=381480024ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp8.png
+  cp gp9 boundary=1200 t=381486285ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp9.png
+  cp gp10 boundary=1400 t=381492532ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/gp10.png
+  cp hiscore boundary=1700 t=381501893ms 720x706 /home/archerc/code/XAst/test/numeric/out/45b/x11-run/hiscore.png
+result: CAPTURED-ONLY (no --ref)

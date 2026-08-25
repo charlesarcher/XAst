@@ -8,7 +8,7 @@ is detectable by diffing, not by eyeballing.
 
 - **45a (this directory, committed now):** golden capture on the **PRE-task-24
   tree** + two-run determinism proof.
-- **45b (W16, later):** the live lane diffs fresh runs against
+- **45b (landed):** the live lane diffs fresh runs against
   `golden/goldens.txt` on X11 **and** GL to prove the split is
   float-order-stable. `make test-numeric` is wired at 45b — deliberately NOT
   here (no makefile changes in 45a).
@@ -136,3 +136,69 @@ storage block that is never constructed.
 - `golden/run1.txt`, `golden/run2.txt` — archived full outputs of both runs
   (byte-identical; the determinism proof).
 - `golden/determinism.diff` — empty diff artifact proving byte identity.
+
+---
+
+# 45b — the live lane (task 45b)
+
+## What runs
+
+| Leg | Driver | Gate |
+|---|---|---|
+| (a) golden diff | `probe.C` rebuilt from the CURRENT tree, GOLD stream diffed vs `golden/goldens.txt` | 53/53 match; any diff = float-order regression → STOP |
+| (b) gravity FP guards | probe C1 + `angles.C` G-section: constructed same-point and denormal-offset states through the REAL `CalcGravityAcceleration` | guard taken (exactly `Vector2d()`), every result finite — no NaN/Inf |
+| (c) 500-angle suite | `angles.C`: 500 seeded random angles over rotator (`GetVecsAtTime` on real rotated-vector tables + `UpdateAngle` fmod) and intersector paths (closing pairs along the angle axis, mid-pass ship-like removal every 9th case) | 2 runs byte-identical per flavor; hash identical across flavors; pinned in `golden/angles.golden.txt` |
+| (d) seeded game runs | `obj/harness --handshake frame` + `XAST_STATE_HASH_FILE` (task-36 infrastructure) on the X11 **and** GL binaries, seed 12345, session.script | per-frame object-state hashes identical across legs (435/435) |
+
+## The two "flavors" of the unit legs
+
+- **X11 flavor:** `-DX11_BACKEND` — real RotVectorData pixmaps under a
+  Display; how the X11 binary's domain units compile.
+- **GL-leg flavor:** guards-closed, NO backend macro — EXACTLY how the
+  makefile compiles `GAME_OBJECTS` into `obj/GL` (`BACKEND_CXXFLAGS=
+  $(VENDOR_INCS)`; only `XAsteroids.o` carries `-DGL_BACKEND`). Hash equality
+  with the X11 flavor proves the domain float order is identical under both
+  preprocessor configurations, including the D14 `#else` engine-rotation math
+  mirror.
+
+`angles.C` cannot reuse `probe.C`'s TU: probe pre-includes real `<X11/Xlib.h>`,
+which conflicts with `x11types.H`'s guards-closed anonymous-tag `XColor`
+mirror. `angles.C` instead includes `playingField.H` FIRST and touches real
+Xlib only under `#ifdef X11_BACKEND`. `probe.C` stays byte-pristine (it is the
+45a capture artifact).
+
+**Hash-construction note:** both drivers inherit probe.C's Sha256 verbatim,
+whose K table carries only 60 initializers (K[60..63] zero-fill) and deviates
+from canonical FIPS 180-4 — it is NOT real SHA-256. Irrelevant to drift
+detection (capture and diff use the identical construction); do not "fix"
+without regenerating every golden.
+
+## Line-cite drift since 45a
+
+The plan's gravity cite `playingField.H:216-228` (guard `:222`) predates the
+task-36 QA instrumentation block that now occupies those lines.
+Current reality: `CalcGravityAcceleration` at `playingField.H:713-736`,
+zero-distance guard `distMagSquared ? ... : Vector2d()` at :728/:735;
+`SetGravityAcceleration` at :738-789. `Ship::HitScript` moved from
+shipGroup.H:253-275 to :407-429 (GL legs grew the file). The swept-sort
+(:754-763) and pass-count (:766-784) cites in intersection2d.H are unchanged.
+
+## Running
+
+```sh
+source qa/env/env.sh
+make test-numeric                          # full lane (~5 min)
+XAST_NUMERIC_SKIP_GAME=1 make test-numeric # unit legs only
+```
+
+Evidence archives land in `out/45b/` (probe/angles run outputs, per-leg
+`.state.hash` streams, harness manifests, `golden-drift.diff` — empty when
+green).
+
+## Files (45b additions)
+
+- `angles.C` — portable 500-angle suite + gravity guard asserts.
+- `lane.sh` — the lane runner invoked by `make test-numeric`.
+- `golden/angles.golden.txt` — the 500-angle suite pin (45b-generated;
+  additive — the 45a `goldens.txt` is never rewritten).
+- `out/45b/` — archived evidence of the latest lane run.

@@ -5,7 +5,16 @@
 sudo apt-get install --upgrade libx11-dev libxt-dev libmotif-dev  
 make clean all  
 
+### Options menus on every backend
+The Options dialog is functional on every backend (BACKEND=X11|GL|VK):
+Motif/Xt dialog on X11, Dear ImGui overlay on the GL/VK backends. Open it
+with the on-screen Options button (title screen or in-game). The FPS slider
+writes the same uSecondsPerFrame value on every backend, and preferences
+save/load use the same file format. Opening the menu pauses the game;
+closing resumes it. The old grayed-out menus limitation no longer applies.
+
 ### If XAsteroids is too small for your setup/screen then it can be scaled in Ubuntu by installing the following.
+#### (LEGACY/SUPERSEDED for the GL/VK backends: the window is natively resizable with a letterboxed play area — resize the window instead.)
 
 ####---- in Ubuntu starting in the XAst build dir ---
 
