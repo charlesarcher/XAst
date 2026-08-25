@@ -209,3 +209,63 @@ vksurface: PASS
   validation ERROR count (VUID-/UNASSIGNED only): 0
   loader ERROR noise (not counted): 2
 vkprobe: PASS
+
+## RUN T42-1 — 2026-08-25T10:52:48Z — task 42: GL-vs-VK identity probe (vkmethods-gl :99 / vkmethods :98, validation LIVE)
+glBackend: GL_VERSION=4.6 (Compatibility Profile) Mesa 26.2.1-arch3.1 GL_RENDERER=llvmpipe (LLVM 22.1.8, 256 bits)
+vkmethods-gl: wrote /tmp/opencode/gl-ref.raw (688x702, 2 text rects)
+vkmethods-gl: PASS
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+[vk-loader-error:Loader Message] loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so".  Skipping layer.
+vkBackend: 5 shaders compiled from source at init (glslc clean)
+vkBackend: 5 shader module(s) loaded
+vkmethods: init ok: shaders=5 pipelines line=ok tri=ok outline=ok tex=ok masked=ok
+vkmethods: A xbm datasets uploaded+deleted: 32/32 (both _CORP_ variants included)
+vkmethods: A explosion frames 66 67 68 69 70 (65x65), masks 71 72 73
+vkmethods: B m13 static-texture transform updates: 0 (rotation path: 1)
+vkmethods: C thin-line px             got=200
+vkmethods: C tri-fill px              got=6000
+vkmethods: C outline px               got=200
+vkmethods: C thick5 interior          got=1
+vkmethods: C tex left-half white      got=1
+vkmethods: C tex right-half black     got=1
+vkmethods: C masked left colored      got=1
+vkmethods: C masked right discarded   got=1
+vkmethods: C NonRot static tex white  got=1
+vkmethods: C GL reference 688x702, 2 text rects
+vkmethods: C GL-vs-VK non-text byte-compare over 482976 px:
+vkmethods: C   exact=458636 (94.9604%) tol1=6120 text=8673 rot=2277 edge=3140 discard=4130 HARD=0
+vkmethods: D rt draw: red=1 green=1 gray=1
+vkmethods: E   press    n=4: CursorEnter(0,'.') MouseMove(0,'.') MouseMove(0,'.') KeyDown(0,'s')
+vkmethods: E   release  n=1: KeyUp(0,'s')
+vkmethods: E   motion   n=1: MouseMove(0,'.')
+vkmethods: E   btnD     n=1: MouseDown(1,'.')
+vkmethods: E   btnU     n=1: MouseUp(1,'.')
+vkmethods: E pollEvents: down=1 up=1 move=1 btnD=1 btnU=1 coords=(381,362) want=(381,362)
+vkmethods: F validation errors (VUID-/UNASSIGNED): 0 (layer LIVE)
+vkmethods: PASS
+
+## RUN T42-2 — 2026-08-25T10:52:58Z — task 42 regressions: vkprobe/vksurface/vkpipe/vkpass/vksoak through the task-42 backend (validation LIVE)
+--- vkprobe (surfaceless) ---
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vkprobe: PASS
+--- vksurface ---
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vksurface: PASS
+--- vkpipe ---
+vkpipe: B width-3 cross-section rows=3 total=900 (301x3=903 butt-capped)
+vkpipe: C1 setTransform(0,0,0) vs reference: 0 differing byte values
+vkpipe: C3 resetTransform vs reference: 0 differing byte values
+vkpipe: D soak: 606/600 frames in 3.60s (168.4 fps), re-bootstraps 0->1, stalls 0
+vkpipe: D re-bootstrap ENGAGED x1 WITH live draws every frame (pipelines survived)
+vkpipe: PASS
+--- vkpass ---
+vkpass: B1 scissored rect {100,80,320,256}: inside 81920/81920 white, outside 506880/506880 black
+vkpass: B1 PASS — scissor CLIPPED the clear (0 px outside, 81920 px inside all white)
+vkpass: B2 nullptr scissor: 588800/588800 pixels white
+vkpass: B2 PASS — full-extent behavior restored
+vkpass: PASS
+--- vksoak ---
+vksoak: PASS

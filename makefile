@@ -264,6 +264,23 @@ obj/VK/vkpipe: test/vk/vkpipe.C utilities/rendering/vkBackend.H utilities/render
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
 
+# Task 42: engine-methods proof (test/vk/vkmethods.C) + its GL reference leg
+# (test/vk/vkmethods-gl.C renders identityScene.H through glBackend and dumps
+# normalized top-down RGBA for the byte-compare). vkmethods links the CPU
+# composite unit (task-27 explosion frames) and X11/XTest (the D16 live
+# injection proof); the GL leg needs glad + stb and NO ImGui symbols (none are
+# odr-used). Run BOTH from the repo root under their own Xvfb displays.
+.PHONY: vkmethods vkmethods-gl
+vkmethods: obj/VK/vkmethods
+vkmethods-gl: obj/VK/vkmethods-gl
+
+obj/VK/vkmethods: test/vk/vkmethods.C test/vk/vkinput.C test/vk/identityScene.H utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/pixmaps/xbmDecode.H utilities/pixmaps/composite/compositePixmap.H utilities/pixmaps/composite/compositePixmap.C utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag utilities/rendering/vkShaders/masked.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o | obj/VK
+	$(VK_LOADER_GATE)
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering test/vk/vkmethods.C test/vk/vkinput.C obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o ${LDFLAGS} -lglfw -lvulkan -lX11 -lXtst -o $@
+
+obj/VK/vkmethods-gl: test/vk/vkmethods-gl.C test/vk/identityScene.H utilities/rendering/glBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/GL/glad.o obj/GL/stbTruetypeImpl.o | obj/VK
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Iutilities/rendering $< obj/GL/glad.o obj/GL/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lGL -ldl -o $@
+
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 

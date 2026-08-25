@@ -233,7 +233,7 @@ int main()
          vk.triPipeline!=VK_NULL_HANDLE?"ok":"MISSING",
          vk.outlinePipeline!=VK_NULL_HANDLE?"ok":"MISSING",
          vk.texPipeline!=VK_NULL_HANDLE?"ok":"MISSING");
-  if (!vk.shadersCompiledAtInit_||vk.shaderModulesLoaded_!=4
+  if (!vk.shadersCompiledAtInit_||vk.shaderModulesLoaded_!=5
       ||!vk.linePipeline||!vk.triPipeline||!vk.outlinePipeline
       ||!vk.texPipeline)
    {fprintf(stderr,"vkpipe: FAIL: pipelines/shaders not ready at init\n");

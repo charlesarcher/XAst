@@ -152,6 +152,53 @@
 // records the POSTAMBLE (EndRenderPass + after-pass QA hook + End) and
 // submits. Hook ordering relative to the pass is unchanged from task 40.
 //
+// TASK-42 ENGINE METHODS (this revision): the 27-method surface is complete.
+//   pollEvents        THE D16 per-event state machine, ported 1:1 from GL:
+//                     GLFW key callback with the US-layout key->character
+//                     table (S/Q/H/E/R/O/P/N/SPACE), PRESS/RELEASE only
+//                     (GLFW_REPEAT dropped at the boundary), plus the task-44a
+//                     mouse bridge (cursor pos / Button1 / enter-leave)
+//                     inverse-present-transformed to LOGICAL client coords at
+//                     enqueue. One typed ring; pollEvents drains it.
+//   Text              stb glyph rasterization into ONE shelf-packed atlas
+//                     (glBackend initText verbatim: ASCII 32..126, four
+//                     slots, 2048x512). The atlas uploads as RGBA8 with the
+//                     coverage byte in ALL FOUR channels so the existing
+//                     texPipeline reproduces glBackend's text math exactly:
+//                     GL FragColor=vec4(uColor*a,a) under SRC_ALPHA blending
+//                     yields rgb=uColor*a^2+dst*(1-a); VK texel=(a,a,a,a) *
+//                     tint=(r,g,b,1) = (r*a,g*a,b*a,a) blends to the SAME
+//                     expression. drawGlyphs emits stride-8 quads through
+//                     texPipeline (24-float-per-quad semantics preserved —
+//                     never reintroduce the task-36 Defect-A 16-float stride).
+//   drawTextureMasked new masked.frag (content binding 0 + R8 mask binding 1,
+//                     discard <0.5 — glBackend maskedProgram_ verbatim) on a
+//                     second descriptor set layout + pipeline sharing tex.vert;
+//                     per-(content,mask) descriptor sets cached by id pair.
+//   Render targets    offscreen VkImage (COLOR_ATTACHMENT|SAMPLED|TRANSFER_SRC,
+//                     swapchain format -> pipeline-compatible) + view +
+//                     framebuffer + sampling descriptor set + a SECOND render
+//                     pass (loadOp DONT_CARE, finalLayout SHADER_READ_ONLY_
+//                     OPTIMAL — layout does not affect pass compatibility).
+//                     beginRenderTo inside an open frame records
+//                     EndRenderPass -> layout barrier -> BeginRenderPass
+//                     (offscreen) inline and endRenderTo reverses it;
+//                     outside a frame (init-time Button/yard faces) both run
+//                     as a one-shot transient command buffer submitted with a
+//                     finite fence. presentMVP_ carries an rtActive_ branch
+//                     mapping logical (0,0)-top-left 1:1 onto the target
+//                     (GL rtActive_ analog without the y-flip).
+//   getPresentTransform REAL letterbox math now (uniform scale + centered
+//                     offsets from fbWidth_/fbHeight_ vs the canonical size —
+//                     glBackend verbatim); recomputePresentTransform_ feeds
+//                     presentScale_/presentOffX_/presentOffY_ from the
+//                     framebuffer-size callback AND every re-bootstrap commit;
+//                     applyPresentTransformToScissor_ applies scale+offset.
+//   nativeHandle      documented undefined/unused no-op (D9 seam).
+//   m13 evidence      transformCallCount_ counts setTransform calls; the QA
+//                     lane snapshots it around a NonRot-style static-texture
+//                     draw to assert the degenerate path issues 0 updates.
+//
 // QA HOOKS (task-40 scissor proof only; NULL by default, zero cost):
 //   qaInRenderPassHook(cb,imageIndex,image,ud)    runs INSIDE the render
 //                    pass, after the scissor is applied;
@@ -305,6 +352,7 @@ class VKBackend : public RenderingEngine
         triPipeline(VK_NULL_HANDLE),
         outlinePipeline(VK_NULL_HANDLE),
         texPipeline(VK_NULL_HANDLE),
+        maskedPipeline(VK_NULL_HANDLE),
         colorPipelineLayout(VK_NULL_HANDLE),
         texPipelineLayout(VK_NULL_HANDLE),
         descriptorPool(VK_NULL_HANDLE),
@@ -315,6 +363,7 @@ class VKBackend : public RenderingEngine
         stallSkipCount_(0),
         presentationSuspended_(false),
         fatalStallShutdown_(false),
+        transformCallCount_(0),
         qaInRenderPassHook(NULL),
         qaInRenderPassHookUserData(NULL),
         qaAfterRenderPassHook(NULL),
@@ -324,18 +373,30 @@ class VKBackend : public RenderingEngine
         canonicalPlayAreaWidth_(0),canonicalPlayAreaHeight_(0),
         canonicalMaxIconHeight_(0),
         renderPassFormat_(VK_FORMAT_UNDEFINED),
+        offscreenRenderPass_(VK_NULL_HANDLE),
+        swapchainLoadRenderPass_(VK_NULL_HANDLE),
         scissorActive_(false),
         scissorRect_{0,0,0,0},
         primVs_(VK_NULL_HANDLE),
         primFs_(VK_NULL_HANDLE),
         texVs_(VK_NULL_HANDLE),
         texFs_(VK_NULL_HANDLE),
+        maskedFs_(VK_NULL_HANDLE),
         texSetLayout_(VK_NULL_HANDLE),
+        maskedSetLayout_(VK_NULL_HANDLE),
+        maskedPipelineLayout_(VK_NULL_HANDLE),
         sharedSampler_(VK_NULL_HANDLE),
         nextTextureId_(1),
+        atlasTex_(0),
         tx_(0.0f),ty_(0.0f),angle_(0.0f),
         presentScale_(1.0f),
         presentOffX_(0),presentOffY_(0),
+        rtActive_(false),
+        rtWidth_(0),rtHeight_(0),
+        currentRenderTarget_(0),
+        rtOneShot_(false),
+        oneShotCb_(VK_NULL_HANDLE),
+        activeCb_(VK_NULL_HANDLE),
         passOpen_(false),
         acquiredImageIndex_(0),
         currentFrame_(0),
@@ -349,7 +410,12 @@ class VKBackend : public RenderingEngine
        for (int i=0;i<4;++i)
         {fontInfo_[i]=NULL;fontData_[i]=NULL;
          fontDataLen_[i]=0;fontScale_[i]=0.0f;maxAsciiAdvance_[i]=0.0f;
+         slotShelfH_[i]=0;
+         for (int c=0;c<128;++c)
+           glyphs_[i][c].present=false;
         }
+       eventHead_=0;eventTail_=0;
+       lastCursorX_=0.0;lastCursorY_=0.0;cursorValid_=false;
         for (int i=0;i<kMaxFramesInFlight;++i)
          {commandBuffers_[i]=VK_NULL_HANDLE;
           inFlightFences_[i]=VK_NULL_HANDLE;
@@ -788,6 +854,10 @@ class VKBackend : public RenderingEngine
         // destroySwapchainFramebuffers_).
         if (!initPipelines_())
          {shutdown();
+           return false;
+          }
+        if (!initText_())
+         {shutdown();
           return false;
          }
         return true;
@@ -807,6 +877,7 @@ class VKBackend : public RenderingEngine
         // the device.
         drainPresentEngine_();
         destroyTextures_();
+        destroyRenderTargets_();
         destroySwapchainFramebuffers_();   // task 40: BEFORE views (fbs
                                            // reference views); the render
                                            // pass outlives re-bootstraps and
@@ -1023,10 +1094,17 @@ class VKBackend : public RenderingEngine
     // (3) Seams
     // ------------------------------------------------------------------
     virtual int pollEvents(GameEvent* out,int maxCount) override
-      {(void)out;(void)maxCount;
-       // Benign until the task-25-reuse/menu integration wires the D16 seam
-       // (GL precedent: underlying pump lives in beginFrame once real).
-       return 0;
+      {// D16 per-event state machine, GL-identical: the GLFW callbacks
+       // installed in pass 2a enqueue typed events (keys through the
+       // US-layout table with PRESS/RELEASE only — GLFW_REPEAT never
+       // reaches this queue; mouse inverse-present-transformed to LOGICAL
+       // client coords at enqueue) and this drain hands them out.
+       int count=0;
+       while (eventHead_!=eventTail_&&count<maxCount)
+        {out[count++]=eventQueue_[eventHead_];
+         eventHead_=(eventHead_+1)%maxEventQueue_;
+        }
+       return count;
       }
 
     virtual void setScissorRect(const int* xywh) override
@@ -1046,26 +1124,267 @@ class VKBackend : public RenderingEngine
       }
 
     virtual RenderTargetId createRenderTarget(int w,int h) override
-      {(void)w;(void)h;
-       return 0;      // TODO(task 42): off-screen VkImage+framebuffer
+      {// M1 VK half: offscreen color image in the SWAPCHAIN FORMAT (keeps
+       // every pipeline render-pass-compatible with the offscreen pass —
+       // compatibility keys on attachment formats, not layouts) + view +
+       // framebuffer against offscreenRenderPass_ + a sampling descriptor
+       // set so drawTexture consumes the result like any TextureId.
+       if (device==VK_NULL_HANDLE||swapchainFormat_==VK_FORMAT_UNDEFINED
+           ||w<=0||h<=0)
+         return 0;
+       ensureOffscreenRenderPass_();
+       VkImageCreateInfo ici{};
+       ici.sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+       ici.imageType=VK_IMAGE_TYPE_2D;
+       ici.format=swapchainFormat_;
+       ici.extent.width=(uint32_t)w;
+       ici.extent.height=(uint32_t)h;
+       ici.extent.depth=1;
+       ici.mipLevels=1;
+       ici.arrayLayers=1;
+       ici.samples=VK_SAMPLE_COUNT_1_BIT;
+       ici.tiling=VK_IMAGE_TILING_OPTIMAL;
+       ici.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                |VK_IMAGE_USAGE_SAMPLED_BIT
+                |VK_IMAGE_USAGE_TRANSFER_SRC_BIT;   // QA readback
+       ici.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
+       ici.initialLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+       VkImage image=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateImage(device,&ici,NULL,&image),
+                    "vkCreateImage(render-target)"))
+         return 0;
+       VkMemoryRequirements mr;
+       vkGetImageMemoryRequirements(device,image,&mr);
+       uint32_t memType=findMemoryType_(mr.memoryTypeBits,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+       if (memType==UINT32_MAX)
+         memType=findMemoryType_(mr.memoryTypeBits,
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                 |VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+       VkDeviceMemory mem=VK_NULL_HANDLE;
+       VkMemoryAllocateInfo mai{};
+       mai.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+       mai.allocationSize=mr.size;
+       mai.memoryTypeIndex=memType;
+       if (memType==UINT32_MAX
+           ||!vkCheck(vkAllocateMemory(device,&mai,NULL,&mem),
+                      "vkAllocateMemory(render-target)")
+           ||!vkCheck(vkBindImageMemory(device,image,mem,0),
+                      "vkBindImageMemory(render-target)"))
+        {if (mem!=VK_NULL_HANDLE)
+           vkFreeMemory(device,mem,NULL);
+         vkDestroyImage(device,image,NULL);
+         return 0;
+        }
+       VkImageViewCreateInfo vci{};
+       vci.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+       vci.image=image;
+       vci.viewType=VK_IMAGE_VIEW_TYPE_2D;
+       vci.format=swapchainFormat_;
+       vci.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+       vci.subresourceRange.levelCount=1;
+       vci.subresourceRange.layerCount=1;
+       VkImageView view=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateImageView(device,&vci,NULL,&view),
+                    "vkCreateImageView(render-target)"))
+        {vkFreeMemory(device,mem,NULL);
+         vkDestroyImage(device,image,NULL);
+         return 0;
+        }
+       VkFramebufferCreateInfo fci{};
+       fci.sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+       fci.renderPass=offscreenRenderPass_;
+       fci.attachmentCount=1;
+       fci.pAttachments=&view;
+       fci.width=(uint32_t)w;
+       fci.height=(uint32_t)h;
+       fci.layers=1;
+       VkFramebuffer fb=VK_NULL_HANDLE;
+       if (!vkCheck(vkCreateFramebuffer(device,&fci,NULL,&fb),
+                    "vkCreateFramebuffer(render-target)"))
+        {vkDestroyImageView(device,view,NULL);
+         vkFreeMemory(device,mem,NULL);
+         vkDestroyImage(device,image,NULL);
+         return 0;
+        }
+       VkDescriptorSetLayout layouts[]={texSetLayout_};
+       VkDescriptorSetAllocateInfo dai{};
+       dai.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+       dai.descriptorPool=descriptorPool;
+       dai.descriptorSetCount=1;
+       dai.pSetLayouts=layouts;
+       VkDescriptorSet set=VK_NULL_HANDLE;
+       if (!vkCheck(vkAllocateDescriptorSets(device,&dai,&set),
+                    "vkAllocateDescriptorSets(render-target)"))
+        {vkDestroyFramebuffer(device,fb,NULL);
+         vkDestroyImageView(device,view,NULL);
+         vkFreeMemory(device,mem,NULL);
+         vkDestroyImage(device,image,NULL);
+         return 0;
+        }
+       VkDescriptorImageInfo ii{};
+       ii.sampler=sharedSampler_;
+       ii.imageView=view;
+       ii.imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+       VkWriteDescriptorSet wr{};
+       wr.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+       wr.dstSet=set;
+       wr.dstBinding=0;
+       wr.descriptorCount=1;
+       wr.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+       wr.pImageInfo=&ii;
+       vkUpdateDescriptorSets(device,1,&wr,0,NULL);
+       RenderTargetId id=nextTextureId_++;
+       RTEntry e;
+       e.image=image;
+       e.mem=mem;
+       e.view=view;
+       e.fb=fb;
+       e.set=set;
+       e.w=w;
+       e.h=h;
+       e.layout=VK_IMAGE_LAYOUT_UNDEFINED;
+       renderTargets_[id]=e;
+       return id;
       }
 
     virtual void beginRenderTo(RenderTargetId target) override
-      {(void)target; // TODO(task 42)
+      {auto it=renderTargets_.find(target);
+       if (it==renderTargets_.end()||device==VK_NULL_HANDLE
+           ||rtActive_)
+         return;
+       RTEntry& rt=it->second;
+       if (passOpen_)
+        {// Mid-frame (AddShip re-faces the yard mid-game): close the
+         // swapchain pass instance, flip the target's layout, open the
+         // offscreen pass on its framebuffer. Dynamic viewport/scissor are
+         // command-buffer state and survive the pass switch.
+         vkCmdEndRenderPass(activeCb_);
+         rtToColorBarrier_(rt);
+         beginOffscreenPass_(rt);
+        }
+       else
+        {// Init-time faces (Button/ShipYard ctors run before any frame):
+         // record into a transient one-shot command buffer, submitted and
+         // fenced by endRenderTo.
+         VkCommandBufferAllocateInfo cai{};
+         cai.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+         cai.commandPool=commandPool;
+         cai.level=VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+         cai.commandBufferCount=1;
+         if (!vkCheck(vkAllocateCommandBuffers(device,&cai,&oneShotCb_),
+                      "vkAllocateCommandBuffers(render-to)"))
+          {oneShotCb_=VK_NULL_HANDLE;
+           return;
+          }
+         VkCommandBufferBeginInfo bi{};
+         bi.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+         bi.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+         if (!vkCheck(vkBeginCommandBuffer(oneShotCb_,&bi),
+                      "vkBeginCommandBuffer(render-to)"))
+          {vkFreeCommandBuffers(device,commandPool,1,&oneShotCb_);
+           oneShotCb_=VK_NULL_HANDLE;
+           return;
+          }
+         activeCb_=oneShotCb_;
+         rtOneShot_=true;
+         passOpen_=true;      // draws record into the one-shot buffer
+         rtToColorBarrier_(rt);
+         beginOffscreenPass_(rt);
+        }
+       currentRenderTarget_=target;
+       rtWidth_=rt.w;
+       rtHeight_=rt.h;
+       rtActive_=true;
       }
 
     virtual void endRenderTo() override
-      {// TODO(task 42)
+      {if (!rtActive_||activeCb_==VK_NULL_HANDLE)
+         return;
+       auto it=renderTargets_.find(currentRenderTarget_);
+       if (it==renderTargets_.end())
+        {rtActive_=false;
+         currentRenderTarget_=0;
+         return;
+        }
+       RTEntry& rt=it->second;
+       vkCmdEndRenderPass(activeCb_);
+       // No manual ->SHADER_READ_ONLY barrier here: the offscreen pass's
+       // finalLayout performs that transition at EndRenderPass; an extra
+       // barrier declaring oldLayout=COLOR_ATTACHMENT trips VUID-01197.
+       rt.layout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+       if (rtOneShot_)
+        {// Finish + submit + finite fence wait: init-time rendering is
+         // synchronous exactly like the texture staging upload.
+         if (vkCheck(vkEndCommandBuffer(oneShotCb_),
+                     "vkEndCommandBuffer(render-to)"))
+          {VkFenceCreateInfo fci{};
+           fci.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+           VkFence fence=VK_NULL_HANDLE;
+           if (vkCheck(vkCreateFence(device,&fci,NULL,&fence),
+                       "vkCreateFence(render-to)"))
+            {VkSubmitInfo si{};
+             si.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO;
+             si.commandBufferCount=1;
+             si.pCommandBuffers=&oneShotCb_;
+             if (vkCheck(vkQueueSubmit(graphicsQueue,1,&si,fence),
+                         "vkQueueSubmit(render-to)"))
+               vkWaitForFences(device,1,&fence,VK_TRUE,
+                               (uint64_t)1000*1000000ull);
+             vkDestroyFence(device,fence,NULL);
+            }
+          }
+         vkFreeCommandBuffers(device,commandPool,1,&oneShotCb_);
+         oneShotCb_=VK_NULL_HANDLE;
+         activeCb_=passOpen_?commandBuffers_[currentFrame_]:VK_NULL_HANDLE;
+         rtOneShot_=false;
+         passOpen_=false;
+        }
+       else
+        {// Reopen the swapchain pass instance for the HUD tail of the frame.
+         // LOAD, not CLEAR: world pixels recorded earlier in THIS frame's
+         // first pass instance must survive (GL's FBO rebind never clears).
+         ensureSwapchainLoadRenderPass_();
+         VkRenderPassBeginInfo rp{};
+         rp.sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+         rp.renderPass=swapchainLoadRenderPass_;
+         rp.framebuffer=swapchainFramebuffers_[acquiredImageIndex_];
+         rp.renderArea.offset.x=0;
+         rp.renderArea.offset.y=0;
+         rp.renderArea.extent=swapchainExtent_;
+         rp.clearValueCount=0;
+         vkCmdBeginRenderPass(activeCb_,&rp,VK_SUBPASS_CONTENTS_INLINE);
+         VkViewport vp{};
+         vp.x=0.0f;vp.y=0.0f;
+         vp.width=(float)swapchainExtent_.width;
+         vp.height=(float)swapchainExtent_.height;
+         vp.minDepth=0.0f;vp.maxDepth=1.0f;
+         vkCmdSetViewport(activeCb_,0,1,&vp);
+         VkRect2D sci=applyPresentTransformToScissor_();
+         vkCmdSetScissor(activeCb_,0,1,&sci);
+        }
+       rtActive_=false;
+       currentRenderTarget_=0;
       }
 
     virtual void getPresentTransform(float& outScale,int& outOffsetX,
                                      int& outOffsetY) override
-      {// Identity while the swapchain extent equals the window size (task
-       // 38 always creates it that way). The D17.4a recompute hook is
-       // recomputePresentTransform_ (called from the framebuffer-size
-       // callback); a real letterbox transform lands with task 40's render
-       // passes, driven by swapchainDirty_.
-       outScale=1.0f;outOffsetX=0;outOffsetY=0;
+      {// Uniform-scale centered letterbox (D17.4a) — glBackend's math
+       // verbatim, sourced from the recorded framebuffer size (kept current
+       // by the size callback + every re-bootstrap commit). Identity at the
+       // canonical size; aspect never stretched.
+       float scale=1.0f;
+       int ox=0,oy=0;
+       if (window&&canonicalWidth_>0&&canonicalHeight_>0
+           &&fbWidth_>0&&fbHeight_>0)
+        {scale=((float)fbWidth_/canonicalWidth_
+               <(float)fbHeight_/canonicalHeight_)
+                ? (float)fbWidth_/canonicalWidth_
+                : (float)fbHeight_/canonicalHeight_;
+         ox=((int)fbWidth_-(int)(canonicalWidth_*scale))/2;
+         oy=((int)fbHeight_-(int)(canonicalHeight_*scale))/2;
+        }
+       outScale=scale;outOffsetX=ox;outOffsetY=oy;
       }
 
     // ------------------------------------------------------------------
@@ -1157,8 +1476,8 @@ class VKBackend : public RenderingEngine
        // is windowMVP_ (pixel coords -> NDC). The 7-float engine contract
        // repacks onto the pipeline's clean 8-float stride with alpha=1
        // (glBackend's overrun-alpha effective behavior; see initPipelines_).
-       auto it=textures_.find(tex);
-       if (!passOpen_||!verts||count<3||it==textures_.end())
+       TexRef ref=lookupTex_(tex);
+       if (!passOpen_||!verts||count<3||!ref.set)
          return;
        std::vector<float> packed((size_t)count*8);
        for (int i=0;i<count;++i)
@@ -1167,7 +1486,8 @@ class VKBackend : public RenderingEngine
          d[0]=s[0];d[1]=s[1];d[2]=s[2];d[3]=s[3];
          d[4]=s[4];d[5]=s[5];d[6]=s[6];d[7]=1.0f;
         }
-       drawTexPrims_(it->second.set,packed.data(),count,windowMVP_());
+       drawTexPrims_(texPipeline,texPipelineLayout,ref.set,packed.data(),
+                     count,windowMVP_());
       }
 
     // ------------------------------------------------------------------
@@ -1176,36 +1496,42 @@ class VKBackend : public RenderingEngine
     virtual void drawStringOpaque(const char* text,float x,float y,int fontId,
                                   float r,float g,float b,
                                   float bgR,float bgG,float bgB) override
-      {(void)text;(void)x;(void)y;(void)fontId;
-       (void)r;(void)g;(void)b;(void)bgR;(void)bgG;(void)bgB;
-       notImplemented();
+      {// XDrawImageString mapping (D12): cell background quad THEN glyphs
+       // (glBackend verbatim).
+       if (!passOpen_||!validFont(fontId)||!text||!*text)
+         return;
+       float w=measureText(text,fontId);
+       FontMetrics fm;
+       getFontMetrics(fontId,fm);
+       drawRect(x,y-fm.max_bounds.ascent,w,
+                fm.max_bounds.ascent+fm.max_bounds.descent,bgR,bgG,bgB,true);
+       drawGlyphs_(text,x,y,fontId,r,g,b);
       }
 
     virtual void drawStringTransparent(const char* text,float x,float y,
-                                       int fontId,
-                                       float r,float g,float b) override
-      {(void)text;(void)x;(void)y;(void)fontId;(void)r;(void)g;(void)b;
-       notImplemented();
+                                        int fontId,
+                                        float r,float g,float b) override
+      {// XDrawString mapping (D12): glyphs only, no background cell.
+       if (!passOpen_||!validFont(fontId)||!text||!*text)
+         return;
+       drawGlyphs_(text,x,y,fontId,r,g,b);
       }
 
     virtual float measureText(const char* text,int fontId) override
       {// Advance-width sum over the loaded TTF slot (stb metrics; glBackend
        // verbatim semantics). Total-width centering policy per D12/M5.
-       // Returns 0 for invalid slot/text like the X11 backend. Glyph
-       // RASTERIZATION stays task 42 — metrics exist from task 38 because
-       // the shared window-size formula consumes them.
-       if (!text||fontId<0||fontId>3||!fontInfo_[fontId]||!fontData_[fontId])
-         return 0.0f;
-       float total=0.0f;
-       for (const char* p=text;*p;++p)
-        {int advance=0,lbearing=0;
-         stbtt_GetCodepointHMetrics(fontInfo_[fontId],(unsigned char)*p,
-                                    &advance,&lbearing);
-         total+=advance*fontScale_[fontId];
-        }
-       return total;
+       // Returns 0 for invalid slot/text like the X11 backend.
+        if (!text||fontId<0||fontId>3||!fontInfo_[fontId]||!fontData_[fontId])
+          return 0.0f;
+        float total=0.0f;
+        for (const char* p=text;*p;++p)
+         {int advance=0,lbearing=0;
+          stbtt_GetCodepointHMetrics(fontInfo_[fontId],(unsigned char)*p,
+                                     &advance,&lbearing);
+          total+=advance*fontScale_[fontId];
+         }
+        return total;
       }
-
     virtual void getFontMetrics(int fontId,FontMetrics& out) override
       {// stb metrics mapped onto FontMetrics incl. per-font max_bounds
        // (glBackend verbatim semantics; D12 signature-level requirement).
@@ -1405,8 +1731,8 @@ class VKBackend : public RenderingEngine
       {// Textured quad, alpha-blended (D8 canonical order governs call
        // order). Tint=(1,1,1,alpha): through FragColor = texture*vColor this
        // reproduces GL's vec4(c.rgb,c.a*uAlpha) exactly.
-       auto it=textures_.find(tex);
-       if (!passOpen_||it==textures_.end())
+       TexRef ref=lookupTex_(tex);
+       if (!passOpen_||!ref.set)
          return;
        float verts[48];
        static const int idx[6]={0,1,2,0,2,3};
@@ -1421,25 +1747,96 @@ class VKBackend : public RenderingEngine
          v[4]=1.0f;v[5]=1.0f;v[6]=1.0f;
          v[7]=alpha;            // tint = (1,1,1,uAlpha)
         }
-       drawTexPrims_(it->second.set,verts,6,presentMVP_());
+       drawTexPrims_(texPipeline,texPipelineLayout,ref.set,verts,6,
+                     presentMVP_());
       }
 
     virtual void drawTextureMasked(TextureId content,TextureId mask,
-                                   float x,float y,float w,float h) override
-      {(void)content;(void)mask;(void)x;(void)y;(void)w;(void)h;
-       notImplemented();   // task 42: needs a 2-sampler frag variant of the
-                           // tex pipeline (pipeline slot exists; layout
-                           // grows a second COMBINED_IMAGE_SAMPLER binding)
+                                    float x,float y,float w,float h) override
+      {// D6 VK half: content quad discarded where the R8 mask is off
+       // (<0.5) — glBackend maskedProgram_ semantics on the masked pipeline.
+       auto c=lookupTex_(content);
+       auto m=lookupTex_(mask);
+       if (!passOpen_||!c.set||!m.set)
+         return;
+       uint64_t key=((uint64_t)content<<32)|(uint64_t)mask;
+       VkDescriptorSet set;
+       auto cached=maskedSets_.find(key);
+       if (cached!=maskedSets_.end())
+         set=cached->second;
+       else
+        {VkDescriptorSetLayout layouts[]={maskedSetLayout_};
+         VkDescriptorSetAllocateInfo dai{};
+         dai.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+         dai.descriptorPool=descriptorPool;
+         dai.descriptorSetCount=1;
+         dai.pSetLayouts=layouts;
+         if (!vkCheck(vkAllocateDescriptorSets(device,&dai,&set),
+                      "vkAllocateDescriptorSets(masked)"))
+           return;
+         VkDescriptorImageInfo infos[2]={};
+         infos[0].sampler=sharedSampler_;
+         infos[0].imageView=c.view;
+         infos[0].imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+         infos[1].sampler=sharedSampler_;
+         infos[1].imageView=m.view;
+         infos[1].imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+         VkWriteDescriptorSet wrs[2]={};
+         for (int i=0;i<2;++i)
+          {wrs[i].sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+           wrs[i].dstSet=set;
+           wrs[i].dstBinding=i;
+           wrs[i].descriptorCount=1;
+           wrs[i].descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+           wrs[i].pImageInfo=&infos[i];
+          }
+         vkUpdateDescriptorSets(device,2,wrs,0,NULL);
+         maskedSets_[key]=set;
+        }
+       float verts[48];
+       static const int idx[6]={0,1,2,0,2,3};
+       const float fx[4]={x,x+w,x+w,x};
+       const float fy[4]={y,y,y+h,y+h};
+       const float fu[4]={0.0f,1.0f,1.0f,0.0f};
+       const float fv[4]={0.0f,0.0f,1.0f,1.0f};
+       for (int i=0;i<6;++i)
+        {float* v=verts+8*i;
+         v[0]=fx[idx[i]];v[1]=fy[idx[i]];
+         v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+         v[4]=1.0f;v[5]=1.0f;v[6]=1.0f;v[7]=1.0f;
+        }
+       drawTexPrims_(maskedPipeline,maskedPipelineLayout_,set,verts,6,
+                     presentMVP_());
       }
 
     virtual void deleteTexture(TextureId tex) override
       {auto it=textures_.find(tex);
-       if (it==textures_.end()||device==VK_NULL_HANDLE)
+       if (it==textures_.end()&&renderTargets_.find(tex)==renderTargets_.end())
          return;
-       vkDestroyImageView(device,it->second.view,NULL);
-       vkFreeMemory(device,it->second.mem,NULL);
-       vkDestroyImage(device,it->second.image,NULL);
-       textures_.erase(it);   // descriptor set returns with pool reset
+       if (device==VK_NULL_HANDLE)
+         return;
+       // The texture's descriptor set may still be referenced by a submitted
+       // (not-yet-complete) command buffer; destroying the view/image here
+       // would trip VUID-01026. Deletion is rare (dtors, AlterIcon), so a
+       // guarded idle wait is the cheap correct sync.
+       if (!passOpen_)
+         vkDeviceWaitIdle(device);
+       auto rt=renderTargets_.find(tex);
+       if (rt!=renderTargets_.end())
+        {vkDestroyFramebuffer(device,rt->second.fb,NULL);
+         vkDestroyImageView(device,rt->second.view,NULL);
+         vkFreeMemory(device,rt->second.mem,NULL);
+         vkDestroyImage(device,rt->second.image,NULL);
+         renderTargets_.erase(rt);
+         return;
+        }
+       auto entry=textures_.find(tex);
+       if (entry!=textures_.end())
+        {vkDestroyImageView(device,entry->second.view,NULL);
+         vkFreeMemory(device,entry->second.mem,NULL);
+         vkDestroyImage(device,entry->second.image,NULL);
+         textures_.erase(entry);   // descriptor set returns with pool reset
+        }
       }
 
     virtual TextureId createTextureFromRGBA32(const uint8_t* pixels,int w,
@@ -1455,7 +1852,9 @@ class VKBackend : public RenderingEngine
       {// GL/VK-only semantics (m19): model transform applied BEFORE the
        // present transform; rotation is about the object's OWN origin, then
        // translation (D2 rotator placement). Consumed per-draw by
-       // presentMVP_ via the push-constant uniform block.
+       // presentMVP_ via the push-constant uniform block. Counted for the
+       // m13 degenerate-path assertion (NonRot static textures issue 0).
+       ++transformCallCount_;
        tx_=tx;ty_=ty;angle_=angleRadians;
       }
 
@@ -1511,6 +1910,7 @@ class VKBackend : public RenderingEngine
                                          // lines, filled polys/rects)
     VkPipeline outlinePipeline;          // task 41: LINE_LIST+POLYGON_MODE_LINE
     VkPipeline texPipeline;              // task 41: textured quads/triangles
+    VkPipeline maskedPipeline;           // task 42: content+R8-mask discard
     VkPipelineLayout colorPipelineLayout;// push-constant uMVP only
     VkPipelineLayout texPipelineLayout;  // push-constant uMVP + sampler set 0
     VkDescriptorPool descriptorPool;     // combined-image-sampler sets
@@ -1521,6 +1921,7 @@ class VKBackend : public RenderingEngine
     unsigned stallSkipCount_;            // recovered stalls (skipped frames)
     bool presentationSuspended_;         // degenerate extent (minimized)
     bool fatalStallShutdown_;            // stall-limit shutdown has run
+    unsigned transformCallCount_;        // m13 evidence: setTransform calls
 
     // Task-40 QA hooks (see header comment; NULL = absent, zero cost).
     void (*qaInRenderPassHook)(VkCommandBuffer,uint32_t,VkImage,void*);
@@ -1542,6 +1943,9 @@ class VKBackend : public RenderingEngine
     std::vector<VkImageView> swapchainImageViews_;
     std::vector<VkFramebuffer> swapchainFramebuffers_;   // task 40, per image
     VkFormat renderPassFormat_;          // format renderPass was built for
+    VkRenderPass offscreenRenderPass_;   // task 42: LOAD load,
+                                         // SHADER_READ_ONLY final layout
+    VkRenderPass swapchainLoadRenderPass_;  // task 42: endRenderTo reopen
     bool scissorActive_;                 // setScissorRect state (D7/D8)
     int scissorRect_[4];                 // LOGICAL CLIENT {x,y,w,h}
 
@@ -1549,9 +1953,12 @@ class VKBackend : public RenderingEngine
     // pipelines/layouts/pool are public above. The vertex scratch buffers
     // are per in-flight frame slot (device-level like the sync objects).
     VkShaderModule primVs_,primFs_,texVs_,texFs_;
+    VkShaderModule maskedFs_;            // task 42 (masked.frag)
     char shaderSpvDir_[96];              // init-time glslc output (consumed
                                          // by createShaderModules_)
     VkDescriptorSetLayout texSetLayout_;
+    VkDescriptorSetLayout maskedSetLayout_;   // task 42: bindings 0+1
+    VkPipelineLayout maskedPipelineLayout_;
     VkSampler sharedSampler_;            // linear + clamp-to-edge (GL params)
     struct TexEntry
       {VkImage image;
@@ -1560,20 +1967,56 @@ class VKBackend : public RenderingEngine
        VkDescriptorSet set;
       };
     std::map<TextureId,TexEntry> textures_;
+    struct RTEntry                       // task 42 render targets (M1)
+      {VkImage image;
+       VkDeviceMemory mem;
+       VkImageView view;
+       VkFramebuffer fb;
+       VkDescriptorSet set;              // sampling after endRenderTo
+       int w,h;
+       VkImageLayout layout;
+      };
+    std::map<RenderTargetId,RTEntry> renderTargets_;
+    std::map<uint64_t,VkDescriptorSet> maskedSets_;   // (content<<32|mask)
     TextureId nextTextureId_;
+    TextureId atlasTex_;                 // task 42 text atlas (RGBA8, coverage
+                                         // in all 4 channels — see header)
+    struct GlyphInfo
+      {float u0,v0,u1,v1;                // atlas UVs
+       float w,h;                        // bitmap size in logical px
+       float advance;                    // x advance (logical px)
+       float bearingX,bearingY;          // pen -> bitmap top-left offset
+       bool present;
+      };
+    GlyphInfo glyphs_[4][128];
+    int slotShelfH_[4];
     static constexpr VkDeviceSize kVertBufBytes=(VkDeviceSize)4<<20;
     VkBuffer vertBuf_[kMaxFramesInFlight];
     VkDeviceMemory vertMem_[kMaxFramesInFlight];
     void* vertMapped_[kMaxFramesInFlight];
     VkDeviceSize vertUsed_[kMaxFramesInFlight];
     float tx_,ty_,angle_;                // setTransform state (m19)
-    float presentScale_;                 // present transform (identity until
-    int presentOffX_,presentOffY_;       // D17.4a letterbox)
+    float presentScale_;                 // present transform (letterbox,
+    int presentOffX_,presentOffY_;       // D17.4a math since task 42)
+    bool rtActive_;                      // inside begin/endRenderTo
+    int rtWidth_,rtHeight_;              // active target dims (presentMVP_)
+    RenderTargetId currentRenderTarget_;
+    bool rtOneShot_;                     // init-time one-shot recording mode
+    VkCommandBuffer oneShotCb_;
+    VkCommandBuffer activeCb_;           // cb draws record into (frame slot
+                                         // or one-shot)
     bool passOpen_;                      // command buffer open between
                                          // beginFrame preamble/endFrame
                                          // postamble; draws record only then
     float mvp_[16];                      // presentMVP_ scratch
     float winMvp_[16];                   // windowMVP_ scratch
+
+    // Task-42 D16 event ring + GLFW input bridge state.
+    static const int maxEventQueue_=256;
+    GameEvent eventQueue_[maxEventQueue_];
+    int eventHead_,eventTail_;
+    double lastCursorX_,lastCursorY_;
+    bool cursorValid_;
 
     // Task-39 frame-sync objects (device-level; independent of the
     // swapchain — re-bootstrap never recreates them). EXCEPTION:
@@ -1678,6 +2121,362 @@ class VKBackend : public RenderingEngine
        return true;
       }
 
+    bool validFont(int fontId) const
+      {return fontId>=0&&fontId<=3&&fontInfo_[fontId]!=NULL
+              &&fontData_[fontId]!=NULL;
+      }
+
+    struct TexRef
+      {VkImageView view;
+       VkDescriptorSet set;
+      };
+
+    TexRef lookupTex_(TextureId id)
+      {TexRef r{VK_NULL_HANDLE,VK_NULL_HANDLE};
+       auto it=textures_.find(id);
+       if (it!=textures_.end())
+        {r.view=it->second.view;
+         r.set=it->second.set;
+         return r;
+        }
+       auto rt=renderTargets_.find(id);
+       if (rt!=renderTargets_.end())
+        {r.view=rt->second.view;
+         r.set=rt->second.set;
+        }
+       return r;
+      }
+
+    // ------------------------------------------------------------------
+    // Task 42 text: shelf-packed coverage atlas + per-glyph quads
+    // (glBackend initText/drawGlyphs port). The atlas uploads as RGBA8 with
+    // the coverage byte in ALL FOUR channels: through FragColor =
+    // texture*vColor and the SRC_ALPHA blend this reproduces glBackend's
+    // vec4(uColor*a,a) math exactly (rgb = tint*a^2 + dst*(1-a)).
+    // ------------------------------------------------------------------
+    bool initText_()
+      {const int AW=2048,AH=512;
+       std::vector<uint8_t> atlas((size_t)AW*AH*4,0);
+       int shelfY[4];
+       int curX=0;
+       for (int s=0;s<4;++s)
+        {shelfY[s]=s==0?0:shelfY[s-1]+slotShelfH_[s-1];
+         curX=0;
+         slotShelfH_[s]=0;
+         for (int cp=32;cp<127;++cp)
+          {int w=0,h=0,xoff=0,yoff=0;
+           uint8_t* bmp=stbtt_GetCodepointBitmap(fontInfo_[s],fontScale_[s],
+                                                 fontScale_[s],cp,
+                                                 &w,&h,&xoff,&yoff);
+           if (w>0&&h>0)
+            {if (curX+w+1>=AW)                 // wrap inside the slot band
+              {curX=0;
+               shelfY[s]+=slotShelfH_[s]+1;
+               slotShelfH_[s]=0;
+              }
+             for (int row=0;row<h;++row)
+              {uint8_t* dst=&atlas[((size_t)(shelfY[s]+row)*AW+curX)*4];
+               const uint8_t* src=bmp+row*w;
+               for (int x=0;x<w;++x)
+                {dst[x*4+0]=src[x];
+                 dst[x*4+1]=src[x];
+                 dst[x*4+2]=src[x];
+                 dst[x*4+3]=src[x];
+                }
+              }
+             GlyphInfo& g=glyphs_[s][cp];
+             g.u0=(float)curX/AW;      g.v0=(float)shelfY[s]/AH;
+             g.u1=(float)(curX+w)/AW;  g.v1=(float)(shelfY[s]+h)/AH;
+             g.w=(float)w;g.h=(float)h;
+             g.bearingX=(float)xoff;g.bearingY=(float)yoff;
+             g.present=true;
+             if (h>slotShelfH_[s])
+               slotShelfH_[s]=h;
+             curX+=w+1;
+            }
+           stbtt_FreeBitmap(bmp,NULL);
+           int adv=0,lsb=0;
+           stbtt_GetCodepointHMetrics(fontInfo_[s],cp,&adv,&lsb);
+           glyphs_[s][cp].advance=adv*fontScale_[s];
+          }
+        }
+       atlasTex_=createTextureFromBitmap(atlas.data(),AW,AH,4);
+       return atlasTex_!=0;
+      }
+
+    void drawGlyphs_(const char* text,float x,float y,int fontId,
+                     float r,float g,float b)
+      {// Pen starts at (x, y) with y = BASELINE (X11 XDrawString semantics).
+       // 6 expanded triangle verts x 8 floats per quad, up to 512 quads per
+       // call — the stride discipline of the task-36 Defect-A fix.
+       TexRef atlas=lookupTex_(atlasTex_);
+       if (!atlas.set)
+         return;
+       float penX=x;
+       float verts[6*8*512];
+       int quads=0;
+       for (const char* p=text;*p&&quads<512;++p)
+        {GlyphInfo& gl=glyphs_[fontId][(unsigned char)*p];
+         if (gl.present)
+          {float x0=penX+gl.bearingX,y0=y+gl.bearingY;   // bearingY <= 0
+           const float fx[4]={x0,x0+gl.w,x0+gl.w,x0};
+           const float fy[4]={y0,y0,y0+gl.h,y0+gl.h};
+           const float fu[4]={gl.u0,gl.u1,gl.u1,gl.u0};
+           const float fv[4]={gl.v0,gl.v0,gl.v1,gl.v1};
+           static const int idx[6]={0,1,2,0,2,3};
+           for (int i=0;i<6;++i)
+            {float* v=verts+48*quads+8*i;
+             v[0]=fx[idx[i]];v[1]=fy[idx[i]];
+             v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+             v[4]=r;v[5]=g;v[6]=b;v[7]=1.0f;
+            }
+           ++quads;
+          }
+         penX+=gl.advance;
+        }
+       if (!quads)
+         return;
+       drawTexPrims_(texPipeline,texPipelineLayout,atlas.set,verts,
+                     quads*6,presentMVP_());
+      }
+
+    // ------------------------------------------------------------------
+    // Task 42 render-target plumbing (M1 VK half).
+    // ------------------------------------------------------------------
+    void ensureOffscreenRenderPass_()
+      {if (offscreenRenderPass_!=VK_NULL_HANDLE
+           ||swapchainFormat_==VK_FORMAT_UNDEFINED)
+         return;
+       // LOAD (not DONT_CARE/CLEAR): ShipYard::AddShip/RemoveShip render
+       // incrementally and rely on the target's persisted contents between
+       // begin/end pairs — GL's FBO bind never discards either. First use
+       // rides the UNDEFINED->COLOR_ATTACHMENT barrier in rtToColorBarrier_
+       // (garbage contents, immediately overwritten by the caller's full
+       // fill — every consumer paints the whole target first).
+       VkAttachmentDescription color{};
+       color.format=swapchainFormat_;
+       color.samples=VK_SAMPLE_COUNT_1_BIT;
+       color.loadOp=VK_ATTACHMENT_LOAD_OP_LOAD;
+       color.storeOp=VK_ATTACHMENT_STORE_OP_STORE;
+       color.stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+       color.stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+       color.initialLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+       color.finalLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+       VkAttachmentReference colorRef{};
+       colorRef.attachment=0;
+       colorRef.layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+       VkSubpassDescription subpass{};
+       subpass.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS;
+       subpass.colorAttachmentCount=1;
+       subpass.pColorAttachments=&colorRef;
+       VkSubpassDependency dep{};
+       dep.srcSubpass=VK_SUBPASS_EXTERNAL;
+       dep.dstSubpass=0;
+       dep.srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+       dep.dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+       dep.srcAccessMask=0;
+       dep.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+       VkRenderPassCreateInfo rpi{};
+       rpi.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+       rpi.attachmentCount=1;
+       rpi.pAttachments=&color;
+       rpi.subpassCount=1;
+       rpi.pSubpasses=&subpass;
+       rpi.dependencyCount=1;
+       rpi.pDependencies=&dep;
+       if (!vkCheck(vkCreateRenderPass(device,&rpi,NULL,
+                    &offscreenRenderPass_),
+                    "vkCreateRenderPass(offscreen)"))
+         offscreenRenderPass_=VK_NULL_HANDLE;
+      }
+
+    void rtToColorBarrier_(RTEntry& rt)
+      {VkImageMemoryBarrier bar{};
+       bar.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+       bar.srcAccessMask=VK_ACCESS_SHADER_READ_BIT;
+       bar.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+       bar.oldLayout=rt.layout==VK_IMAGE_LAYOUT_UNDEFINED
+                       ? VK_IMAGE_LAYOUT_UNDEFINED
+                       : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+       bar.newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+       bar.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       bar.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+       bar.image=rt.image;
+       bar.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+       bar.subresourceRange.levelCount=1;
+       bar.subresourceRange.layerCount=1;
+       vkCmdPipelineBarrier(activeCb_,
+                            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                            0,0,NULL,0,NULL,1,&bar);
+       rt.layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      }
+
+    void beginOffscreenPass_(RTEntry& rt)
+      {VkRenderPassBeginInfo rp{};
+       rp.sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+       rp.renderPass=offscreenRenderPass_;
+       rp.framebuffer=rt.fb;
+       rp.renderArea.offset.x=0;
+       rp.renderArea.offset.y=0;
+       rp.renderArea.extent.width=(uint32_t)rt.w;
+       rp.renderArea.extent.height=(uint32_t)rt.h;
+       rp.clearValueCount=0;
+       vkCmdBeginRenderPass(activeCb_,&rp,VK_SUBPASS_CONTENTS_INLINE);
+       VkViewport vp{};
+       vp.x=0.0f;vp.y=0.0f;
+       vp.width=(float)rt.w;
+       vp.height=(float)rt.h;
+       vp.minDepth=0.0f;vp.maxDepth=1.0f;
+       vkCmdSetViewport(activeCb_,0,1,&vp);
+       VkRect2D sci{};
+       sci.offset.x=0;
+       sci.offset.y=0;
+       sci.extent.width=(uint32_t)rt.w;
+       sci.extent.height=(uint32_t)rt.h;
+       vkCmdSetScissor(activeCb_,0,1,&sci);
+      }
+
+    void destroyRenderTargets_()
+      {for (auto& kv:renderTargets_)
+        {vkDestroyFramebuffer(device,kv.second.fb,NULL);
+         vkDestroyImageView(device,kv.second.view,NULL);
+         vkFreeMemory(device,kv.second.mem,NULL);
+         vkDestroyImage(device,kv.second.image,NULL);
+        }
+       renderTargets_.clear();
+       maskedSets_.clear();
+       rtActive_=false;
+       currentRenderTarget_=0;
+      }
+
+    // Second swapchain-facing pass: identical to the task-40 CLEAR pass
+    // except loadOp LOAD + PRESENT_SRC initial layout — used ONLY by the
+    // endRenderTo reopen so already-recorded world pixels survive the pass
+    // switch. Same attachment format/count keeps every pipeline compatible.
+    void ensureSwapchainLoadRenderPass_()
+      {if (swapchainLoadRenderPass_!=VK_NULL_HANDLE)
+         return;
+       VkAttachmentDescription color{};
+       color.format=swapchainFormat_;
+       color.samples=VK_SAMPLE_COUNT_1_BIT;
+       color.loadOp=VK_ATTACHMENT_LOAD_OP_LOAD;
+       color.storeOp=VK_ATTACHMENT_STORE_OP_STORE;
+       color.stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+       color.stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+       color.initialLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+       color.finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+       VkAttachmentReference colorRef{};
+       colorRef.attachment=0;
+       colorRef.layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+       VkSubpassDescription subpass{};
+       subpass.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS;
+       subpass.colorAttachmentCount=1;
+       subpass.pColorAttachments=&colorRef;
+       VkSubpassDependency dep{};
+       dep.srcSubpass=VK_SUBPASS_EXTERNAL;
+       dep.dstSubpass=0;
+       dep.srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+       dep.dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+       dep.srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+       dep.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+                        |VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+       VkRenderPassCreateInfo rpi{};
+       rpi.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+       rpi.attachmentCount=1;
+       rpi.pAttachments=&color;
+       rpi.subpassCount=1;
+       rpi.pSubpasses=&subpass;
+       rpi.dependencyCount=1;
+       rpi.pDependencies=&dep;
+       if (!vkCheck(vkCreateRenderPass(device,&rpi,NULL,
+                    &swapchainLoadRenderPass_),
+                    "vkCreateRenderPass(swapchain-load)"))
+         swapchainLoadRenderPass_=VK_NULL_HANDLE;
+      }
+
+    // ------------------------------------------------------------------
+    // Task 42 D16 input bridge (GL task-44a mouse bridge + the task-35 US-
+    // layout key table, both ported verbatim). Enqueues apply the INVERSE
+    // present transform so the domain speaks LOGICAL client coords.
+    // ------------------------------------------------------------------
+    static void keyTrampoline_(GLFWwindow*,int key,int,int action,int)
+     {if (action!=GLFW_PRESS&&action!=GLFW_RELEASE)
+        return;                        // GLFW_REPEAT dropped at the boundary
+      char character=0;
+      switch(key)
+       {case GLFW_KEY_S: character='s'; break;
+        case GLFW_KEY_Q: character='q'; break;
+        case GLFW_KEY_H: character='h'; break;
+        case GLFW_KEY_E: character='e'; break;
+        case GLFW_KEY_R: character='r'; break;
+        case GLFW_KEY_O: character='o'; break;
+        case GLFW_KEY_P: character='p'; break;
+        case GLFW_KEY_N: character='n'; break;
+        case GLFW_KEY_SPACE: character=' '; break;
+       }
+      if (character&&s_instance)
+        s_instance->enqueueEvent_(action==GLFW_PRESS?GameEvent::KeyDown
+                                                  :GameEvent::KeyUp,
+                                  0,0,0,character);
+     }
+
+    static void cursorPosTrampoline_(GLFWwindow*,double x,double y)
+     {if (s_instance)
+        s_instance->enqueueMouseMove_(x,y);
+     }
+
+    static void mouseButtonTrampoline_(GLFWwindow*,int button,int action,int)
+     {if (s_instance&&button==GLFW_MOUSE_BUTTON_LEFT)
+        s_instance->enqueueMouseButton_(action==GLFW_PRESS);
+     }
+
+    static void cursorEnterTrampoline_(GLFWwindow*,int entered)
+     {if (s_instance)
+        s_instance->enqueueCursorEnter_(entered==GLFW_TRUE);
+     }
+
+    void enqueueMouseMove_(double x,double y)
+     {float scale=1.0f;
+      int offsetX=0,offsetY=0;
+      getPresentTransform(scale,offsetX,offsetY);
+      lastCursorX_=x;lastCursorY_=y;cursorValid_=true;
+      enqueueEvent_(GameEvent::MouseMove,
+                    (int)((x-offsetX)/scale),(int)((y-offsetY)/scale));
+     }
+
+    void enqueueMouseButton_(bool pressed)
+     {int x=0,y=0;
+      if (cursorValid_)
+       {float scale=1.0f;
+        int offsetX=0,offsetY=0;
+        getPresentTransform(scale,offsetX,offsetY);
+        x=(int)((lastCursorX_-offsetX)/scale);
+        y=(int)((lastCursorY_-offsetY)/scale);
+       }
+      enqueueEvent_(pressed?GameEvent::MouseDown:GameEvent::MouseUp,x,y,1);
+     }
+
+    void enqueueCursorEnter_(bool entered)
+     {enqueueEvent_(entered?GameEvent::CursorEnter:GameEvent::CursorLeave,
+                    cursorValid_?(int)lastCursorX_:0,
+                    cursorValid_?(int)lastCursorY_:0);
+     }
+
+    void enqueueEvent_(GameEvent::Type type,int x,int y,int key=0,
+                       char character=0)
+     {const int next=(eventTail_+1)%maxEventQueue_;
+      if (next==eventHead_)
+        return;                              // overflow drops (never blocks)
+      GameEvent& event=eventQueue_[eventTail_];
+      event.type=type;
+      event.key=key;
+      event.character=character;
+      event.x=x;
+      event.y=y;
+      eventTail_=next;
+     }
+
     // ------------------------------------------------------------------
     // Pass 2a: GLFW_NO_API window sized by the SHARED D15 formula
     // (WindowSizeFormula::Compute — identical inputs to glBackend pass 2
@@ -1715,7 +2514,12 @@ class VKBackend : public RenderingEngine
         }
        glfwSetFramebufferSizeCallback(window,framebufferSizeTrampoline_);
        glfwSetWindowCloseCallback(window,windowCloseTrampoline_);
+       glfwSetKeyCallback(window,keyTrampoline_);
+       glfwSetCursorPosCallback(window,cursorPosTrampoline_);
+       glfwSetMouseButtonCallback(window,mouseButtonTrampoline_);
+       glfwSetCursorEnterCallback(window,cursorEnterTrampoline_);
        glfwGetFramebufferSize(window,&fbWidth_,&fbHeight_);
+       recomputePresentTransform_();
        VkResult rc=glfwCreateWindowSurface(instance,window,NULL,&surface);
        if (!vkCheck(rc,"glfwCreateWindowSurface"))
         {surface=VK_NULL_HANDLE;
@@ -1943,10 +2747,11 @@ class VKBackend : public RenderingEngine
         }
 
         swapchainImageCount_=nimgs;
-        swapchainFormat_=chosen.format;
-        swapchainColorSpace_=chosen.colorSpace;
-        swapchainExtent_=ext;
-        swapchainDirty_=false;
+         swapchainFormat_=chosen.format;
+         swapchainColorSpace_=chosen.colorSpace;
+         swapchainExtent_=ext;
+         swapchainDirty_=false;
+         recomputePresentTransform_();   // D17.4a: letterbox follows extent
         // Task 40: render pass (reused unless the format changed) + one
         // framebuffer per new view. Living here means BOTH the initial
         // bootstrap AND every task-39 re-bootstrap recreate them.
@@ -2196,22 +3001,22 @@ class VKBackend : public RenderingEngine
       }
 
     // D7/v6.1 seam: logical client rect -> framebuffer-space VkRect2D.
-    // Identity while the present transform is identity (task 38 always
-    // creates extent == window); D17.4a letterbox math lands here later.
+    // Applies the letterbox present transform (scale + centered offsets;
+    // VK needs no y-flip — top-left origin both sides).
     VkRect2D applyPresentTransformToScissor_() const
       {if (!scissorActive_)
         {VkRect2D full{};
-         full.offset.x=0;
-         full.offset.y=0;
-         full.extent=swapchainExtent_;
-         return full;
-        }
-       VkRect2D r{};
-       r.offset.x=scissorRect_[0];
-       r.offset.y=scissorRect_[1];
-       r.extent.width=(uint32_t)scissorRect_[2];
-       r.extent.height=(uint32_t)scissorRect_[3];
-       return r;
+          full.offset.x=0;
+          full.offset.y=0;
+          full.extent=swapchainExtent_;
+          return full;
+         }
+        VkRect2D r{};
+        r.offset.x=presentOffX_+(int)(scissorRect_[0]*presentScale_);
+        r.offset.y=presentOffY_+(int)(scissorRect_[1]*presentScale_);
+        r.extent.width=(uint32_t)(scissorRect_[2]*presentScale_);
+        r.extent.height=(uint32_t)(scissorRect_[3]*presentScale_);
+        return r;
       }
 
     bool recordFramePreamble_(uint32_t imageIndex)
@@ -2243,21 +3048,22 @@ class VKBackend : public RenderingEngine
        rp.renderArea.extent=swapchainExtent_;
        rp.clearValueCount=1;
        rp.pClearValues=&clearBlack;
-       vkCmdBeginRenderPass(cb,&rp,VK_SUBPASS_CONTENTS_INLINE);
-       // Dynamic viewport + scissor: full extent unless setScissorRect
-       // overrode it. The pipelines declare VK_DYNAMIC_STATE_VIEWPORT|
-       // SCISSOR, so these latched commands drive every draw recorded
-       // before the postamble.
-       VkViewport vp{};
-       vp.x=0.0f;vp.y=0.0f;
-       vp.width=(float)swapchainExtent_.width;
-       vp.height=(float)swapchainExtent_.height;
-       vp.minDepth=0.0f;vp.maxDepth=1.0f;
-       vkCmdSetViewport(cb,0,1,&vp);
-       VkRect2D sci=applyPresentTransformToScissor_();
-       vkCmdSetScissor(cb,0,1,&sci);
-       vertUsed_[currentFrame_]=0;   // fresh scratch budget per frame
-       passOpen_=true;
+        vkCmdBeginRenderPass(cb,&rp,VK_SUBPASS_CONTENTS_INLINE);
+        // Dynamic viewport + scissor: full extent unless setScissorRect
+        // overrode it. The pipelines declare VK_DYNAMIC_STATE_VIEWPORT|
+        // SCISSOR, so these latched commands drive every draw recorded
+        // before the postamble.
+        VkViewport vp{};
+        vp.x=0.0f;vp.y=0.0f;
+        vp.width=(float)swapchainExtent_.width;
+        vp.height=(float)swapchainExtent_.height;
+        vp.minDepth=0.0f;vp.maxDepth=1.0f;
+        vkCmdSetViewport(cb,0,1,&vp);
+        VkRect2D sci=applyPresentTransformToScissor_();
+        vkCmdSetScissor(cb,0,1,&sci);
+        vertUsed_[currentFrame_]=0;   // fresh scratch budget per frame
+        activeCb_=cb;
+        passOpen_=true;
        if (qaInRenderPassHook)
          qaInRenderPassHook(cb,imageIndex,
                             swapchainImages_[imageIndex],
@@ -2268,6 +3074,7 @@ class VKBackend : public RenderingEngine
     bool recordFramePostamble_()
       {VkCommandBuffer cb=commandBuffers_[currentFrame_];
        passOpen_=false;
+       activeCb_=VK_NULL_HANDLE;
        vkCmdEndRenderPass(cb);
        if (qaAfterRenderPassHook)
          qaAfterRenderPassHook(cb,acquiredImageIndex_,
@@ -2286,9 +3093,10 @@ class VKBackend : public RenderingEngine
     // ------------------------------------------------------------------
     bool compileShadersAtInit_()
       {if (shadersCompiledAtInit_)
-         return true;
-       static const char* const names[4]={"prim.vert","prim.frag",
-                                          "tex.vert","tex.frag"};
+          return true;
+       static const char* const names[5]={"prim.vert","prim.frag",
+                                          "tex.vert","tex.frag",
+                                          "masked.frag"};
        char root[4096];
        ssize_t n=readlink("/proc/self/exe",root,sizeof root-1);
        if (n<=0)
@@ -2308,7 +3116,7 @@ class VKBackend : public RenderingEngine
           return false;
          }
        bool ok=true;
-       for (int i=0;i<4&&ok;++i)
+       for (int i=0;i<5&&ok;++i)
         {char srcPath[4600],spvPath[200];
          snprintf(srcPath,sizeof srcPath,
                   "%s/utilities/rendering/vkShaders/%s",root,names[i]);
@@ -2323,7 +3131,7 @@ class VKBackend : public RenderingEngine
          return false;
         }
        shadersCompiledAtInit_=true;
-       printf("vkBackend: 4 shaders compiled from source at init (glslc "
+       printf("vkBackend: 5 shaders compiled from source at init (glslc "
               "clean)\n");
        return true;
       }
@@ -2337,8 +3145,9 @@ class VKBackend : public RenderingEngine
         {fprintf(stderr,"vkBackend: no compiled shaders to load\n");
          return false;
         }
-       VkShaderModule* slots[4]={&primVs_,&primFs_,&texVs_,&texFs_};
-       for (int i=0;i<4;++i)
+       VkShaderModule* slots[5]={&primVs_,&primFs_,&texVs_,&texFs_,
+                                 &maskedFs_};
+       for (int i=0;i<5;++i)
         {char spvPath[200];
          snprintf(spvPath,sizeof spvPath,"%s/%d.spv",shaderSpvDir_,i);
          if (!createShaderModuleFromSpv_(spvPath,slots[i]))
@@ -2419,27 +3228,46 @@ class VKBackend : public RenderingEngine
        if (!createShaderModules_())
          return false;
        VkDescriptorSetLayoutBinding samp{};
-       samp.binding=0;
-       samp.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-       samp.descriptorCount=1;
-       samp.stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT;
-       VkDescriptorSetLayoutCreateInfo dli{};
-       dli.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-       dli.bindingCount=1;
-       dli.pBindings=&samp;
-       if (!vkCheck(vkCreateDescriptorSetLayout(device,&dli,NULL,
-                    &texSetLayout_),
-                    "vkCreateDescriptorSetLayout"))
-         return false;
-       // Pool sized for the textured path (one set per texture).
-       VkDescriptorPoolSize ps{};
-       ps.type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-       ps.descriptorCount=256;
-       VkDescriptorPoolCreateInfo dpi{};
-       dpi.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-       dpi.maxSets=256;
-       dpi.poolSizeCount=1;
-       dpi.pPoolSizes=&ps;
+        samp.binding=0;
+        samp.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        samp.descriptorCount=1;
+        samp.stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT;
+        VkDescriptorSetLayoutCreateInfo dli{};
+        dli.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        dli.bindingCount=1;
+        dli.pBindings=&samp;
+        if (!vkCheck(vkCreateDescriptorSetLayout(device,&dli,NULL,
+                     &texSetLayout_),
+                     "vkCreateDescriptorSetLayout"))
+          return false;
+        // Masked pipeline set layout: binding 0 content + binding 1 R8 mask.
+        VkDescriptorSetLayoutBinding msamp[2]={};
+        msamp[0].binding=0;
+        msamp[0].descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        msamp[0].descriptorCount=1;
+        msamp[0].stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT;
+        msamp[1].binding=1;
+        msamp[1].descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        msamp[1].descriptorCount=1;
+        msamp[1].stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT;
+        VkDescriptorSetLayoutCreateInfo mdli{};
+        mdli.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        mdli.bindingCount=2;
+        mdli.pBindings=msamp;
+        if (!vkCheck(vkCreateDescriptorSetLayout(device,&mdli,NULL,
+                     &maskedSetLayout_),
+                     "vkCreateDescriptorSetLayout(masked)"))
+          return false;
+        // Pool sized for the textured path (one set per texture) plus the
+        // render-target sampling sets and cached (content,mask) pairs.
+        VkDescriptorPoolSize ps{};
+        ps.type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        ps.descriptorCount=512;
+        VkDescriptorPoolCreateInfo dpi{};
+        dpi.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        dpi.maxSets=512;
+        dpi.poolSizeCount=1;
+        dpi.pPoolSizes=&ps;
        if (!vkCheck(vkCreateDescriptorPool(device,&dpi,NULL,
                     &descriptorPool),
                     "vkCreateDescriptorPool"))
@@ -2472,12 +3300,17 @@ class VKBackend : public RenderingEngine
                     &colorPipelineLayout),
                     "vkCreatePipelineLayout(color)"))
          return false;
-       cli.setLayoutCount=1;
-       cli.pSetLayouts=&texSetLayout_;
-       if (!vkCheck(vkCreatePipelineLayout(device,&cli,NULL,
-                    &texPipelineLayout),
-                    "vkCreatePipelineLayout(tex)"))
-         return false;
+        cli.setLayoutCount=1;
+         cli.pSetLayouts=&texSetLayout_;
+        if (!vkCheck(vkCreatePipelineLayout(device,&cli,NULL,
+                     &texPipelineLayout),
+                     "vkCreatePipelineLayout(tex)"))
+          return false;
+        cli.pSetLayouts=&maskedSetLayout_;
+        if (!vkCheck(vkCreatePipelineLayout(device,&cli,NULL,
+                     &maskedPipelineLayout_),
+                     "vkCreatePipelineLayout(masked)"))
+          return false;
        // Vertex scratch: one host-visible coherent buffer per in-flight
        // frame slot (GL's per-draw STREAM_DRAW equivalent).
        for (int i=0;i<kMaxFramesInFlight;++i)
@@ -2562,12 +3395,17 @@ class VKBackend : public RenderingEngine
                                    VK_POLYGON_MODE_LINE,
                                    colorPipelineLayout,&outlinePipeline))
          return false;
-       if (!buildGraphicsPipeline_(texVs_,texFs_,&bindTex,attrTex,3,
-                                   VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                                   VK_POLYGON_MODE_FILL,
-                                   texPipelineLayout,&texPipeline))
-         return false;
-       return true;
+        if (!buildGraphicsPipeline_(texVs_,texFs_,&bindTex,attrTex,3,
+                                    VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                                    VK_POLYGON_MODE_FILL,
+                                    texPipelineLayout,&texPipeline))
+          return false;
+        if (!buildGraphicsPipeline_(texVs_,maskedFs_,&bindTex,attrTex,3,
+                                    VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                                    VK_POLYGON_MODE_FILL,
+                                    maskedPipelineLayout_,&maskedPipeline))
+          return false;
+        return true;
       }
 
     bool buildGraphicsPipeline_(VkShaderModule vs,VkShaderModule fs,
@@ -2660,14 +3498,15 @@ class VKBackend : public RenderingEngine
       }
 
     void destroyPipelines_()
-      {VkPipeline pipes[4]={linePipeline,triPipeline,outlinePipeline,
-                            texPipeline};
-       for (int i=0;i<4;++i)
+      {VkPipeline pipes[5]={linePipeline,triPipeline,outlinePipeline,
+                            texPipeline,maskedPipeline};
+       for (int i=0;i<5;++i)
         {if (pipes[i]!=VK_NULL_HANDLE)
            vkDestroyPipeline(device,pipes[i],NULL);
          pipes[i]=VK_NULL_HANDLE;
         }
-       linePipeline=triPipeline=outlinePipeline=texPipeline=VK_NULL_HANDLE;
+       linePipeline=triPipeline=outlinePipeline=texPipeline
+                  =maskedPipeline=VK_NULL_HANDLE;
        if (colorPipelineLayout!=VK_NULL_HANDLE)
         {vkDestroyPipelineLayout(device,colorPipelineLayout,NULL);
          colorPipelineLayout=VK_NULL_HANDLE;
@@ -2675,6 +3514,10 @@ class VKBackend : public RenderingEngine
        if (texPipelineLayout!=VK_NULL_HANDLE)
         {vkDestroyPipelineLayout(device,texPipelineLayout,NULL);
          texPipelineLayout=VK_NULL_HANDLE;
+        }
+       if (maskedPipelineLayout_!=VK_NULL_HANDLE)
+        {vkDestroyPipelineLayout(device,maskedPipelineLayout_,NULL);
+         maskedPipelineLayout_=VK_NULL_HANDLE;
         }
       }
 
@@ -2692,25 +3535,33 @@ class VKBackend : public RenderingEngine
          vertUsed_[i]=0;
         }
        destroyPipelines_();
-       if (descriptorPool!=VK_NULL_HANDLE)
-        {vkDestroyDescriptorPool(device,descriptorPool,NULL);
-         descriptorPool=VK_NULL_HANDLE;
-        }
-       if (texSetLayout_!=VK_NULL_HANDLE)
-        {vkDestroyDescriptorSetLayout(device,texSetLayout_,NULL);
-         texSetLayout_=VK_NULL_HANDLE;
-        }
-       if (sharedSampler_!=VK_NULL_HANDLE)
-        {vkDestroySampler(device,sharedSampler_,NULL);
-         sharedSampler_=VK_NULL_HANDLE;
-        }
-       VkShaderModule mods[4]={primVs_,primFs_,texVs_,texFs_};
-       for (int i=0;i<4;++i)
-        {if (mods[i]!=VK_NULL_HANDLE)
-           vkDestroyShaderModule(device,mods[i],NULL);
-        }
-       primVs_=primFs_=texVs_=texFs_=VK_NULL_HANDLE;
-       if (renderPass!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
+        if (descriptorPool!=VK_NULL_HANDLE)
+         {vkDestroyDescriptorPool(device,descriptorPool,NULL);
+          descriptorPool=VK_NULL_HANDLE;
+         }
+        if (texSetLayout_!=VK_NULL_HANDLE)
+         {vkDestroyDescriptorSetLayout(device,texSetLayout_,NULL);
+          texSetLayout_=VK_NULL_HANDLE;
+         }
+        if (maskedSetLayout_!=VK_NULL_HANDLE)
+         {vkDestroyDescriptorSetLayout(device,maskedSetLayout_,NULL);
+          maskedSetLayout_=VK_NULL_HANDLE;
+         }
+        if (sharedSampler_!=VK_NULL_HANDLE)
+         {vkDestroySampler(device,sharedSampler_,NULL);
+          sharedSampler_=VK_NULL_HANDLE;
+         }
+        VkShaderModule mods[5]={primVs_,primFs_,texVs_,texFs_,maskedFs_};
+        for (int i=0;i<5;++i)
+         {if (mods[i]!=VK_NULL_HANDLE)
+            vkDestroyShaderModule(device,mods[i],NULL);
+         }
+        primVs_=primFs_=texVs_=texFs_=maskedFs_=VK_NULL_HANDLE;
+        if (offscreenRenderPass_!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
+         {vkDestroyRenderPass(device,offscreenRenderPass_,NULL);
+          offscreenRenderPass_=VK_NULL_HANDLE;
+         }
+        if (renderPass!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
         {vkDestroyRenderPass(device,renderPass,NULL);
          renderPass=VK_NULL_HANDLE;
          renderPassFormat_=VK_FORMAT_UNDEFINED;
@@ -2857,14 +3708,15 @@ class VKBackend : public RenderingEngine
        if (!p)
          return;
        memcpy(p,interleaved,(size_t)vertCount*5*sizeof(float));
-       VkCommandBuffer cb=commandBuffers_[currentFrame_];
+       VkCommandBuffer cb=activeCb_;
        vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,pipe);
        pushMvp_(cb,colorPipelineLayout,presentMVP_());
        vkCmdBindVertexBuffers(cb,0,1,&vertBuf_[currentFrame_],&off);
        vkCmdDraw(cb,(uint32_t)vertCount,1,0,0);
       }
 
-    void drawTexPrims_(VkDescriptorSet set,const float* verts,int count,
+    void drawTexPrims_(VkPipeline pipe,VkPipelineLayout layout,
+                       VkDescriptorSet set,const float* verts,int count,
                        const float* mvp)
       {if (!passOpen_||count<3)
          return;
@@ -2873,11 +3725,11 @@ class VKBackend : public RenderingEngine
        if (!p)
          return;
        memcpy(p,verts,(size_t)count*8*sizeof(float));
-       VkCommandBuffer cb=commandBuffers_[currentFrame_];
-       vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,texPipeline);
-       pushMvp_(cb,texPipelineLayout,mvp);
+       VkCommandBuffer cb=activeCb_;
+       vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,pipe);
+       pushMvp_(cb,layout,mvp);
        vkCmdBindDescriptorSets(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,
-                               texPipelineLayout,0,1,&set,0,NULL);
+                               layout,0,1,&set,0,NULL);
        vkCmdBindVertexBuffers(cb,0,1,&vertBuf_[currentFrame_],&off);
        vkCmdDraw(cb,(uint32_t)count,1,0,0);
       }
@@ -2888,7 +3740,23 @@ class VKBackend : public RenderingEngine
     // y-DOWN like logical space, so P carries NO flip (GL's negative
     // y-scale becomes positive here — same geometry, same pixels).
     const float* presentMVP_()
-      {float W=(float)swapchainExtent_.width;
+      {if (rtActive_)
+        {// Rendering INTO a render target: logical (0,0)-top-left maps 1:1
+         // onto the target surface (Button face geometry is target-local;
+         // glBackend rtActive_ analog without the GL y-flip — VK NDC is
+         // y-down like logical space).
+         float a=2.0f/(float)rtWidth_;
+         float b=2.0f/(float)rtHeight_;
+         float cs=cosf(angle_),sn=sinf(angle_);
+         float ma=cs,mb=-sn,mc=tx_;
+         float md=sn,me=cs,mf=ty_;
+         mvp_[0]=a*ma;    mvp_[1]=b*md;    mvp_[2]=0.0f;mvp_[3]=0.0f;
+         mvp_[4]=a*mb;    mvp_[5]=b*me;    mvp_[6]=0.0f;mvp_[7]=0.0f;
+         mvp_[8]=0.0f;    mvp_[9]=0.0f;    mvp_[10]=1.0f;mvp_[11]=0.0f;
+         mvp_[12]=a*mc-1.0f;mvp_[13]=b*mf-1.0f;mvp_[14]=0.0f;mvp_[15]=1.0f;
+         return mvp_;
+        }
+       float W=(float)swapchainExtent_.width;
        float H=(float)swapchainExtent_.height;
        float a=2.0f*presentScale_/W;
        float c=2.0f*(float)presentOffX_/W-1.0f;
@@ -3036,13 +3904,24 @@ class VKBackend : public RenderingEngine
        shutdown();
       }
 
-    // D17.4a hook: the framebuffer-size callback records the new size and
-    // marks the swapchain dirty; task 39's re-bootstrap consumes the flag
-    // (re-create at the new extent + present-transform recompute). Nothing
-    // else may clear or act on swapchainDirty_ until then.
+    // D17.4a hook: recompute the letterbox present transform from the last
+    // known framebuffer size vs the canonical size. Called from the
+    // framebuffer-size callback and after every swapchain (re-)creation.
     void recomputePresentTransform_()
-      {// Identity transform while extent tracks the window exactly; the
-       // letterbox math lands with task 40's render passes.
+      {float scale=1.0f;
+       int ox=0,oy=0;
+       if (canonicalWidth_>0&&canonicalHeight_>0
+           &&fbWidth_>0&&fbHeight_>0)
+        {scale=((float)fbWidth_/canonicalWidth_
+               <(float)fbHeight_/canonicalHeight_)
+                ? (float)fbWidth_/canonicalWidth_
+                : (float)fbHeight_/canonicalHeight_;
+         ox=((int)fbWidth_-(int)(canonicalWidth_*scale))/2;
+         oy=((int)fbHeight_-(int)(canonicalHeight_*scale))/2;
+        }
+       presentScale_=scale;
+       presentOffX_=ox;
+       presentOffY_=oy;
       }
 
     static void framebufferSizeTrampoline_(GLFWwindow* win,int w,int h)
@@ -3083,12 +3962,6 @@ class VKBackend : public RenderingEngine
            return true;
         }
        return false;
-      }
-
-    [[noreturn]] static void notImplemented()
-      {fprintf(stderr,"vkBackend: %s not implemented until task 42\n",
-               __func__);
-       abort();
       }
 
     // Minimal result-name helper: the C headers ship no
