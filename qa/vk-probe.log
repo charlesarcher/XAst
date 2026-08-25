@@ -161,3 +161,61 @@ vkprobe: PASS-0 REPORT
   loader ERROR noise (not counted): 1
 vkprobe: PASS
 rc=0
+================================================================
+= TASK 38 APPENDIX (wt-t38): surface+swapchain probes under Xvfb :98
+= date: 2026-08-25T05:08:59Z  screen 1280x1024x24
+================================================================
+--- RUN T38-1: vkprobe (surfaceless pass-0 regression, default env) ---
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vkprobe: PASS-0 REPORT
+  instance: created (header pin 1.4.357)
+  device: NVIDIA GeForce RTX 5090 (discrete, apiVersion 1.4.341)
+  graphics queue family: 0
+  debug utils available: yes, messenger: created
+  validation layer: instance-present=no device-present=no enabled=no
+  swapchain ext available: yes (standalone device: NOT enabled; the windowed path enables it post-surface)
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vkprobe: PASS
+rc=0
+
+--- RUN T38-2: vksurface (window+surface+swapchain), validation ABSENT (default) ---
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vksurface: SURFACE+SWAPCHAIN REPORT
+  window: 688x702 requested, framebuffer 688x702
+  surface: created
+  present queue family: 0 (graphics family also presents)
+  swapchain: 3 images, VK_FORMAT_B8G8R8A8_UNORM, extent 688x702
+  validation layer: enabled=no
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vksurface: PASS
+rc=0
+
+--- RUN T38-3: vksurface with VK_LAYER_PATH -> vulkan-validation-layers 1.4.357.0-1.1 (validation LIVE through surface/swapchain init) ---
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vksurface: SURFACE+SWAPCHAIN REPORT
+  window: 688x702 requested, framebuffer 688x702
+  surface: created
+  present queue family: 0 (graphics family also presents)
+  swapchain: 3 images, VK_FORMAT_B8G8R8A8_UNORM, extent 688x702
+  validation layer: enabled=yes
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vksurface: PASS
+rc=0
+
+--- RUN T38-4: vksurface XAST_VK_VALIDATION=off escape ---
+WARNING: radv is not a conformant Vulkan implementation, testing use only.
+vksurface: SURFACE+SWAPCHAIN REPORT
+  window: 688x702 requested, framebuffer 688x702
+  surface: created
+  present queue family: 0 (graphics family also presents)
+  swapchain: 3 images, VK_FORMAT_B8G8R8A8_UNORM, extent 688x702
+  validation layer: enabled=no
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+  loader ERROR noise (not counted): 2
+vksurface: PASS
+rc=0

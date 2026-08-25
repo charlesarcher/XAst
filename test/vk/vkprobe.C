@@ -49,7 +49,8 @@ int main()
          vk.instanceLayerPresent_?"yes":"no",
          vk.deviceLayerPresent_?"yes":"no",
          vk.validationEnabled_?"yes":"no");
-  printf("  swapchain ext available: %s (NOT enabled until task 38)\n",
+  printf("  swapchain ext available: %s (standalone device: NOT enabled; "
+         "the windowed path enables it post-surface)\n",
          vk.swapchainAvailable_?"yes":"no");
   printf("  validation ERROR count (VUID-/UNASSIGNED only): %u\n",
          vk.validationErrorCount_);

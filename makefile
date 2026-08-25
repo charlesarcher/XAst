@@ -82,13 +82,18 @@ endif
 ifeq ($(BACKEND),GL)
 GL_OBJECTS=$(OBJDIR)/glad.o $(OBJDIR)/stbTruetypeImpl.o
 endif
+# Task 38: the VK leg consumes stb font METRICS (pass-1 window sizing via the
+# shared D15 formula) — the SAME impl TU as GL; glad stays GL-only.
+ifeq ($(BACKEND),VK)
+VK_STB_OBJECT=$(OBJDIR)/stbTruetypeImpl.o
+endif
 
 .PHONY: objects
 # All three game objects on EVERY leg (task 27: the D14 units' #else engine
 # branches compile guards-closed on GL/VK, macro'd on X11) + the
 # backend-agnostic self-test/vendor units on the GPU legs.
 GAME_OBJECTS=$(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o
-objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS)
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT)
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
@@ -177,9 +182,9 @@ ifeq ($(BACKEND),GL)
 XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS)
 	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) ${LDFLAGS} -lglfw -lGL -o XAsteroids
 else ifeq ($(BACKEND),VK)
-XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS)
+XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT)
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) ${LDFLAGS} -lglfw -lvulkan -o XAsteroids
+	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) ${LDFLAGS} -lglfw -lvulkan -o XAsteroids
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
@@ -192,9 +197,19 @@ endif
 .PHONY: vkprobe
 vkprobe: obj/VK/vkprobe
 
-obj/VK/vkprobe: test/vk/vkprobe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H | obj/VK
+obj/VK/vkprobe: test/vk/vkprobe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< ${LDFLAGS} -lglfw -lvulkan -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+
+# Task 38: surface+swapchain probe driver (test/vk/vksurface.C ->
+# VKBackend::initWindow end-to-end). Run under Xvfb with DISPLAY set; copy
+# to the repo root first (font paths resolve via /proc/self/exe).
+.PHONY: vksurface
+vksurface: obj/VK/vksurface
+
+obj/VK/vksurface: test/vk/vksurface.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+	$(VK_LOADER_GATE)
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
 
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
