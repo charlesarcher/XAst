@@ -1,0 +1,31 @@
+# post-soak replays (launched immediately after each 15-min soak finished)
+# GL: masked Q10 regime vs committed qa/baseline-x11/session
+  diff help AE=0.000000 mask=/tmp/opencode/t46/masks-q10/help.mask.png PASS
+  diff start AE=0.000000 mask=/tmp/opencode/t46/masks-q10/start.mask.png PASS
+  diff gp1 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp1.mask.png PASS
+  diff gp2 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp2.mask.png PASS
+  diff gp3 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp3.mask.png PASS
+  diff gp4 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp4.mask.png PASS
+  diff gp5 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp5.mask.png PASS
+  diff gp6 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp6.mask.png PASS
+  diff gp7 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp7.mask.png PASS
+  diff gp8 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp8.mask.png PASS
+  diff gp9 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp9.mask.png PASS
+  diff gp10 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp10.mask.png PASS
+  diff hiscore AE=0.000000 mask=/tmp/opencode/t46/masks-q10/hiscore.mask.png PASS
+result: PASS
+# VK: masked Q11 regime vs fresh GL reference (ref-gld)
+  diff help AE=0.000000 mask=qa/phase4-evidence/masks/help.mask.png PASS
+  diff start AE=0.000000 mask=qa/phase4-evidence/masks/start.mask.png PASS
+  diff gp1 AE=0.000000 mask=qa/phase4-evidence/masks/gp1.mask.png PASS
+  diff gp2 AE=0.000000 mask=qa/phase4-evidence/masks/gp2.mask.png PASS
+  diff gp3 AE=0.000000 mask=qa/phase4-evidence/masks/gp3.mask.png PASS
+  diff gp4 AE=0.000000 mask=qa/phase4-evidence/masks/gp4.mask.png PASS
+  diff gp5 AE=0.000000 mask=qa/phase4-evidence/masks/gp5.mask.png PASS
+  diff gp6 AE=0.000000 mask=qa/phase4-evidence/masks/gp6.mask.png PASS
+  diff gp7 AE=0.000000 mask=qa/phase4-evidence/masks/gp7.mask.png PASS
+  diff gp8 AE=0.000000 mask=qa/phase4-evidence/masks/gp8.mask.png PASS
+  diff gp9 AE=0.000000 mask=qa/phase4-evidence/masks/gp9.mask.png PASS
+  diff gp10 AE=0.000000 mask=qa/phase4-evidence/masks/gp10.mask.png PASS
+  diff hiscore AE=0.000000 mask=qa/phase4-evidence/masks/hiscore.mask.png PASS
+result: PASS

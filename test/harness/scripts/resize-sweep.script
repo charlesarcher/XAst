@@ -1,0 +1,91 @@
+# resize-sweep.script — task-46 Q15 scripted-resize sweep (row 46).
+#
+# session.script's input/capture schedule VERBATIM (help -> play -> deaths
+# -> hi-score -> quit, seed 12345) plus FIVE programmatic resizes inserted
+# ONLY in input-free windows (harness `resize W H` = XResizeWindow ->
+# ConfigureNotify; WM-less-safe under Xvfb):
+#
+#   b44   resize 1000x800   (larger; width-fit... height-limited letterbox)
+#   b124  resize 900x700    (slightly smaller than canonical)
+#   b204  resize 500x400    (much smaller: symmetric crop/letterbox)
+#   b244  resize 700x900    (taller than wide: vertical letterbox bars)
+#   b404  resize 688x702    (back to canonical)
+#
+# Each resize is followed by a capture at the new size (rsz_*) on the next
+# input-free boundary. Pass criteria (row 46): state-hash stream IDENTICAL
+# to the canonical session.script run on the same backend (simulation never
+# sees the window size — S2 retention), presentation re-transforms without
+# crash, frames keep publishing through every swapchain-rebootstrap (VK),
+# natural 'q' exit rc=0. Letterbox geometry asserted offline from the rsz_*
+# captures (uniform-scale centered presentation per getPresentTransform).
+
+1    capture help
+
+3    keydown s              # start game
+6    keyup s
+40   capture start
+44   resize 1000 800
+46   capture rsz_1000x800
+
+# --- engagement 1: rotate left, thrust, two shots
+50   keydown e
+54   keyup e
+60   keydown o
+74   keyup o
+80   keydown p
+84   keyup p
+95   keydown p
+99   keyup p
+120  capture gp1
+124  resize 900 700
+126  capture rsz_900x700
+
+# --- engagement 2: rotate right, thrust, shot
+130  keydown r
+134  keyup r
+140  keydown o
+154  keyup o
+160  keydown p
+164  keyup p
+200  capture gp2
+204  resize 500 400
+206  capture rsz_500x400
+
+# --- engagement 3: hyperspace (seeded random re-entry)
+210  keydown space
+214  keyup space
+240  capture gp3
+244  resize 700 900
+246  capture rsz_700x900
+
+# --- engagement 4: fire volley while thrusting
+250  keydown o
+268  keyup o
+270  keydown p
+274  keyup p
+290  keydown p
+294  keyup p
+310  keydown p
+314  keyup p
+340  capture gp4
+
+# --- engagement 5: long thrust + rotate
+350  keydown e
+356  keyup e
+360  keydown o
+390  keyup o
+400  capture gp5
+404  resize 688 702
+406  capture rsz_canon
+
+# --- coast: idle ship dies to seeded rocks/saucers; periodic checkpoints
+600  capture gp6
+800  capture gp7
+1000 capture gp8
+1200 capture gp9
+1400 capture gp10
+1700 capture hiscore        # game-over/hi-score screen
+
+1720 keydown q              # quit from the hi-score screen -> clean exit
+1724 keyup q
+exit

@@ -1,0 +1,48 @@
+# harness manifest (task 9, D17.3)
+seed: 12345
+handshake: frame
+display: :99
+xvfb_geometry: 1280x1024x24
+script: test/harness/scripts/session.script
+binary: /home/archerc/code/XAst/XAsteroids
+binary_size_mtime: 2329048 1787678436
+hiscore_fixture: test/harness/fixtures/hiScore.nul.data
+game_cwd: /tmp/xast-harness.1zcV3o
+client_geometry: 688x702 border=0 depth=24 at +296+161
+sync_params: poll_ms=5 stability=3 tick_gap_ms=30
+frame_counter_file: /tmp/xast-harness.1zcV3o/framecount
+frame_base: 3
+mask_dir: /tmp/opencode/t46/masks-q10
+run_ms: 70592
+game_exit_rc: 0
+checkpoints: 13
+  cp help boundary=1 t=423512554ms 688x702 /tmp/opencode/t46/postsoak-gl/help.png
+  cp start boundary=40 t=423514869ms 688x702 /tmp/opencode/t46/postsoak-gl/start.png
+  cp gp1 boundary=120 t=423519876ms 688x702 /tmp/opencode/t46/postsoak-gl/gp1.png
+  cp gp2 boundary=200 t=423524881ms 688x702 /tmp/opencode/t46/postsoak-gl/gp2.png
+  cp gp3 boundary=240 t=423527380ms 688x702 /tmp/opencode/t46/postsoak-gl/gp3.png
+  cp gp4 boundary=340 t=423533640ms 688x702 /tmp/opencode/t46/postsoak-gl/gp4.png
+  cp gp5 boundary=400 t=423537388ms 688x702 /tmp/opencode/t46/postsoak-gl/gp5.png
+  cp gp6 boundary=600 t=423545487ms 688x702 /tmp/opencode/t46/postsoak-gl/gp6.png
+  cp gp7 boundary=800 t=423552235ms 688x702 /tmp/opencode/t46/postsoak-gl/gp7.png
+  cp gp8 boundary=1000 t=423558709ms 688x702 /tmp/opencode/t46/postsoak-gl/gp8.png
+  cp gp9 boundary=1200 t=423565441ms 688x702 /tmp/opencode/t46/postsoak-gl/gp9.png
+  cp gp10 boundary=1400 t=423571902ms 688x702 /tmp/opencode/t46/postsoak-gl/gp10.png
+  cp hiscore boundary=1700 t=423581992ms 688x702 /tmp/opencode/t46/postsoak-gl/hiscore.png
+diff_reference: /tmp/opencode/t46/ref-x11
+mine_crop: 24,175,640,512
+ref_crop: 40,179,640,512
+  diff help AE=0.000000 mask=/tmp/opencode/t46/masks-q10/help.mask.png PASS
+  diff start AE=0.000000 mask=/tmp/opencode/t46/masks-q10/start.mask.png PASS
+  diff gp1 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp1.mask.png PASS
+  diff gp2 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp2.mask.png PASS
+  diff gp3 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp3.mask.png PASS
+  diff gp4 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp4.mask.png PASS
+  diff gp5 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp5.mask.png PASS
+  diff gp6 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp6.mask.png PASS
+  diff gp7 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp7.mask.png PASS
+  diff gp8 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp8.mask.png PASS
+  diff gp9 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp9.mask.png PASS
+  diff gp10 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp10.mask.png PASS
+  diff hiscore AE=0.000000 mask=/tmp/opencode/t46/masks-q10/hiscore.mask.png PASS
+result: PASS

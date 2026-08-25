@@ -1,0 +1,13 @@
+help       rects=   3 masked= 109792px coverage= 33.51% OK
+start      rects=  30 masked=  30252px coverage=  9.23% OK
+gp1        rects= 129 masked=  26666px coverage=  8.14% OK
+gp2        rects=  33 masked=  21184px coverage=  6.46% OK
+gp3        rects=  33 masked=  16797px coverage=  5.13% OK
+gp4        rects=  48 masked=  25708px coverage=  7.85% OK
+gp5        rects=  39 masked=  30637px coverage=  9.35% OK
+gp6        rects=   2 masked= 150600px coverage= 45.96% OK
+gp7        rects=   2 masked= 150600px coverage= 45.96% OK
+gp8        rects=   2 masked= 150600px coverage= 45.96% OK
+gp9        rects=   2 masked= 150600px coverage= 45.96% OK
+gp10       rects=   2 masked= 150600px coverage= 45.96% OK
+hiscore    rects=   2 masked= 150600px coverage= 45.96% OK

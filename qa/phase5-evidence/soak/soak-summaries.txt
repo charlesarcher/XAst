@@ -1,0 +1,9 @@
+# task-46 soak summaries
+== GL (llvmpipe)
+duration_s: 9420 boundaries in 903.085352
+== gl: samples=60 span=15..900s
+   raw   start(15s)=126852kB end=133672kB growth=5.38%
+   steady(start 120s)=133564kB end=133672kB growth=0.08%  GATE<5%=PASS
+== vk: samples=60 span=15..900s
+   raw   start(15s)=123796kB end=123824kB growth=0.02%
+   steady(start 120s)=123804kB end=123824kB growth=0.02%  GATE<5%=PASS

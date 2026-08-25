@@ -1,0 +1,18 @@
+== gl
+  rsz_1000x800 (1000x800) expected=784x800+108+0 bright_bbox=688x702+0+0 Lbar=0.23289
+  rsz_900x700 (900x700) expected=686x700+107+0 bright_bbox=686x700+2+0 Lbar=0.265349
+  rsz_500x400 (500x400) expected=392x400+54+0 bright_bbox=498x398+2+2 Lbar=0.427347
+  rsz_700x900 (700x900) expected=700x714+0+93 bright_bbox=688x702+0+0 Tbar=0.582392
+  rsz_canon (688x702) expected=688x702+0+0 bright_bbox=682x685+2+2
+== vk
+  rsz_1000x800 (1000x800) expected=784x800+108+0 bright_bbox=784x800+108+0 Lbar=0
+  rsz_900x700 (900x700) expected=686x700+107+0 bright_bbox=730x700+107+0 Lbar=0
+  rsz_500x400 (500x400) expected=392x400+54+0 bright_bbox=405x400+41+0 Lbar=0.0005023
+  rsz_700x900 (700x900) expected=700x714+0+93 bright_bbox=700x714+0+93 Tbar=0
+  rsz_canon (688x702) expected=688x702+0+0 bright_bbox=682x685+2+2
+== x11 (fixed-dst 1:1 blits by construction; content pinned at original dst)
+  rsz_1000x800 bright_bbox=695x689+2+2
+  rsz_900x700 bright_bbox=695x689+2+2
+  rsz_500x400 bright_bbox=498x398+2+2
+  rsz_700x900 bright_bbox=695x689+2+2
+  rsz_canon bright_bbox=686x689+2+2

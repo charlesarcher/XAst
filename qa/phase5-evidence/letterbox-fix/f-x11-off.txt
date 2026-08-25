@@ -1,0 +1,5 @@
+  rsz_1000x800 (1000x800) expected=720x706+140+47 bright_bbox=720x706+140+47 Lbar=0 Tbar=0
+  rsz_500x400 (500x400) expected=720x706+-110+-153 bright_bbox=500x377+0+16 Lbar=n/a Tbar=n/a
+  rsz_700x900 (700x900) expected=720x706+-10+97 bright_bbox=700x706+0+97 Lbar=n/a Tbar=0
+  rsz_900x700 (900x700) expected=720x706+90+-3 bright_bbox=720x700+90+0 Lbar=0 Tbar=n/a
+  rsz_canon (688x702) expected=720x706+-16+-2 bright_bbox=688x689+0+0 Lbar=n/a Tbar=n/a

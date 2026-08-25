@@ -1,0 +1,68 @@
+[harness] pre-flight OK: Xvfb/xdpyinfo/xlsfonts/xwd/convert/compare + fonts dir /home/archerc/.local/xast-env/fonts
+[harness] Xvfb :99 up (1280x1024x24, fp=/home/archerc/.local/xast-env/fonts)
+[harness] font pre-flight OK: all 5 stage.H:134-138 families resolve
+[harness] work dir: /tmp/xast-harness.RH6nkm
+[harness] staged test/harness/fixtures/hiScore.nul.data as /tmp/xast-harness.RH6nkm/hiScore.data (score.H cwd candidate picks it up)
+[harness] game pid 1295655 (DISPLAY=:99 XAST_SEED=12345, cwd=/tmp/xast-harness.RH6nkm)
+[harness] settling 10s for static init
+[harness] window 0x4194310 "Asteroids" client 720x706 border=5 depth=24 at +285+164
+[harness] script loaded: test/harness/scripts/session.script (46 lines)
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured help.png (720x706) @boundary 1
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured start.png (720x706) @boundary 40
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp1.png (720x706) @boundary 120
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp2.png (720x706) @boundary 200
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp3.png (720x706) @boundary 240
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp4.png (720x706) @boundary 340
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp5.png (720x706) @boundary 400
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp6.png (720x706) @boundary 600
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp7.png (720x706) @boundary 800
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp8.png (720x706) @boundary 1000
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp9.png (720x706) @boundary 1200
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured gp10.png (720x706) @boundary 1400
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured hiscore.png (720x706) @boundary 1700
+[ERROR] X error 9 (BadDrawable (invalid Pixmap or Window parameter)) request=73
+[harness] game process exited (rc=0)
+[harness] quiescence run done: 1720 boundaries in 68.994442s, checkpoints 13
+[harness] diff vs reference qa/baseline-x11/session:
+[diff-ok] help AE=0.000000 mask=qa/baseline-x11/session/help.mask.png
+[diff-ok] start AE=0.000000 mask=qa/baseline-x11/session/start.mask.png
+[diff-ok] gp1 AE=0.000000 mask=qa/baseline-x11/session/gp1.mask.png
+[diff-ok] gp2 AE=0.000000 mask=qa/baseline-x11/session/gp2.mask.png
+[diff-ok] gp3 AE=0.000000 mask=qa/baseline-x11/session/gp3.mask.png
+[diff-ok] gp4 AE=0.000000 mask=qa/baseline-x11/session/gp4.mask.png
+[diff-ok] gp5 AE=0.000000 mask=qa/baseline-x11/session/gp5.mask.png
+[diff-ok] gp6 AE=0.000000 mask=qa/baseline-x11/session/gp6.mask.png
+[diff-ok] gp7 AE=0.000000 mask=qa/baseline-x11/session/gp7.mask.png
+[diff-ok] gp8 AE=0.000000 mask=qa/baseline-x11/session/gp8.mask.png
+[diff-ok] gp9 AE=0.000000 mask=qa/baseline-x11/session/gp9.mask.png
+[diff-ok] gp10 AE=0.000000 mask=qa/baseline-x11/session/gp10.mask.png
+[diff-ok] hiscore AE=0.000000 mask=qa/baseline-x11/session/hiscore.mask.png
+[harness] manifest: /tmp/opencode/t46/canon-x11-q13/manifest.txt
+[cleanup] killed Xvfb pid 1295617
+RESULT: PASS (all checkpoints AE=0)

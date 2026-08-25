@@ -1,0 +1,20 @@
+# harness manifest (task 9, D17.3)
+seed: 12345
+handshake: frame
+display: :99
+xvfb_geometry: 1280x1024x24
+script: test/harness/scripts/soak.script
+binary: /home/archerc/code/XAst/XAsteroids
+binary_size_mtime: 2329048 1787678436
+hiscore_fixture: test/harness/fixtures/hiScore.nul.data
+game_cwd: /tmp/xast-harness.KdYGUm
+client_geometry: 688x702 border=0 depth=24 at +296+161
+sync_params: poll_ms=5 stability=3 tick_gap_ms=30
+frame_counter_file: /tmp/xast-harness.KdYGUm/framecount
+frame_base: 3
+run_ms: 903085
+game_exit_rc: 0
+checkpoints: 2
+  cp help0 boundary=1 t=422555708ms 688x702 /tmp/opencode/t46/soak-gl/help0.png
+  cp hiscore_end boundary=9400 t=423457637ms 688x702 /tmp/opencode/t46/soak-gl/hiscore_end.png
+result: CAPTURED-ONLY (no --ref)

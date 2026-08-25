@@ -89,10 +89,27 @@ def expand(rec):
     return (x - pad, y - pad, x + w + pad, y + h + pad)
 
 
+# Phase-5 finding (task 46): recorded draw bboxes can UNDER-COVER the rendered
+# extent by 1-3px — X11's pre-rasterized ROTATED rock pixmaps (RotVectorData)
+# blit a few px past the logical box the dumper records, and masked-blit edges
+# show the same sub-rect spill. PAD grows every rect (all classes + overlaps +
+# text) by a uniform geometry-derived margin; it stays pixel-independent and
+# coverage keeps its honest-gate cap. Default 0 reproduces the task-36 masks.
+PAD = 0.0
+
+
 def clip(r):
     x0, y0, x1, y1 = r
     return (max(x0, 0.0), max(y0, 0.0), min(x1, float(CROP_W)),
             min(y1, float(CROP_H)))
+
+
+def pad(r):
+    """PAD growth for DRAW-derived rects only — text blocks already carry
+    their own margin and are large enough that a few px of spill is
+    irrelevant; padding them blew the 50% honest-gate cap on table screens."""
+    x0, y0, x1, y1 = r
+    return (x0 - PAD, y0 - PAD, x1 + PAD, y1 + PAD)
 
 
 def area(r):
@@ -117,7 +134,12 @@ def main():
                          "checkpoint NAME (e.g. hiscore=table, help=help)")
     ap.add_argument("--out", default="qa/masks")
     ap.add_argument("--max-coverage", type=float, default=0.5)
+    ap.add_argument("--pad", type=float, default=0.0,
+                    help="uniform safety margin (px) grown around every "
+                         "rect at raster time; 0 reproduces task-36 masks")
     args = ap.parse_args()
+    global PAD
+    PAD = args.pad
 
     legs = []
     for group in args.leg:
@@ -142,8 +164,8 @@ def main():
                 # leg (playArea.NorthWestCorner() = (80,80) canvas origin;
                 # verified against sprite pixels): crop-local = v - 80.
                 for cls, x, y, w, h in frames.get(frame, []):
-                    rects.append(expand((cls, x - LOGICAL_X, y - LOGICAL_Y,
-                                         w, h)))
+                    rects.append(pad(expand((cls, x - LOGICAL_X,
+                                             y - LOGICAL_Y, w, h))))
             n = len(rects)
             for i in range(n):          # GXor/blend overlaps: all pairs
                 for j in range(i + 1, n):

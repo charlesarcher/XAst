@@ -1,0 +1,48 @@
+# harness manifest (task 9, D17.3)
+seed: 12345
+handshake: frame
+display: :99
+xvfb_geometry: 1280x1024x24
+script: test/harness/scripts/session.script
+binary: /home/archerc/code/XAst/XAsteroids
+binary_size_mtime: 2066424 1787669914
+hiscore_fixture: test/harness/fixtures/hiScore.nul.data
+game_cwd: /tmp/xast-harness.SsLCHx
+client_geometry: 688x702 border=0 depth=24 at +296+161
+sync_params: poll_ms=5 stability=3 tick_gap_ms=30
+frame_counter_file: /tmp/xast-harness.SsLCHx/framecount
+frame_base: 3
+mask_dir: qa/phase4-evidence/masks
+run_ms: 70286
+game_exit_rc: 0
+checkpoints: 13
+  cp help boundary=1 t=414033695ms 688x702 /tmp/opencode/t46/canon-vk/help.png
+  cp start boundary=40 t=414036031ms 688x702 /tmp/opencode/t46/canon-vk/start.png
+  cp gp1 boundary=120 t=414041037ms 688x702 /tmp/opencode/t46/canon-vk/gp1.png
+  cp gp2 boundary=200 t=414046043ms 688x702 /tmp/opencode/t46/canon-vk/gp2.png
+  cp gp3 boundary=240 t=414048547ms 688x702 /tmp/opencode/t46/canon-vk/gp3.png
+  cp gp4 boundary=340 t=414054800ms 688x702 /tmp/opencode/t46/canon-vk/gp4.png
+  cp gp5 boundary=400 t=414058555ms 688x702 /tmp/opencode/t46/canon-vk/gp5.png
+  cp gp6 boundary=600 t=414066670ms 688x702 /tmp/opencode/t46/canon-vk/gp6.png
+  cp gp7 boundary=800 t=414073167ms 688x702 /tmp/opencode/t46/canon-vk/gp7.png
+  cp gp8 boundary=1000 t=414079667ms 688x702 /tmp/opencode/t46/canon-vk/gp8.png
+  cp gp9 boundary=1200 t=414086436ms 688x702 /tmp/opencode/t46/canon-vk/gp9.png
+  cp gp10 boundary=1400 t=414092926ms 688x702 /tmp/opencode/t46/canon-vk/gp10.png
+  cp hiscore boundary=1700 t=414102678ms 688x702 /tmp/opencode/t46/canon-vk/hiscore.png
+diff_reference: /tmp/opencode/t46/canon-gl
+mine_crop: 24,175,640,512
+ref_crop: 24,175,640,512
+  diff help AE=0.000000 mask=qa/phase4-evidence/masks/help.mask.png PASS
+  diff start AE=0.000000 mask=qa/phase4-evidence/masks/start.mask.png PASS
+  diff gp1 AE=0.000000 mask=qa/phase4-evidence/masks/gp1.mask.png PASS
+  diff gp2 AE=0.000000 mask=qa/phase4-evidence/masks/gp2.mask.png PASS
+  diff gp3 AE=0.000000 mask=qa/phase4-evidence/masks/gp3.mask.png PASS
+  diff gp4 AE=0.000000 mask=qa/phase4-evidence/masks/gp4.mask.png PASS
+  diff gp5 AE=0.000000 mask=qa/phase4-evidence/masks/gp5.mask.png PASS
+  diff gp6 AE=0.000000 mask=qa/phase4-evidence/masks/gp6.mask.png PASS
+  diff gp7 AE=0.000000 mask=qa/phase4-evidence/masks/gp7.mask.png PASS
+  diff gp8 AE=0.000000 mask=qa/phase4-evidence/masks/gp8.mask.png PASS
+  diff gp9 AE=0.000000 mask=qa/phase4-evidence/masks/gp9.mask.png PASS
+  diff gp10 AE=0.000000 mask=qa/phase4-evidence/masks/gp10.mask.png PASS
+  diff hiscore AE=0.000000 mask=qa/phase4-evidence/masks/hiscore.mask.png PASS
+result: PASS

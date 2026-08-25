@@ -1,0 +1,5 @@
+# task-46 edge-case flows: focus loss/gain (leave/enter) — base vs disturbed
+# statehash streams (h-lines) and same-named capture pixel equality
+leg=x11 frames=955 statehash=IDENTICAL capture_diffs: NONE (all AE=0)
+leg=gl frames=955 statehash=IDENTICAL capture_diffs: NONE (all AE=0)
+leg=vk frames=955 statehash=IDENTICAL capture_diffs: NONE (all AE=0)

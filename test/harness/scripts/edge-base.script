@@ -1,0 +1,71 @@
+# edge-base.script — task-46 edge-flow BASELINE schedule (no disturbances).
+#
+# The input/capture schedule that edge-flows.script disturbs with
+# leave/enter (focus loss/gain) pairs. Both scripts share every keydown/
+# keyup/capture target verbatim; the state-hash streams must be IDENTICAL
+# (simulation never sees focus events) and same-named captures must be
+# pixel-identical on the same backend.
+#
+# Screens exercised (Q9 set, full): initial help, redrawn help ('h' from
+# title), shipyard+play start, engagement checkpoints, 'n' reset ->
+# hi-score table -> restart, coast to natural game-over table, quit.
+#
+# Run (frame handshake so XAST_STATE_HASH_FILE is exported):
+#   ./obj/harness --seed 12345 --script test/harness/scripts/edge-base.script \
+#       --out DIR --handshake frame --keep \
+#       --hiscore test/harness/fixtures/hiScore.nul.data
+
+1    capture help0          # initial screen IS the help screen (task-7 fact)
+
+3    keydown h              # title 'h': redraw help
+6    keyup h
+20   capture help_redrawn
+
+30   keydown s              # start game
+34   keyup s
+60   capture start
+
+# --- engagement 1: rotate left, thrust, two shots
+70   keydown e
+74   keyup e
+80   keydown o
+94   keyup o
+100  keydown p
+104  keyup p
+115  keydown p
+119  keyup p
+140  capture gp1
+
+# --- 'n' reset-and-return path -> hi-score table (Q9 score screen)
+150  keydown n
+154  keyup n
+190  capture hiscore_n
+
+200  keydown s              # restart from the table
+204  keyup s
+240  capture start2
+
+# --- engagement 2: rotate right, thrust, shot, hyperspace
+250  keydown r
+254  keyup r
+260  keydown o
+274  keyup o
+280  keydown p
+284  keyup p
+320  capture gp2
+330  keydown space
+334  keyup space
+360  capture gp3
+
+# --- engagement 3: thrust burst
+370  keydown o
+388  keyup o
+400  capture gp4
+
+# --- coast: idle ship dies to seeded rocks/saucers (cf. gameover.script:
+#     last life lost ~1100 boundaries after start; start happened at b200)
+1700 capture hiscore_death  # natural end-of-game hi-score table
+
+1720 keydown q              # quit from the table -> clean exit
+1724 keyup q
+exit

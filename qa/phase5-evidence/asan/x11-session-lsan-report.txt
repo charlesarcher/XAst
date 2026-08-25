@@ -1,0 +1,29 @@
+
+=================================================================
+==1354056==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 64 byte(s) in 4 object(s) allocated from:
+    #0 0x7fe94858aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7fe948c26ba5 in XtCalloc (/usr/lib/libXt.so.6+0x11ba5) (BuildId: 29d80b8769d60390edd6882071e0cfadd2238289)
+
+Direct leak of 32 byte(s) in 2 object(s) allocated from:
+    #0 0x7fe94858a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7fe948c25269 in XtMalloc (/usr/lib/libXt.so.6+0x10269) (BuildId: 29d80b8769d60390edd6882071e0cfadd2238289)
+
+Direct leak of 10 byte(s) in 1 object(s) allocated from:
+    #0 0x7fe94858a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7fe947ed9dc4 in XStringListToTextProperty (/usr/lib/libX11.so.6+0x45dc4) (BuildId: 56cb874219e12145eed340ed7571f6597fc0f905)
+
+Indirect leak of 112 byte(s) in 1 object(s) allocated from:
+    #0 0x7fe948589451  (/usr/lib/libasan.so.8+0x189451) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7fe948c26243 in XtRealloc (/usr/lib/libXt.so.6+0x11243) (BuildId: 29d80b8769d60390edd6882071e0cfadd2238289)
+
+Indirect leak of 96 byte(s) in 4 object(s) allocated from:
+    #0 0x7fe94858aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7fe948c26ba5 in XtCalloc (/usr/lib/libXt.so.6+0x11ba5) (BuildId: 29d80b8769d60390edd6882071e0cfadd2238289)
+
+Indirect leak of 96 byte(s) in 7 object(s) allocated from:
+    #0 0x7fe94858a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7fe948c25269 in XtMalloc (/usr/lib/libXt.so.6+0x10269) (BuildId: 29d80b8769d60390edd6882071e0cfadd2238289)
+
+SUMMARY: AddressSanitizer: 410 byte(s) leaked in 19 allocation(s).

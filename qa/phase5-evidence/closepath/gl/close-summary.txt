@@ -1,0 +1,3 @@
+scenario=s1_title deletes=1 midplay=0 exit_rc=0 reaped_once=yes verdict=PASS
+scenario=s3_double deletes=2 midplay=0 exit_rc=0 reaped_once=yes verdict=PASS
+scenario=s2_midplay deletes=1 midplay=1 exit_rc=0 reaped_once=yes verdict=PASS

@@ -1,0 +1,20 @@
+  cp gp9 boundary=1200 t=418749593ms 688x702 /tmp/opencode/t46/canon-gl5/gp9.png
+  cp gp10 boundary=1400 t=418756072ms 688x702 /tmp/opencode/t46/canon-gl5/gp10.png
+  cp hiscore boundary=1700 t=418765802ms 688x702 /tmp/opencode/t46/canon-gl5/hiscore.png
+diff_reference: /tmp/opencode/t46/ref-x11
+mine_crop: 24,175,640,512
+ref_crop: 40,179,640,512
+  diff help AE=0.000000 mask=/tmp/opencode/t46/masks-q10/help.mask.png PASS
+  diff start AE=0.000000 mask=/tmp/opencode/t46/masks-q10/start.mask.png PASS
+  diff gp1 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp1.mask.png PASS
+  diff gp2 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp2.mask.png PASS
+  diff gp3 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp3.mask.png PASS
+  diff gp4 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp4.mask.png PASS
+  diff gp5 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp5.mask.png PASS
+  diff gp6 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp6.mask.png PASS
+  diff gp7 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp7.mask.png PASS
+  diff gp8 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp8.mask.png PASS
+  diff gp9 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp9.mask.png PASS
+  diff gp10 AE=0.000000 mask=/tmp/opencode/t46/masks-q10/gp10.mask.png PASS
+  diff hiscore AE=0.000000 mask=/tmp/opencode/t46/masks-q10/hiscore.mask.png PASS
+result: PASS

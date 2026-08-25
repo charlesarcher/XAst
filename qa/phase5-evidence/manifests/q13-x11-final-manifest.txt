@@ -1,0 +1,43 @@
+# harness manifest (task 9, D17.3)
+seed: 12345
+handshake: quiescence
+display: :99
+xvfb_geometry: 1280x1024x24
+script: test/harness/scripts/session.script
+binary: /home/archerc/code/XAst/XAsteroids
+binary_size_mtime: 429848 1787681805
+hiscore_fixture: test/harness/fixtures/hiScore.nul.data
+game_cwd: /tmp/xast-harness.aUA9n1
+client_geometry: 720x706 border=5 depth=24 at +285+164
+sync_params: poll_ms=10 stability=3 tick_gap_ms=30
+run_ms: 67593
+game_exit_rc: 0
+checkpoints: 13
+  cp help boundary=1 t=425924352ms 720x706 /tmp/opencode/t46/final-q13/help.png
+  cp start boundary=40 t=425926695ms 720x706 /tmp/opencode/t46/final-q13/start.png
+  cp gp1 boundary=120 t=425931705ms 720x706 /tmp/opencode/t46/final-q13/gp1.png
+  cp gp2 boundary=200 t=425936705ms 720x706 /tmp/opencode/t46/final-q13/gp2.png
+  cp gp3 boundary=240 t=425939211ms 720x706 /tmp/opencode/t46/final-q13/gp3.png
+  cp gp4 boundary=340 t=425945466ms 720x706 /tmp/opencode/t46/final-q13/gp4.png
+  cp gp5 boundary=400 t=425949214ms 720x706 /tmp/opencode/t46/final-q13/gp5.png
+  cp gp6 boundary=600 t=425956810ms 720x706 /tmp/opencode/t46/final-q13/gp6.png
+  cp gp7 boundary=800 t=425963041ms 720x706 /tmp/opencode/t46/final-q13/gp7.png
+  cp gp8 boundary=1000 t=425969272ms 720x706 /tmp/opencode/t46/final-q13/gp8.png
+  cp gp9 boundary=1200 t=425975499ms 720x706 /tmp/opencode/t46/final-q13/gp9.png
+  cp gp10 boundary=1400 t=425981760ms 720x706 /tmp/opencode/t46/final-q13/gp10.png
+  cp hiscore boundary=1700 t=425991142ms 720x706 /tmp/opencode/t46/final-q13/hiscore.png
+diff_reference: qa/baseline-x11/session
+  diff help AE=0.000000 mask=qa/baseline-x11/session/help.mask.png PASS
+  diff start AE=0.000000 mask=qa/baseline-x11/session/start.mask.png PASS
+  diff gp1 AE=0.000000 mask=qa/baseline-x11/session/gp1.mask.png PASS
+  diff gp2 AE=0.000000 mask=qa/baseline-x11/session/gp2.mask.png PASS
+  diff gp3 AE=0.000000 mask=qa/baseline-x11/session/gp3.mask.png PASS
+  diff gp4 AE=0.000000 mask=qa/baseline-x11/session/gp4.mask.png PASS
+  diff gp5 AE=0.000000 mask=qa/baseline-x11/session/gp5.mask.png PASS
+  diff gp6 AE=0.000000 mask=qa/baseline-x11/session/gp6.mask.png PASS
+  diff gp7 AE=0.000000 mask=qa/baseline-x11/session/gp7.mask.png PASS
+  diff gp8 AE=0.000000 mask=qa/baseline-x11/session/gp8.mask.png PASS
+  diff gp9 AE=0.000000 mask=qa/baseline-x11/session/gp9.mask.png PASS
+  diff gp10 AE=0.000000 mask=qa/baseline-x11/session/gp10.mask.png PASS
+  diff hiscore AE=0.000000 mask=qa/baseline-x11/session/hiscore.mask.png PASS
+result: PASS

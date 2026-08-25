@@ -1,0 +1,4 @@
+# task-46 Q15 resize sweep — statehash vs canonical session.script (same leg)
+leg=x11 canonical_frames=435 rsz_frames=435 statehash=IDENTICAL sweep_game_rc=0
+leg=gl canonical_frames=435 rsz_frames=435 statehash=IDENTICAL sweep_game_rc=0
+leg=vk canonical_frames=435 rsz_frames=435 statehash=IDENTICAL sweep_game_rc=0

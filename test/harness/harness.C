@@ -434,6 +434,33 @@ static bool cropPng(const std::string& src, const CropRect& r,
 // ------------------------------------------------------------------ manifest
 static std::vector<Checkpoint> g_checkpoints;
 
+// D17.4(b) letterbox remediation: the X11 backend logs its one-time present-
+// path selection ("[x11] present path: xrender|fallback") to stderr, which
+// lands in game.log; surface it as a manifest line so every recorded session
+// states which presentation path produced its captures. "-" on GPU legs.
+static std::string gameLogMarker(const std::string& workDir,
+                                 const std::string& marker) {
+    FILE* f = fopen((workDir + "/game.log").c_str(), "r");
+    if (!f) return "-";
+    char buf[1024];
+    std::string found = "-";
+    while (fgets(buf, sizeof buf, f)) {
+        const char* p = strstr(buf, marker.c_str());
+        if (p) {
+            p += marker.size();
+            while (*p == ' ' || *p == '\t') ++p;
+            std::string v(p);
+            while (!v.empty() && (v.back() == '\n' || v.back() == '\r' ||
+                                  v.back() == ' ' || v.back() == '\t'))
+                v.pop_back();
+            if (!v.empty()) found = v;
+            break;
+        }
+    }
+    fclose(f);
+    return found;
+}
+
 static void writeManifest(const std::string& path, const std::string& workDir,
                           double runMs, int gameExitRc, long frameBase,
                           bool haveDiff, bool diffPass) {
@@ -447,6 +474,8 @@ static void writeManifest(const std::string& path, const std::string& workDir,
     fprintf(f, "xvfb_geometry: %s\n", cfg.geometry.c_str());
     fprintf(f, "script: %s\n", cfg.scriptPath.c_str());
     fprintf(f, "binary: %s\n", cfg.gamePath.c_str());
+    fprintf(f, "present_path: %s\n",
+            gameLogMarker(workDir, "[x11] present path:").c_str());
     if (stat(cfg.gamePath.c_str(), &st) == 0)
         fprintf(f, "binary_size_mtime: %ld %ld\n", long(st.st_size), long(st.st_mtime));
     fprintf(f, "hiscore_fixture: %s\n",
@@ -702,6 +731,49 @@ static void executeAction(const Line& L, long boundary, Frame& scratch,
             die("line " + std::to_string(L.srcLine) + ": resize needs \"W H\"");
         XResizeWindow(g_dpy, g_win, unsigned(w), unsigned(h));
         XSync(g_dpy, False);
+        // Re-query the client geometry: every later grabClient samples with
+        // g_clientW/H, and a stale size turns the very next XGetImage into
+        // BadMatch (error 8, request 73) — hit on this action's first live
+        // use (task-46 sweep). XSync above guarantees the server has applied
+        // the new size; XResizeWindow pins the top-left corner, so only the
+        // extents need refreshing.
+        {
+            Window rootReturn = None;
+            int wx = 0, wy = 0;
+            unsigned nw = 0, nh = 0, nbw = 0, ndepth = 0;
+            if (XGetGeometry(g_dpy, g_win, &rootReturn, &wx, &wy,
+                             &nw, &nh, &nbw, &ndepth)) {
+                // A larger window can now extend past the root's right/bottom
+                // edge; XGetImage on a window BadMatches unless the whole
+                // rect lies within the screen, so pull it back on-screen.
+                // The BORDER counts toward the on-screen footprint even
+                // though XGetGeometry excludes it from w/h — clamp with a
+                // one-border margin on the right/bottom.
+                const int scrW = DisplayWidth(g_dpy, g_screen);
+                const int scrH = DisplayHeight(g_dpy, g_screen);
+                Window child = None;
+                XTranslateCoordinates(g_dpy, g_win, DefaultRootWindow(g_dpy),
+                                      0, 0, &g_absX, &g_absY, &child);
+                const int maxX = scrW - int(nw) - int(nbw);
+                const int maxY = scrH - int(nh) - int(nbw);
+                const int newX = g_absX > maxX ? maxX : g_absX;
+                const int newY = g_absY > maxY ? maxY : g_absY;
+                if (newX != g_absX || newY != g_absY) {
+                    XMoveWindow(g_dpy, g_win, newX, newY);
+                    XSync(g_dpy, False);
+                }
+                g_clientW = nw;
+                g_clientH = nh;
+                g_border = nbw;
+                g_depth = ndepth;
+                XTranslateCoordinates(g_dpy, g_win, DefaultRootWindow(g_dpy),
+                                      0, 0, &g_absX, &g_absY, &child);
+            }
+            LOG("resized client to " + std::to_string(g_clientW) + "x" +
+                std::to_string(g_clientH) + " at +" + std::to_string(g_absX) +
+                "+" + std::to_string(g_absY));
+        }
+        sleepMs(150);   // let the game's ConfigureNotify handling settle
         return;
     }
     if (a == "capture") {

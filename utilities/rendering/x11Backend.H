@@ -93,10 +93,13 @@
 //    PlayTheGame site: argv/argc pass as NULL,0 (frozen initWindow signature;
 //    command-name property unset, pixel-inert) and the map-and-raise fires at
 //    init instead of first PlayTheGame entry.
-//  - ConfigureNotify-driven present-transform caching arrives with the event
-//    island (task 25): draining events from here NOW would steal them from
-//    the domain loop. getPresentTransform() therefore recomputes on demand
-//    from XGetGeometry (identity at the canonical size).
+//  - ConfigureNotify-driven present-transform caching arrived with the event
+//    island (task 25). D17.4(b) remediation: the cached transform now
+//    describes the ACTIVE present path (XAST_XRENDER=auto|on|off selected at
+//    init; xrender = uniform-scale centered composite, fallback = centered
+//    1:1 with black bars / symmetric crop), endFrame presents both published
+//    regions through it (identity fast path = the exact legacy XCopyArea),
+//    and window-target draws map through the same values.
 //  - The harness's quiescence handshake counts visible frame completions
 //    (test/harness/script-format.md); it does NOT consume an X-property frame
 //    counter, so endFrame() publishes none (zero risk accepted: skipped).
@@ -111,11 +114,34 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #include<X11/Xutil.h>
+#include<X11/extensions/Xrender.h>
+#include<dlfcn.h>
 #endif
 
 #include"renderingEngine.H"
 #include"windowSize.H"
 #include"../../bitmaps/starDestroyerIcon.xbm"
+
+#ifdef X11_BACKEND
+// D17.4(b): the RENDER extension is bound at RUN TIME (dlopen/dlsym) — no new
+// link-time dependency, and a missing library degrades cleanly to the core-
+// X11 fallback path. Signatures mirror Xrender.h exactly.
+typedef Bool (*xastXRenderQueryExtensionFn)(Display*,int*,int*);
+typedef XRenderPictFormat* (*xastXRenderFindVisualFormatFn)(Display*,
+                                                            const Visual*);
+typedef Picture (*xastXRenderCreatePictureFn)(Display*,Drawable,
+                                              _Xconst XRenderPictFormat*,
+                                              unsigned long,
+                                              _Xconst XRenderPictureAttributes*);
+typedef void (*xastXRenderFreePictureFn)(Display*,Picture);
+typedef Bool (*xastXRenderSetPictureTransformFn)(Display*,Picture,
+                                                 XTransform*);
+typedef Bool (*xastXRenderSetPictureFilterFn)(Display*,Picture,const char*,
+                                              XFixed*,int);
+typedef void (*xastXRenderCompositeFn)(Display*,int,Picture,Picture,Picture,
+                                       int,int,int,int,int,int,
+                                       unsigned int,unsigned int);
+#endif
 
 class X11Backend : public RenderingEngine
  {public:
@@ -140,8 +166,14 @@ class X11Backend : public RenderingEngine
         raisePending_(false),refreshPending_(false),closePending_(false),
         presentDirty_(true),presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
         scissorActive_(false),
-        scissorX_(0),scissorY_(0),scissorW_(0),scissorH_(0)
+        scissorX_(0),scissorY_(0),scissorW_(0),scissorH_(0),
+        useXRender_(false),xrenderLib_(nullptr),
+        canvasPicture_(None),windowPicture_(None),
+        cachedWinW_(0),cachedWinH_(0),windowBgPixel_(0)
      {fonts_[0]=fonts_[1]=fonts_[2]=fonts_[3]=fonts_[4]=nullptr;
+      xQueryExtension_=nullptr;xFindVisualFormat_=nullptr;xCreatePicture_=nullptr;
+      xFreePicture_=nullptr;xSetPictureTransform_=nullptr;
+      xSetPictureFilter_=nullptr;xComposite_=nullptr;
      }
 
     virtual ~X11Backend()
@@ -189,6 +221,18 @@ class X11Backend : public RenderingEngine
       if (maskedGC_)     XFreeGC(display,maskedGC_);
       if (iconPixmap)    XFreePixmap(display,iconPixmap);
       if (canvasPixmap_) XFreePixmap(display,canvasPixmap_);
+      // D17.4(b): RENDER pictures die with the display that owns them.
+      for (std::map<TextureId,Picture>::iterator it=renderPictures_.begin();
+           it!=renderPictures_.end();++it)
+       {if (xFreePicture_)
+          xFreePicture_(display,it->second);
+       }
+      renderPictures_.clear();
+      canvasPicture_=windowPicture_=None;
+      if (xrenderLib_)
+       {dlclose(xrenderLib_);
+        xrenderLib_=nullptr;
+       }
       // ALL FIVE fonts incl. errorInfo — F4 named assertion (m18/U14 closed).
       for (int i=0;i<5;++i)
        {if (fonts_[i])
@@ -236,19 +280,99 @@ class X11Backend : public RenderingEngine
       // 25), which calls this exactly once per frame.
       if (!display)
         return;
+      if (presentDirty_)                  // belt: legs always present through
+        updatePresentTransformCache();    // the ACTIVE transform (D17.4b)
       if (frameYardTex_&&frameYardPending_)
-       {XCopyArea(display,(Drawable)frameYardTex_,window,defaultGC_,
-                  0,0,(unsigned int)frameYardW_,(unsigned int)frameYardH_,
-                  frameYardX_,frameYardY_);
+       {presentRegion((Drawable)frameYardTex_,0,0,
+                      frameYardW_,frameYardH_,frameYardX_,frameYardY_);
         frameYardPending_=false;
        }
       if (frameFieldPending_)
-       {XCopyArea(display,canvasPixmap_,window,defaultGC_,
-                  canvasClearX_,canvasClearY_,
-                  (unsigned int)canvasClearW_,(unsigned int)canvasClearH_,
-                  frameFieldDstX_,frameFieldDstY_);
+       {presentRegion((Drawable)canvasPixmap_,canvasClearX_,canvasClearY_,
+                      canvasClearW_,canvasClearH_,
+                      frameFieldDstX_,frameFieldDstY_);
         frameFieldPending_=false;
        }
+     }
+
+    // ------------------------------------------------------------------
+    // D17.4(b) X11 letterbox present leg (both published regions).
+    // Identity fast path (canonical size: scale exactly 1.0f, offsets
+    // exactly 0) issues the byte-identical legacy XCopyArea — this is the
+    // canonical-size request-stream guarantee Q13 holds on every
+    // XAST_XRENDER path. Non-canonical:
+    //   xrender  — scaled composite (picture transform; NEAREST filter set
+    //              once per picture: pixel-edge fidelity, an unfiltered copy
+    //              at scale 1 and hard-edged pixels elsewhere — LINEAR would
+    //              blur game pixels);
+    //   fallback — centered 1:1 copy; larger window shows black bars (filled
+    //              once by repaintWindowBase at the geometry change), smaller
+    //              window crops symmetrically (server clips the negative-
+    //              offset blit).
+    // ------------------------------------------------------------------
+    inline void presentRegion(Drawable src,int sx,int sy,int sw,int sh,
+                              int dx,int dy)
+     {if (!display||sw<=0||sh<=0)
+        return;
+      if (presentScale_==1.0f&&presentOffX_==0&&presentOffY_==0)
+       {XCopyArea(display,src,window,defaultGC_,sx,sy,
+                  (unsigned int)sw,(unsigned int)sh,dx,dy);
+        return;
+       }
+      if (useXRender_)
+       {Picture sp=pictureFor(src);
+        if (sp&&windowPicture_&&xSetPictureTransform_&&xComposite_)
+         {float s=presentScale_;
+          int dw=(int)(sw*s),dh=(int)(sh*s);
+          if (dw>0&&dh>0)
+           {// The Render picture transform is the DESTINATION->SOURCE
+            // sampling matrix: dest pixel (i,j) samples the source at
+            // matrix*(i,j)+(src_x,src_y). Magnifying by s therefore needs
+            // the INVERSE scale in the matrix (a forward s here shrinks the
+            // content by 1/s — measured live before this was corrected).
+            // NEAREST keeps source-pixel edges hard (see pictureFor).
+            const float inv=1.0f/s;
+            XTransform xf;
+            xf.matrix[0][0]=(XFixed)(inv*65536.0f+0.5f);
+            xf.matrix[0][1]=0;xf.matrix[0][2]=0;
+            xf.matrix[1][0]=0;
+            xf.matrix[1][1]=(XFixed)(inv*65536.0f+0.5f);
+            xf.matrix[1][2]=0;
+            xf.matrix[2][0]=0;xf.matrix[2][1]=0;xf.matrix[2][2]=65536;
+            xSetPictureTransform_(display,sp,&xf);
+            xComposite_(display,PictOpSrc,sp,None,windowPicture_,
+                        sx,sy,0,0,
+                        presentOffX_+(int)(dx*s),presentOffY_+(int)(dy*s),
+                        (unsigned int)dw,(unsigned int)dh);
+           }
+          return;
+         }
+       }
+      XCopyArea(display,src,window,defaultGC_,sx,sy,
+                (unsigned int)sw,(unsigned int)sh,
+                presentOffX_+dx,presentOffY_+dy);
+     }
+
+    // Lazy RENDER picture per source drawable (the yard texture re-creates
+    // on icon changes — deleteTexture retires its picture with it). NEAREST
+    // filter latched at creation; see presentRegion for the rationale.
+    inline Picture pictureFor(Drawable d)
+     {TextureId id=(TextureId)d;
+      std::map<TextureId,Picture>::iterator it=renderPictures_.find(id);
+      if (it!=renderPictures_.end())
+        return it->second;
+      if (!xFindVisualFormat_||!xCreatePicture_||!xSetPictureFilter_)
+        return None;
+      XRenderPictFormat* fmt=xFindVisualFormat_(display,
+                                                DefaultVisual(display,screen));
+      if (!fmt)
+        return None;
+      Picture p=xCreatePicture_(display,d,fmt,0,nullptr);
+      if (p)
+       {xSetPictureFilter_(display,p,"nearest",nullptr,0);
+        renderPictures_[id]=p;
+       }
+      return p;
      }
 
     // ------------------------------------------------------------------
@@ -408,6 +532,12 @@ class X11Backend : public RenderingEngine
         if (emit&&n<maxCount)
           out[n++]=g;
        }
+      // D17.4(b): a ConfigureNotify processed INSIDE this drain latched
+      // presentDirty_ after the head check — refresh the cache BEFORE the
+      // caller consumes takeRefreshRequest() and repaints chrome, so the
+      // geometry-change base repaint (bars) strictly precedes any redraw.
+      if (presentDirty_)
+        updatePresentTransformCache();
       return n;
      }
 
@@ -443,25 +573,32 @@ class X11Backend : public RenderingEngine
      }
 
     virtual void getPresentTransform(float& outScale,int& outOffsetX,
-                                     int& outOffsetY) override
-     {// Uniform-scale centered letterbox (D17.4b), recomputed on demand from
-      // XGetGeometry — identity at the canonical size. ConfigureNotify-driven
-      // caching defers to task 25 (see file header).
-      float scale=1.0f;
-      int ox=0,oy=0;
-      if (display&&window&&windowWidth_>0&&windowHeight_>0)
-       {unsigned int w=0,h=0,bb=0,depth=0;
-        Window root;
-        int wx,wy;
-        if (XGetGeometry(display,window,&root,&wx,&wy,&w,&h,&bb,&depth))
-         {scale=((float)w/windowWidth_<(float)h/windowHeight_)
-                  ? (float)w/windowWidth_ : (float)h/windowHeight_;
-          ox=((int)w-(int)(windowWidth_*scale))/2;
-          oy=((int)h-(int)(windowHeight_*scale))/2;
-         }
-       }
-      outScale=scale;outOffsetX=ox;outOffsetY=oy;
+                                      int& outOffsetY) override
+     {// Active-path cache read (D17.4b): consumers must agree with what
+      // endFrame presents — see updatePresentTransformCache for the per-path
+      // math. Identity at the canonical size.
+      if (presentDirty_)
+        updatePresentTransformCache();
+      outScale=presentScale_;
+      outOffsetX=presentOffX_;
+      outOffsetY=presentOffY_;
      }
+
+    // ------------------------------------------------------------------
+    // D17.4b/D17.4e coordinate seam: draws whose target IS the window carry
+    // canonical-client coordinates and map through the ACTIVE present
+    // transform; render-target draws (canvas, button faces, yard) stay
+    // target-local. Identity at the canonical size => the request stream is
+    // identical to the pre-letterbox backend on every gate that runs there.
+    // ------------------------------------------------------------------
+    inline bool windowTarget() const
+      {return currentTarget_==window;}
+    inline int mapX(float x) const
+      {return presentOffX_+(int)(x*presentScale_);}
+    inline int mapY(float y) const
+      {return presentOffY_+(int)(y*presentScale_);}
+    inline int mapLen(float len) const
+      {return (int)(len*presentScale_);}
 
     // ------------------------------------------------------------------
     // (4) Primitives
@@ -483,45 +620,52 @@ class X11Backend : public RenderingEngine
 
     virtual void drawLine(float x1,float y1,float x2,float y2,
                           float r,float g,float b,float width) override
-     {if (!display)
-        return;
-      XSetForeground(display,primitiveGC_,pixelFor(r,g,b));
-      XSetLineAttributes(display,primitiveGC_,
-                         width>=2.0f?3:1,LineSolid,CapNotLast,JoinRound);
-      XDrawLine(display,currentTarget_,primitiveGC_,
-                (int)x1,(int)y1,(int)x2,(int)y2);
-     }
+      {if (!display)
+         return;
+       XSetForeground(display,primitiveGC_,pixelFor(r,g,b));
+       XSetLineAttributes(display,primitiveGC_,
+                          width>=2.0f?3:1,LineSolid,CapNotLast,JoinRound);
+       XDrawLine(display,currentTarget_,primitiveGC_,
+                 windowTarget()?mapX(x1):(int)x1,
+                 windowTarget()?mapY(y1):(int)y1,
+                 windowTarget()?mapX(x2):(int)x2,
+                 windowTarget()?mapY(y2):(int)y2);
+      }
 
     virtual void drawPolygon(const float* verts,int count,
-                             float r,float g,float b,bool fill) override
-     {if (!display||!verts||count<2)
-        return;
-      XPoint pts[256];
-      int n=count<256?count:256;
-      for (int i=0;i<n;++i)
-       {pts[i].x=(short)(int)verts[2*i];
-        pts[i].y=(short)(int)verts[2*i+1];
-       }
-      XSetForeground(display,primitiveGC_,pixelFor(r,g,b));
-      if (fill)
-        XFillPolygon(display,currentTarget_,primitiveGC_,pts,n,Complex,
-                     CoordModeOrigin);
-      else
-        XDrawLines(display,currentTarget_,primitiveGC_,pts,n,CoordModeOrigin);
-     }
+                              float r,float g,float b,bool fill) override
+      {if (!display||!verts||count<2)
+         return;
+       XPoint pts[256];
+       int n=count<256?count:256;
+       for (int i=0;i<n;++i)
+        {pts[i].x=(short)(windowTarget()?mapX(verts[2*i])
+                                        :(int)verts[2*i]);
+         pts[i].y=(short)(windowTarget()?mapY(verts[2*i+1])
+                                        :(int)verts[2*i+1]);
+        }
+       XSetForeground(display,primitiveGC_,pixelFor(r,g,b));
+       if (fill)
+         XFillPolygon(display,currentTarget_,primitiveGC_,pts,n,Complex,
+                      CoordModeOrigin);
+       else
+         XDrawLines(display,currentTarget_,primitiveGC_,pts,n,CoordModeOrigin);
+      }
 
     virtual void drawRect(float x,float y,float w,float h,
-                          float r,float g,float b,bool fill) override
-     {if (!display)
-        return;
-      XSetForeground(display,primitiveGC_,pixelFor(r,g,b));
-      if (fill)
-        XFillRectangle(display,currentTarget_,primitiveGC_,
-                       (int)x,(int)y,(unsigned int)w,(unsigned int)h);
-      else
-        XDrawRectangle(display,currentTarget_,primitiveGC_,
-                       (int)x,(int)y,(unsigned int)w,(unsigned int)h);
-     }
+                           float r,float g,float b,bool fill) override
+      {if (!display)
+         return;
+       int xi=windowTarget()?mapX(x):(int)x;
+       int yi=windowTarget()?mapY(y):(int)y;
+       unsigned int wi=(unsigned int)(windowTarget()?mapLen(w):(int)w);
+       unsigned int hi=(unsigned int)(windowTarget()?mapLen(h):(int)h);
+       XSetForeground(display,primitiveGC_,pixelFor(r,g,b));
+       if (fill)
+         XFillRectangle(display,currentTarget_,primitiveGC_,xi,yi,wi,hi);
+       else
+         XDrawRectangle(display,currentTarget_,primitiveGC_,xi,yi,wi,hi);
+      }
 
     // Menu-adapter batch path (D9): CPU software rasterizer — texture-
     // sampled, per-vertex color modulate, scissor-clipped, WINDOW-space.
@@ -537,14 +681,16 @@ class X11Backend : public RenderingEngine
     virtual void drawStringOpaque(const char* text,float x,float y,int fontId,
                                   float r,float g,float b,
                                   float bgR,float bgG,float bgB) override
-     {if (!display||!validFont(fontId)||!text)
-        return;
-      GC gc=fontGC((EngineFontId)fontId);
-      XSetForeground(display,gc,pixelFor(r,g,b));
-      XSetBackground(display,gc,pixelFor(bgR,bgG,bgB));
-      XDrawImageString(display,currentTarget_,gc,(int)x,(int)y,
-                       text,(int)strlen(text));
-     }
+      {if (!display||!validFont(fontId)||!text)
+         return;
+       GC gc=fontGC((EngineFontId)fontId);
+       XSetForeground(display,gc,pixelFor(r,g,b));
+       XSetBackground(display,gc,pixelFor(bgR,bgG,bgB));
+       XDrawImageString(display,currentTarget_,gc,
+                        windowTarget()?mapX(x):(int)x,
+                        windowTarget()?mapY(y):(int)y,
+                        text,(int)strlen(text));
+      }
 
     virtual void drawStringTransparent(const char* text,float x,float y,
                                         int fontId,
@@ -563,7 +709,9 @@ class X11Backend : public RenderingEngine
         }
        GC gc=fontGC((EngineFontId)fontId);
        XSetForeground(display,gc,pixelFor(r,g,b));
-       XDrawString(display,currentTarget_,gc,(int)x,(int)y,
+       XDrawString(display,currentTarget_,gc,
+                   windowTarget()?mapX(x):(int)x,
+                   windowTarget()?mapY(y):(int)y,
                    text,(int)strlen(text));
       }
 
@@ -625,28 +773,42 @@ class X11Backend : public RenderingEngine
       if (!display||!tex)
         return;
       GC gc=(currentTarget_==(Drawable)canvasPixmap_)?gxorGC_:defaultGC_;
+      int xi=windowTarget()?mapX(x):(int)x;
+      int yi=windowTarget()?mapY(y):(int)y;
+      unsigned int wi=(unsigned int)(windowTarget()?mapLen(w):(int)w);
+      unsigned int hi=(unsigned int)(windowTarget()?mapLen(h):(int)h);
       XCopyArea(display,(Drawable)tex,currentTarget_,gc,
-                0,0,(unsigned int)w,(unsigned int)h,(int)x,(int)y);
+                0,0,wi,hi,xi,yi);
      }
 
     virtual void drawTextureMasked(TextureId content,TextureId mask,
-                                   float x,float y,float w,float h) override
+                                    float x,float y,float w,float h) override
      {// Native clip-mask GC semantics (explosionGraphic.H:103-117 /
-      // rockGroup.H:184-197): XSetClipMask + XSetClipOrigin + XCopyArea.
-      if (!display||!content||!mask)
-        return;
-      XSetClipMask(display,maskedGC_,(Pixmap)mask);
-      XSetClipOrigin(display,maskedGC_,(int)x,(int)y);
-      XCopyArea(display,(Drawable)content,currentTarget_,maskedGC_,
-                0,0,(unsigned int)w,(unsigned int)h,(int)x,(int)y);
-     }
+       // rockGroup.H:184-197): XSetClipMask + XSetClipOrigin + XCopyArea.
+       if (!display||!content||!mask)
+         return;
+       int xi=windowTarget()?mapX(x):(int)x;
+       int yi=windowTarget()?mapY(y):(int)y;
+       unsigned int wi=(unsigned int)(windowTarget()?mapLen(w):(int)w);
+       unsigned int hi=(unsigned int)(windowTarget()?mapLen(h):(int)h);
+       XSetClipMask(display,maskedGC_,(Pixmap)mask);
+       XSetClipOrigin(display,maskedGC_,xi,yi);
+       XCopyArea(display,(Drawable)content,currentTarget_,maskedGC_,
+                 0,0,wi,hi,xi,yi);
+      }
 
     virtual void deleteTexture(TextureId tex) override
-     {if (!display||!tex)
-        return;
-      XFreePixmap(display,(Pixmap)tex);
-      textureDims_.erase(tex);
-     }
+      {if (!display||!tex)
+         return;
+       std::map<TextureId,Picture>::iterator pit=renderPictures_.find(tex);
+       if (pit!=renderPictures_.end())
+        {if (xFreePicture_)
+           xFreePicture_(display,pit->second);
+         renderPictures_.erase(pit);
+        }
+       XFreePixmap(display,(Pixmap)tex);
+       textureDims_.erase(tex);
+      }
 
     // Menu-adapter upload (D9): RGBA8888 -> depth-matched ZPixmap -> pixmap.
     // Alpha is dropped (X11 core pixmaps have no alpha channel) — documented
@@ -905,6 +1067,11 @@ class X11Backend : public RenderingEngine
       canvasClearX_=2*40;canvasClearY_=2*40;
       canvasClearW_=canonicalPlayAreaWidth_;
       canvasClearH_=canonicalPlayAreaHeight_;
+      // D17.4(b): one-time present-path selection (XAST_XRENDER=auto|on|off,
+      // default auto = RENDER-extension probe). Logs the choice to stderr —
+      // the harness greps this marker into its manifest.
+      windowBgPixel_=(unsigned long)background;
+      selectPresentPath();
       // Saved keyboard auto-repeat state (stage.H:212-214 position: BEFORE
       // PlayTheGame's XAutoRepeatOff) + the terminate-path signal handler
       // (stage.H:215-221 verbatim registration; M7/N6 — the handler now
@@ -996,22 +1163,151 @@ class X11Backend : public RenderingEngine
     // round trips — the island used raw window coords directly, and a
     // per-event XGetGeometry here would reintroduce the mid-drain round
     // trips T14 proved harmful.
+    //
+    // D17.4(b): the stored scale/offset now describe the ACTIVE presentation
+    // path — xrender: uniform-scale centered; fallback: centered 1:1 (scale
+    // 1, centering offsets may be negative => symmetric crop) — so event
+    // inverse-mapping (D17.4d, inverseTransformPoint) and every window-space
+    // consumer agree with what endFrame actually presents. A geometry change
+    // repaints the window base ONCE (black bars when larger; background gray
+    // again at canonical so stale bars/content cannot linger as ghosts).
+    // The FIRST computation never repaints: canonical-size sessions issue
+    // byte-identical requests to the pre-letterbox backend.
     inline void updatePresentTransformCache()
-     {float scale=1.0f;
+     {if (!display||!window)
+        return;
+      unsigned int w=0,h=0,bb=0,depth=0;
+      Window root;
+      int wx,wy;
+      if (!XGetGeometry(display,window,&root,&wx,&wy,&w,&h,&bb,&depth))
+        return;
+      const bool canonical=((int)w==windowWidth_&&(int)h==windowHeight_);
+      float scale=1.0f;
       int ox=0,oy=0;
-      if (window&&windowWidth_>0&&windowHeight_>0)
-       {unsigned int w=0,h=0,bb=0,depth=0;
-        Window root;
-        int wx,wy;
-        if (XGetGeometry(display,window,&root,&wx,&wy,&w,&h,&bb,&depth))
+      if (!canonical)
+       {if (useXRender_)
          {scale=((float)w/windowWidth_<(float)h/windowHeight_)
                   ? (float)w/windowWidth_ : (float)h/windowHeight_;
           ox=((int)w-(int)(windowWidth_*scale))/2;
           oy=((int)h-(int)(windowHeight_*scale))/2;
          }
+        else
+         {ox=((int)w-windowWidth_)/2;
+          oy=((int)h-windowHeight_)/2;
+         }
+       }
+      if ((int)w!=cachedWinW_||(int)h!=cachedWinH_)
+       {const bool first=(cachedWinW_==0&&cachedWinH_==0);
+        cachedWinW_=(int)w;
+        cachedWinH_=(int)h;
+        if (!first)
+          repaintWindowBase(canonical,(int)w,(int)h,scale,ox,oy);
        }
       presentScale_=scale;presentOffX_=ox;presentOffY_=oy;
       presentDirty_=false;
+     }
+
+    // One-shot per geometry change. The X11 presentation model paints chrome
+    // ONCE over the PERSISTENT window background (Stage::Refresh emits text
+    // glyphs/cells only — the gray backdrop is the window's own background
+    // pixel), so the base repaint must restore that gray EVERYWHERE first;
+    // black letterbox bars are then painted only OUTSIDE the mapped content
+    // rect. Filling everything black instead would leave chrome rendered
+    // black-on-black after the refresh (measured: invisible title).
+    inline void repaintWindowBase(bool canonical,int w,int h,
+                                  float scale,int ox,int oy)
+     {if (!display)
+        return;
+      XSetForeground(display,backgroundGC_,(unsigned long)windowBgPixel_);
+      XFillRectangle(display,window,backgroundGC_,0,0,
+                     (unsigned int)w,(unsigned int)h);
+      if (canonical)
+        return;
+      const int cw=(int)(windowWidth_*scale),ch=(int)(windowHeight_*scale);
+      XSetForeground(display,backgroundGC_,BlackPixel(display,screen));
+      if (ox>0)
+        XFillRectangle(display,window,backgroundGC_,0,0,
+                       (unsigned int)ox,(unsigned int)h);
+      if (ox+cw<w)
+        XFillRectangle(display,window,backgroundGC_,ox+cw,0,
+                       (unsigned int)(w-ox-cw),(unsigned int)h);
+      if (oy>0)
+        XFillRectangle(display,window,backgroundGC_,0,0,
+                       (unsigned int)w,(unsigned int)oy);
+      if (oy+ch<h)
+        XFillRectangle(display,window,backgroundGC_,0,oy+ch,
+                       (unsigned int)w,(unsigned int)(h-oy-ch));
+     }
+
+    // One-time D17.4(b) path selection. XAST_XRENDER: unset/"auto" probes
+    // the server's RENDER extension (via run-time-bound libXrender); "on"
+    // forces the probe but degrades to fallback with a logged reason;
+    // "off" skips the probe entirely. The chosen path is logged once —
+    // "[x11] present path: xrender|fallback" — for the harness manifest.
+    void selectPresentPath()
+     {useXRender_=false;
+      const char* env=getenv("XAST_XRENDER");
+      const bool off=(env&&strcmp(env,"off")==0);
+      const bool forceOn=(env&&strcmp(env,"on")==0);
+      if (!off)
+       {if (loadXRender())
+         {int evBase=0,errBase=0;
+          if (xQueryExtension_(display,&evBase,&errBase))
+            useXRender_=true;
+          else if (forceOn)
+            fprintf(stderr,"[x11] XAST_XRENDER=on but server lacks RENDER; "
+                           "using fallback\n");
+         }
+        else if (forceOn)
+          fprintf(stderr,"[x11] XAST_XRENDER=on but libXrender unavailable; "
+                         "using fallback\n");
+       }
+      if (useXRender_)
+       {XRenderPictFormat* fmt=xFindVisualFormat_(
+           display,DefaultVisual(display,screen));
+        if (fmt)
+         {canvasPicture_=xCreatePicture_(display,(Drawable)canvasPixmap_,
+                                         fmt,0,nullptr);
+          windowPicture_=xCreatePicture_(display,window,fmt,0,nullptr);
+         }
+        if (!canvasPicture_||!windowPicture_)
+         {useXRender_=false;
+          fprintf(stderr,"[x11] RENDER picture creation failed; "
+                         "using fallback\n");
+         }
+       }
+      fprintf(stderr,"[x11] present path: %s\n",
+              useXRender_?"xrender":"fallback");
+     }
+
+    bool loadXRender()
+     {const char* names[2]={"libXrender.so.1","libXrender.so"};
+      for (int i=0;i<2&&!xrenderLib_;++i)
+        xrenderLib_=dlopen(names[i],RTLD_LAZY|RTLD_LOCAL);
+      if (!xrenderLib_)
+        return false;
+      xQueryExtension_=(xastXRenderQueryExtensionFn)dlsym(
+        xrenderLib_,"XRenderQueryExtension");
+      xFindVisualFormat_=(xastXRenderFindVisualFormatFn)dlsym(
+        xrenderLib_,"XRenderFindVisualFormat");
+      xCreatePicture_=(xastXRenderCreatePictureFn)dlsym(
+        xrenderLib_,"XRenderCreatePicture");
+      xFreePicture_=(xastXRenderFreePictureFn)dlsym(
+        xrenderLib_,"XRenderFreePicture");
+      xSetPictureTransform_=(xastXRenderSetPictureTransformFn)dlsym(
+        xrenderLib_,"XRenderSetPictureTransform");
+      xSetPictureFilter_=(xastXRenderSetPictureFilterFn)dlsym(
+        xrenderLib_,"XRenderSetPictureFilter");
+      xComposite_=(xastXRenderCompositeFn)dlsym(
+        xrenderLib_,"XRenderComposite");
+      const bool ok=xQueryExtension_&&xFindVisualFormat_&&xCreatePicture_
+                     &&xFreePicture_&&xSetPictureTransform_
+                     &&xSetPictureFilter_&&xComposite_;
+      if (!ok)
+       {dlclose(xrenderLib_);
+        xrenderLib_=nullptr;
+       }
+      return ok;
      }
 
     inline void inverseTransformPoint(int winX,int winY,int& outX,int& outY)
@@ -1135,6 +1431,20 @@ class X11Backend : public RenderingEngine
     int presentOffX_,presentOffY_;
     bool scissorActive_;
     int scissorX_,scissorY_,scissorW_,scissorH_;
+    // ---- D17.4(b) X11 letterbox present path ------------------------------
+    bool useXRender_;                    // one-time init selection (XAST_XRENDER)
+    void* xrenderLib_;                   // dlopen handle; closed in shutdown
+    Picture canvasPicture_,windowPicture_;// eager pictures (canvas + window)
+    int cachedWinW_,cachedWinH_;         // geometry the cache was built from
+    unsigned long windowBgPixel_;        // canonical-restore fill color
+    std::map<TextureId,Picture> renderPictures_;   // lazy per-texture pictures
+    xastXRenderQueryExtensionFn xQueryExtension_;
+    xastXRenderFindVisualFormatFn xFindVisualFormat_;
+    xastXRenderCreatePictureFn xCreatePicture_;
+    xastXRenderFreePictureFn xFreePicture_;
+    xastXRenderSetPictureTransformFn xSetPictureTransform_;
+    xastXRenderSetPictureFilterFn xSetPictureFilter_;
+    xastXRenderCompositeFn xComposite_;
     std::map<TextureId,std::pair<int,int> > textureDims_;
     std::map<unsigned long,unsigned long> pixelCache_;
 

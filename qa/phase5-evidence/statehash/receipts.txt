@@ -1,0 +1,5 @@
+# task-46 state-hash receipts (all 'h' lines, play-rect 'p' headers stripped)
+canon-x11 == canon-gl:  IDENTICAL (435 frames)
+canon-gl   == canon-vk: IDENTICAL
+presoak-gl == postsoak-gl: IDENTICAL
+presoak-vk == postsoak-vk: IDENTICAL

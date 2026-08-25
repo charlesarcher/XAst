@@ -12,8 +12,10 @@
 //     header X11Backend calls) and creates a GLFW_RESIZABLE window at that
 //     size, root-centered. NO size limits anywhere (v6/S2/D15).
 //   - Letterbox present transform: uniform scale + centered offsets,
-//     recomputed lazily when dirty; the framebuffer-size callback only sets
-//     the dirty flag (mirrors x11Backend.H semantics exactly).
+//     stored by recomputePresentTransform_() — called from the
+//     framebuffer-size callback AND at init (D17.4b remediation: one
+//     writer, one source of truth; the former lazy dirty-flag refresh let
+//     draws revert to stale identity values after a resize).
 //   - GL 4.5 core gate: gladLoadGLLoader then version check; any failure
 //     makes initWindow return false -> main() exit(1) (M12/B5/m17).
 //   - glfwSetWindowCloseCallback routes to shutdown EXACTLY ONCE via a flag
@@ -77,7 +79,7 @@ class GLBackend : public RenderingEngine
        fbWidth_(0),fbHeight_(0),
        canonicalPlayAreaWidth_(0),canonicalPlayAreaHeight_(0),
        canonicalMaxIconHeight_(0),
-       presentDirty_(true),presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
+       presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
        closeRequested_(false),shutdownDone_(false),glfwInitialized_(false),
        colorProgram_(0),mvpLocation_(-1),vao_(0),vbo_(0),
        tx_(0.0f),ty_(0.0f),angle_(0.0f),
@@ -267,11 +269,6 @@ class GLBackend : public RenderingEngine
        }
       float scale=presentScale_;
       int ox=presentOffX_,oy=presentOffY_;
-      if (presentDirty_)
-       {float s;int x2,y2;
-        getPresentTransform(s,x2,y2);
-        scale=s;ox=x2;oy=y2;
-       }
       int fx=ox+(int)(xywh[0]*scale);
       int fy=fbHeight_-(oy+(int)((xywh[1]+xywh[3])*scale));  // y-flip: top->bottom
       int fw=(int)(xywh[2]*scale);
@@ -332,29 +329,17 @@ class GLBackend : public RenderingEngine
      }
 
     virtual void getPresentTransform(float& outScale,int& outOffsetX,
-                                     int& outOffsetY) override
-     {// Uniform-scale centered letterbox (D17.4b) — math mirrors
-      // x11Backend.H getPresentTransform exactly, sourced from
-      // glfwGetFramebufferSize instead of XGetGeometry. Identity at the
+                                      int& outOffsetY) override
+     {// Uniform-scale centered letterbox (D17.4b). D17.4(b) remediation: the
+      // values live ONLY in presentScale_/presentOffX_/presentOffY_ — ONE
+      // source of truth, recomputed by recomputePresentTransform_() from the
+      // framebuffer-size callback and at init (vkBackend mirror). This getter
+      // is a pure cache read: it must never diverge from what presentMVP_/
+      // setScissorRect/enqueueMouseMove actually apply. Identity at the
       // canonical size; aspect never stretched; fractional scales fine.
-      float scale=1.0f;
-      int ox=0,oy=0;
-      if (window&&canonicalWidth_>0&&canonicalHeight_>0)
-       {if (presentDirty_)
-          {int w=0,h=0;
-           glfwGetFramebufferSize(window,&w,&h);
-           fbWidth_=w;fbHeight_=h;
-           presentDirty_=false;
-          }
-        if (fbWidth_>0&&fbHeight_>0)
-         {scale=((float)fbWidth_/canonicalWidth_<(float)fbHeight_/canonicalHeight_)
-                 ? (float)fbWidth_/canonicalWidth_
-                 : (float)fbHeight_/canonicalHeight_;
-          ox=((int)fbWidth_-(int)(canonicalWidth_*scale))/2;
-          oy=((int)fbHeight_-(int)(canonicalHeight_*scale))/2;
-         }
-       }
-      outScale=scale;outOffsetX=ox;outOffsetY=oy;
+      outScale=presentScale_;
+      outOffsetX=presentOffX_;
+      outOffsetY=presentOffY_;
      }
 
     // ------------------------------------------------------------------
@@ -704,18 +689,40 @@ class GLBackend : public RenderingEngine
      }
 
     bool shaderOk(GLuint shader,const char* what)
-     {GLint ok=GL_FALSE;
-      glGetShaderiv(shader,GL_COMPILE_STATUS,&ok);
-      if (!ok)
-       {char log[512];
-        GLsizei n=0;
-        glGetShaderInfoLog(shader,512,&n,log);
-        fprintf(stderr,"glBackend: %s shader compile failed: %.*s\n",
-                what,(int)n,log);
-        return false;
-       }
-      return true;
-     }
+      {GLint ok=GL_FALSE;
+       glGetShaderiv(shader,GL_COMPILE_STATUS,&ok);
+       if (!ok)
+        {char log[512];
+         GLsizei n=0;
+         glGetShaderInfoLog(shader,512,&n,log);
+         fprintf(stderr,"glBackend: %s shader compile failed: %.*s\n",
+                 what,(int)n,log);
+         return false;
+        }
+       return true;
+      }
+
+    // D17.4(b) present-transform store (vkBackend mirror): the ONE writer of
+    // presentScale_/presentOffX_/presentOffY_. Uniform scale = min(fbW/canW,
+    // fbH/canH) as float; offsets center the scaled content. Identity at the
+    // canonical size (equal-int division is exactly 1.0f, offsets exactly 0),
+    // which is what keeps canonical-size pixels byte-identical.
+    void recomputePresentTransform_()
+      {float scale=1.0f;
+       int ox=0,oy=0;
+       if (canonicalWidth_>0&&canonicalHeight_>0
+           &&fbWidth_>0&&fbHeight_>0)
+        {scale=((float)fbWidth_/canonicalWidth_
+               <(float)fbHeight_/canonicalHeight_)
+                ? (float)fbWidth_/canonicalWidth_
+                : (float)fbHeight_/canonicalHeight_;
+         ox=((int)fbWidth_-(int)(canonicalWidth_*scale))/2;
+         oy=((int)fbHeight_-(int)(canonicalHeight_*scale))/2;
+        }
+       presentScale_=scale;
+       presentOffX_=ox;
+       presentOffY_=oy;
+      }
 
     static void makeVert(float* dst,int slot,float x,float y,
                          float r,float g,float b)
@@ -776,11 +783,6 @@ class GLBackend : public RenderingEngine
        }
       float scale=presentScale_;
       int ox=presentOffX_,oy=presentOffY_;
-      if (presentDirty_)
-       {float s;int x2,y2;
-        getPresentTransform(s,x2,y2);
-        scale=s;ox=x2;oy=y2;
-       }
       float a=2.0f*scale/(float)fbWidth_;    // P: x-scale
       float c=2.0f*(float)ox/(float)fbWidth_-1.0f;
       float b=-2.0f*scale/(float)fbHeight_;  // P: y-scale (flip)
@@ -1177,7 +1179,7 @@ class GLBackend : public RenderingEngine
       glfwGetFramebufferSize(window,&fbw,&fbh);
       fbWidth_=fbw;fbHeight_=fbh;
       glViewport(0,0,fbw,fbh);
-      presentDirty_=false;
+      recomputePresentTransform_();
       if (!initPrimitives())
        {shutdown();
         return false;
@@ -1202,16 +1204,21 @@ class GLBackend : public RenderingEngine
      }
 
     static void framebufferSizeTrampoline(GLFWwindow* win,int w,int h)
-     {(void)win;
-      // Single-instance backend (main() constructs exactly one engine).
-      // Route through the file-static instance pointer set at creation.
-      if (s_instance)
-       {s_instance->fbWidth_=w;
-        s_instance->fbHeight_=h;
-        s_instance->presentDirty_=true;
-        glViewport(0,0,w,h);
-       }
-     }
+      {(void)win;
+       // Single-instance backend (main() constructs exactly one engine).
+       // Route through the file-static instance pointer set at creation.
+       // D17.4(b) remediation: the callback now STORES the letterbox transform
+       // (vkBackend recomputePresentTransform_ mirror) — a lazy dirty-flag
+       // refresh let only the first post-resize draw consume fresh values and
+       // silently reverted every later draw to stale identity (the measured
+       // 1:1 top-left presentation). No in-callback GL calls beyond viewport.
+       if (s_instance)
+        {s_instance->fbWidth_=w;
+         s_instance->fbHeight_=h;
+         s_instance->recomputePresentTransform_();
+         glViewport(0,0,w,h);
+        }
+      }
 
     static void windowCloseTrampoline(GLFWwindow* win)
      {(void)win;
@@ -1416,15 +1423,9 @@ class GLBackend : public RenderingEngine
 
     void drawGlyphs(const char* text,float x,float y,int fontId,
                     float r,float g,float b)
-     {// Pen starts at (x, y) with y = BASELINE (X11 XDrawString semantics).
-      float scale=presentScale_;
-      int ox=presentOffX_,oy=presentOffY_;
-      if (presentDirty_)
-       {float s;int x2,y2;
-        getPresentTransform(s,x2,y2);
-        scale=s;ox=x2;oy=y2;
-       }
-      (void)scale;(void)ox;(void)oy;   // MVP carries the transform
+     {      // Pen starts at (x, y) with y = BASELINE (X11 XDrawString semantics).
+      // The present transform rides the MVP exclusively (one source of
+      // truth: presentScale_/presentOffX_/presentOffY_).
       float penX=x;
       // 6 expanded triangle verts x 4 floats per quad. Task-36 Defect A fix:
       // this loop previously advanced 16 floats/quad while writing 24 — each
@@ -1479,9 +1480,9 @@ class GLBackend : public RenderingEngine
     int fbWidth_,fbHeight_;                  // last-known framebuffer size
     int canonicalPlayAreaWidth_,canonicalPlayAreaHeight_;
     int canonicalMaxIconHeight_;
-    bool presentDirty_;
-    float presentScale_;
-    int presentOffX_,presentOffY_;
+    float presentScale_;                     // present transform (letterbox,
+    int presentOffX_,presentOffY_;           // D17.4b; ONE writer:
+                                             // recomputePresentTransform_)
     float canvasOffX_=0.0f,canvasOffY_=0.0f;   // task-36 canvas-domain shift
     bool closeRequested_;
     bool shutdownDone_;

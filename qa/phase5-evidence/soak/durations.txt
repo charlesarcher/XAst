@@ -1,0 +1,2 @@
+[harness] frame run done: 9420 boundaries in 903.085352s, checkpoints 2
+[harness] frame run done: 9420 boundaries in 900.518823s, checkpoints 2

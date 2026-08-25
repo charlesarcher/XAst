@@ -1,0 +1,236 @@
+
+=================================================================
+==1360454==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 4096 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13b040b  (<unknown module>)
+
+Direct leak of 2784 byte(s) in 2 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cce3e74a1  (<unknown module>)
+
+Direct leak of 2048 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e5529  (<unknown module>)
+
+Direct leak of 256 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd4189451  (/usr/lib/libasan.so.8+0x189451) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cb562908f  (<unknown module>)
+    #2 0x7b2cb5629789  (<unknown module>)
+
+Direct leak of 224 byte(s) in 7 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7f2cd3fdfd64  (/usr/lib/libxcb.so.1+0xcd64) (BuildId: 0a5551df0f405cc0cfb1f0a4e3c200866ce194d7)
+    #2 0x7f2cd3fe058d  (/usr/lib/libxcb.so.1+0xd58d) (BuildId: 0a5551df0f405cc0cfb1f0a4e3c200866ce194d7)
+    #3 0x7f2cd3fe0c76  (/usr/lib/libxcb.so.1+0xdc76) (BuildId: 0a5551df0f405cc0cfb1f0a4e3c200866ce194d7)
+    #4 0x7f2cd3fe2025 in xcb_wait_for_reply (/usr/lib/libxcb.so.1+0xf025) (BuildId: 0a5551df0f405cc0cfb1f0a4e3c200866ce194d7)
+
+Direct leak of 184 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7f2cd3192c08  (/usr/lib/../lib/libdbus-1.so.3+0x28c08) (BuildId: abbac845e2b15b094f7744a15ed2c67ce27cf54b)
+    #2 0x7f2cd3194b7d in _dbus_message_loader_queue_messages (/usr/lib/../lib/libdbus-1.so.3+0x2ab7d) (BuildId: abbac845e2b15b094f7744a15ed2c67ce27cf54b)
+
+Direct leak of 112 byte(s) in 2 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cce3e775d  (<unknown module>)
+
+Direct leak of 64 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e3773  (<unknown module>)
+
+Direct leak of 64 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13b0618  (<unknown module>)
+
+Direct leak of 56 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7f2cd2f7f2fc  (<unknown module>)
+
+Direct leak of 52 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9e8a  (<unknown module>)
+    #2 0x7b2cd13da768  (<unknown module>)
+
+Direct leak of 40 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e5332  (<unknown module>)
+
+Direct leak of 16 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9c0a  (<unknown module>)
+
+Direct leak of 16 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13ead1f  (<unknown module>)
+
+Direct leak of 16 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13ed9f1  (<unknown module>)
+
+Direct leak of 8 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13f5f7a  (<unknown module>)
+    #2 0x7b2cd13f963a  (<unknown module>)
+
+Indirect leak of 8176 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13b05da  (<unknown module>)
+
+Indirect leak of 8176 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13b0827  (<unknown module>)
+
+Indirect leak of 3600 byte(s) in 50 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9cb9  (<unknown module>)
+    #2 0x7b2cd13da768  (<unknown module>)
+
+Indirect leak of 3520 byte(s) in 88 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13dfdf2  (<unknown module>)
+
+Indirect leak of 2992 byte(s) in 3 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cce3e775d  (<unknown module>)
+
+Indirect leak of 2579 byte(s) in 49 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9e8a  (<unknown module>)
+    #2 0x7b2cd13da768  (<unknown module>)
+
+Indirect leak of 2136 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e52d0  (<unknown module>)
+
+Indirect leak of 1728 byte(s) in 27 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e3773  (<unknown module>)
+
+Indirect leak of 1360 byte(s) in 85 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13dfcaa  (<unknown module>)
+    #2 0x7b2cd13e00a4  (<unknown module>)
+
+Indirect leak of 1302 byte(s) in 88 object(s) allocated from:
+    #0 0x7f2cd418169a in strdup (/usr/lib/libasan.so.8+0x18169a) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e001e  (<unknown module>)
+
+Indirect leak of 1280 byte(s) in 16 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e61c9  (<unknown module>)
+
+Indirect leak of 1056 byte(s) in 88 object(s) allocated from:
+    #0 0x7f2cd418169a in strdup (/usr/lib/libasan.so.8+0x18169a) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13dfe0b  (<unknown module>)
+
+Indirect leak of 1028 byte(s) in 50 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9cef  (<unknown module>)
+    #2 0x7b2cd13da768  (<unknown module>)
+
+Indirect leak of 834 byte(s) in 2 object(s) allocated from:
+    #0 0x7f2cd4189451  (/usr/lib/libasan.so.8+0x189451) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7f2cd31a5909 in _dbus_string_copy_len (/usr/lib/../lib/libdbus-1.so.3+0x3b909) (BuildId: abbac845e2b15b094f7744a15ed2c67ce27cf54b)
+
+Indirect leak of 800 byte(s) in 50 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9c0a  (<unknown module>)
+    #2 0x7b2cd13da768  (<unknown module>)
+
+Indirect leak of 787 byte(s) in 85 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13dfcd3  (<unknown module>)
+    #2 0x7b2cd13e00a4  (<unknown module>)
+
+Indirect leak of 695 byte(s) in 53 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9d66  (<unknown module>)
+
+Indirect leak of 288 byte(s) in 4 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9cb9  (<unknown module>)
+
+Indirect leak of 182 byte(s) in 3 object(s) allocated from:
+    #0 0x7f2cd4189451  (/usr/lib/libasan.so.8+0x189451) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13dfb1c  (<unknown module>)
+    #2 0x7b2cd13e00a4  (<unknown module>)
+
+Indirect leak of 176 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13df52f  (<unknown module>)
+    #2 0x7b2cd13e3417  (<unknown module>)
+
+Indirect leak of 168 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13df546  (<unknown module>)
+    #2 0x7b2cd13e3417  (<unknown module>)
+
+Indirect leak of 128 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd41895e1 in reallocarray (/usr/lib/libasan.so.8+0x1895e1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e6201  (<unknown module>)
+
+Indirect leak of 104 byte(s) in 13 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e6bda  (<unknown module>)
+
+Indirect leak of 104 byte(s) in 3 object(s) allocated from:
+    #0 0x7f2cd41895e1 in reallocarray (/usr/lib/libasan.so.8+0x1895e1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13dfae0  (<unknown module>)
+    #2 0x7b2cd13e00a4  (<unknown module>)
+
+Indirect leak of 96 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7f2cd2f81289  (<unknown module>)
+
+Indirect leak of 80 byte(s) in 3 object(s) allocated from:
+    #0 0x7f2cd41895e1 in reallocarray (/usr/lib/libasan.so.8+0x1895e1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e6762  (<unknown module>)
+
+Indirect leak of 78 byte(s) in 4 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9cef  (<unknown module>)
+
+Indirect leak of 62 byte(s) in 4 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cce3e74a1  (<unknown module>)
+
+Indirect leak of 48 byte(s) in 3 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9c0a  (<unknown module>)
+
+Indirect leak of 47 byte(s) in 5 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13d9f40  (<unknown module>)
+    #2 0x7b2cd13da768  (<unknown module>)
+
+Indirect leak of 32 byte(s) in 2 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13ead1f  (<unknown module>)
+
+Indirect leak of 31 byte(s) in 2 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7f2cd2f7ef08  (<unknown module>)
+
+Indirect leak of 24 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd4189451  (/usr/lib/libasan.so.8+0x189451) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e2818  (<unknown module>)
+
+Indirect leak of 24 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418aa21 in calloc (/usr/lib/libasan.so.8+0x18aa21) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13df513  (<unknown module>)
+    #2 0x7b2cd13e3417  (<unknown module>)
+
+Indirect leak of 12 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418169a in strdup (/usr/lib/libasan.so.8+0x18169a) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e347d  (<unknown module>)
+
+Indirect leak of 6 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418169a in strdup (/usr/lib/libasan.so.8+0x18169a) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13e8572  (<unknown module>)
+
+Indirect leak of 1 byte(s) in 1 object(s) allocated from:
+    #0 0x7f2cd418a5b1 in malloc (/usr/lib/libasan.so.8+0x18a5b1) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7b2cd13eac7d  (<unknown module>)
+
+SUMMARY: AddressSanitizer: 53776 byte(s) leaked in 816 allocation(s).

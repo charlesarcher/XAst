@@ -1,0 +1,84 @@
+# edge-flows.script — task-46 edge-case flows: focus loss/gain over the
+# edge-base schedule.
+#
+# IDENTICAL input/capture schedule to edge-base.script (same targets, same
+# captures) plus leave/enter disturbance pairs (LeaveNotify/EnterNotify,
+# task-25 semantics) inserted ONLY in input-free windows:
+#   - title/help screen:  leave b12 -> enter b18
+#   - mid-play #1:        leave b122 -> enter b132 (RunGame pause spin;
+#                         frame publishes stall; boundaries tick via the
+#                         static-idle escape; EnterNotify re-arms the clock)
+#   - hi-score table:     leave b160 -> enter b166
+#   - mid-play #2:        leave b290 -> enter b305 (long freeze, ~15 boundaries)
+#   - coast mid-play #3:  leave b500 -> enter b520
+#   - death table:        leave b1705 -> enter b1710
+# NO gameplay keys land inside a pause window (keys pressed while paused are
+# discarded by the spin BY DESIGN and would legitimately diverge).
+#
+# Pass: state-hash stream IDENTICAL to edge-base.script on the same backend
+# (no state loss across focus loss/gain), same-named captures pixel-equal,
+# frames keep publishing after every re-enter, natural 'q' exit rc=0.
+
+1    capture help0
+
+3    keydown h
+6    keyup h
+12   leave
+18   enter
+20   capture help_redrawn
+
+30   keydown s
+34   keyup s
+60   capture start
+
+70   keydown e
+74   keyup e
+80   keydown o
+94   keyup o
+100  keydown p
+104  keyup p
+115  keydown p
+119  keyup p
+122  leave                  # pause mid-play (publishes stall)
+132  enter                  # re-arm; frames resume
+140  capture gp1
+
+150  keydown n
+154  keyup n
+160  leave                  # pause on the hi-score table screen
+166  enter
+190  capture hiscore_n
+
+200  keydown s
+204  keyup s
+240  capture start2
+
+250  keydown r
+254  keyup r
+260  keydown o
+274  keyup o
+280  keydown p
+284  keyup p
+290  leave                  # long pause mid-play
+305  enter
+320  capture gp2
+
+330  keydown space
+334  keyup space
+360  capture gp3
+
+370  keydown o
+388  keyup o
+400  capture gp4
+
+500  leave                  # pause during the drift phase
+520  enter
+
+1700 capture hiscore_death
+
+1705 leave                  # pause on the death table
+1710 enter
+
+1720 keydown q
+1724 keyup q
+exit

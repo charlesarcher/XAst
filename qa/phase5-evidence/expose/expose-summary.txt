@@ -1,0 +1,3 @@
+leg=x11 leg_binary=XAsteroids window=720x706 expose=XClearArea(whole,True) settle=3s AE=0 (0)
+leg=gl leg_binary=XAsteroids window=688x702 expose=XClearArea(whole,True) settle=3s AE=0 (0)
+leg=vk leg_binary=XAsteroids window=688x702 expose=XClearArea(whole,True) settle=3s AE=0 (0)
