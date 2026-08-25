@@ -296,6 +296,8 @@
 
 #include"renderingEngine.H"
 #include"windowSize.H"    // WindowSizeFormula::Compute + EngineFontId enum
+#include"imgui.h"         // task 44b: menu-glue platform half (clipboard
+                          // stubs + BackendPlatformName; mirrors glBackend).
 #include"stb_truetype.h"  // vendor/stb v1.26; DECLARATIONS only here — the
                           // implementation TU is obj/*/stbTruetypeImpl.o
                           // (glBackend.H precedent; linked into the VK leg
@@ -389,6 +391,7 @@ class VKBackend : public RenderingEngine
         nextTextureId_(1),
         atlasTex_(0),
         tx_(0.0f),ty_(0.0f),angle_(0.0f),
+        canvasOffX_(0.0f),canvasOffY_(0.0f),
         presentScale_(1.0f),
         presentOffX_(0),presentOffY_(0),
         rtActive_(false),
@@ -871,12 +874,27 @@ class VKBackend : public RenderingEngine
        // D15 release order (task-38 extension): swapchain views -> swapchain
        // -> surface -> window, THEN the task-37 chain: device -> messenger
        // -> instance -> GLFW library.
-        // Task-39 frame-sync teardown: drain pending presents FIRST (the
-        // presentation engine holds the last-presented images/semaphores
-        // beyond queue execution), then free device-level objects BEFORE
-        // the device.
-        drainPresentEngine_();
-        destroyTextures_();
+         // Task-39 frame-sync teardown: drain pending presents FIRST (the
+         // presentation engine holds the last-presented images/semaphores
+         // beyond queue execution), then free device-level objects BEFORE
+         // the device.
+         drainPresentEngine_();
+        // Task 43: reset the pool BEFORE any texture/view teardown — a
+        // recorded-but-not-reset command buffer keeps its bound descriptor
+        // sets "in use" for validation (VUID-01026) even after the work
+        // completed; resetting releases every recorded reference. The game
+        // can exit from paths that leave slot cbs recorded (close on any
+        // screen).
+        if (device!=VK_NULL_HANDLE&&commandPool!=VK_NULL_HANDLE)
+          vkResetCommandPool(device,commandPool,0);
+        // Task 43: retire the descriptor pool BEFORE the texture views it
+        // references — a set alive while its view dies is exactly the
+        // VUID-01026 teardown chain (set-in-use-by-cb holds the view).
+        if (descriptorPool!=VK_NULL_HANDLE)
+         {vkDestroyDescriptorPool(device,descriptorPool,NULL);
+          descriptorPool=VK_NULL_HANDLE;
+         }
+         destroyTextures_();
         destroyRenderTargets_();
         destroySwapchainFramebuffers_();   // task 40: BEFORE views (fbs
                                            // reference views); the render
@@ -959,6 +977,16 @@ class VKBackend : public RenderingEngine
          return;
         if (window)                     // GLFW requires a regular pump or
           glfwPollEvents();             // resize/close callbacks never fire
+        if (frameAcquired_)             // Task 43: the domain double-pumps —
+          return;                       // RunGame's iteration head pumps
+                                        // BEFORE the drain AND PresentFrame
+                                        // opens its own frame (GL's beginFrame
+                                        // is pump-only, so the redundant call
+                                        // must not re-acquire/re-record: a
+                                        // second acquire here strands images
+                                        // outside the present engine and a
+                                        // second preamble re-records an open
+                                        // command buffer).
         if (swapchainDirty_)            // task-38 resize flag consumed HERE
          {if (!rebootstrapSwapchain_())
             return;
@@ -1099,6 +1127,8 @@ class VKBackend : public RenderingEngine
        // US-layout table with PRESS/RELEASE only — GLFW_REPEAT never
        // reaches this queue; mouse inverse-present-transformed to LOGICAL
        // client coords at enqueue) and this drain hands them out.
+       // Unlike GL there is no out-of-backend key bridge to merge: keys AND
+       // mouse both arrive through this one queue.
        int count=0;
        while (eventHead_!=eventTail_&&count<maxCount)
         {out[count++]=eventQueue_[eventHead_];
@@ -1106,6 +1136,29 @@ class VKBackend : public RenderingEngine
         }
        return count;
       }
+
+    // ------------------------------------------------------------------
+    // Menu/input glue (task 44b, D9). The Dear ImGui PLATFORM half that the
+    // engine owns — mirrors glBackend.H's installMenuInputBridge: clipboard
+    // stubs for the ImGui context the menu adapter creates; the raw mouse/
+    // key capture itself already rides initWindow pass 2a (task 42).
+    // ------------------------------------------------------------------
+    void installMenuInputBridge()
+     {// Called once by ImGuiOptionsMenu after adapter init created the ImGui
+      // context. Clipboard stubs: no clipboard domain exists; explicit no-ops.
+      ImGuiIO& io=ImGui::GetIO();
+      io.BackendPlatformName="vkBackend_XAsteroids_GameEvents";
+      io.SetClipboardTextFn=clipboardSetStub_;
+      io.GetClipboardTextFn=clipboardGetStub_;
+     }
+
+    // Task 43: canvas-domain translation (logical units, added inside
+    // presentMVP_) — identical contract to glBackend's setCanvasOffset.
+    // playingField brackets the passes whose coordinates are recorded in the
+    // old canvas-relative space (world replay, help text, score table) with
+    // (stage->playAreaXY - 80); window-domain chrome stays unbracketed.
+    void setCanvasOffset(float dx,float dy)
+     {canvasOffX_=dx;canvasOffY_=dy;}
 
     virtual void setScissorRect(const int* xywh) override
       {// D7/D8 (v6.1): LOGICAL CLIENT {x,y,w,h} in; the present transform is
@@ -1817,10 +1870,11 @@ class VKBackend : public RenderingEngine
          return;
        // The texture's descriptor set may still be referenced by a submitted
        // (not-yet-complete) command buffer; destroying the view/image here
-       // would trip VUID-01026. Deletion is rare (dtors, AlterIcon), so a
-       // guarded idle wait is the cheap correct sync.
-       if (!passOpen_)
-         vkDeviceWaitIdle(device);
+       // would trip VUID-01026. Deletion is rare (dtors, AlterIcon), so an
+       // idle wait is the cheap correct sync. Task 43: UNCONDITIONAL — an
+       // early game exit ('q'/close) leaves passOpen_ true with frames still
+       // in flight, and the guarded skip then raced the pending cb.
+       vkDeviceWaitIdle(device);
        auto rt=renderTargets_.find(tex);
        if (rt!=renderTargets_.end())
         {vkDestroyFramebuffer(device,rt->second.fb,NULL);
@@ -1996,6 +2050,8 @@ class VKBackend : public RenderingEngine
     void* vertMapped_[kMaxFramesInFlight];
     VkDeviceSize vertUsed_[kMaxFramesInFlight];
     float tx_,ty_,angle_;                // setTransform state (m19)
+    float canvasOffX_,canvasOffY_;       // task 43 canvas-domain shift
+                                         // (setCanvasOffset; presentMVP_)
     float presentScale_;                 // present transform (letterbox,
     int presentOffX_,presentOffY_;       // D17.4a math since task 42)
     bool rtActive_;                      // inside begin/endRenderTo
@@ -2373,14 +2429,17 @@ class VKBackend : public RenderingEngine
        subpass.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS;
        subpass.colorAttachmentCount=1;
        subpass.pColorAttachments=&colorRef;
-       VkSubpassDependency dep{};
-       dep.srcSubpass=VK_SUBPASS_EXTERNAL;
-       dep.dstSubpass=0;
-       dep.srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-       dep.dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-       dep.srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-       dep.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                        |VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        VkSubpassDependency dep{};
+        dep.srcSubpass=VK_SUBPASS_EXTERNAL;
+        dep.dstSubpass=0;
+        dep.srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dep.dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        // Task 43: MUST match createRenderPass_'s external dependency
+        // byte-for-byte — this pass reopens a framebuffer created for THE
+        // task-40 pass, and validation (VUID-00904) rejects begin/pass
+        // pairs whose external srcAccessMask chains disagree.
+        dep.srcAccessMask=0;
+        dep.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
        VkRenderPassCreateInfo rpi{};
        rpi.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
        rpi.attachmentCount=1;
@@ -3561,6 +3620,12 @@ class VKBackend : public RenderingEngine
          {vkDestroyRenderPass(device,offscreenRenderPass_,NULL);
           offscreenRenderPass_=VK_NULL_HANDLE;
          }
+        // Task 43: the endRenderTo reopen pass was created on demand but
+        // never retired — the VUID-05137 leaked-object at DestroyDevice.
+        if (swapchainLoadRenderPass_!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
+         {vkDestroyRenderPass(device,swapchainLoadRenderPass_,NULL);
+          swapchainLoadRenderPass_=VK_NULL_HANDLE;
+         }
         if (renderPass!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
         {vkDestroyRenderPass(device,renderPass,NULL);
          renderPass=VK_NULL_HANDLE;
@@ -3763,8 +3828,11 @@ class VKBackend : public RenderingEngine
        float b=2.0f*presentScale_/H;
        float d=2.0f*(float)presentOffY_/H-1.0f;
        float cs=cosf(angle_),sn=sinf(angle_);
-       float ma=cs,mb=-sn,mc=tx_;
-       float md=sn,me=cs,mf=ty_;
+       // M: logical = R*local + t. Task 43: canvas-domain draws carry the
+       // canvas-origin shift (playAreaXY - 80) so world/help/table content
+       // lands exactly where glBackend places it (setCanvasOffset).
+       float ma=cs,mb=-sn,mc=tx_+canvasOffX_;
+       float md=sn,me=cs,mf=ty_+canvasOffY_;
        mvp_[0]=a*ma;    mvp_[1]=b*md;    mvp_[2]=0.0f;mvp_[3]=0.0f;
        mvp_[4]=a*mb;    mvp_[5]=b*me;    mvp_[6]=0.0f;mvp_[7]=0.0f;
        mvp_[8]=0.0f;    mvp_[9]=0.0f;    mvp_[10]=1.0f;mvp_[11]=0.0f;
@@ -3938,6 +4006,14 @@ class VKBackend : public RenderingEngine
       {(void)win;
        if (s_instance)
          s_instance->closeRequested_=true;   // M13: flag only, no teardown
+      }
+
+    // task 44b clipboard stubs (glBackend verbatim; no clipboard domain).
+    static void clipboardSetStub_(void*,const char*)
+      {}
+
+    static const char* clipboardGetStub_(void*)
+      {return "";
       }
 
     static bool deviceIsDiscrete(VkPhysicalDevice d)

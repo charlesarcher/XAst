@@ -28,6 +28,10 @@
 #include<unistd.h>
 #include"../utilities/rendering/glBackend.H"
 #endif
+#if !defined(X11_BACKEND) && defined(VK_BACKEND)
+#include<unistd.h>
+#include"../utilities/rendering/vkBackend.H"
+#endif
 #include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
 #include"../utilities/vector2d.H"
@@ -660,16 +664,22 @@ inline void PlayingField::PresentFrame()
    // (5) world pass — ORIGINAL per-object emission order verbatim on X11
    // (O5-M4: the canonical order is a GL/VK-only contract); replay of the
    // records captured at the old mid-physics draw points;
-   #ifdef GL_BACKEND
-   // Canvas-domain shift: record coords are X11-canvas-relative (80-based);
-   // GL has no canvas indirection, so translate by playAreaXY-80.
-   static_cast<GLBackend&>(engine).setCanvasOffset(
-       (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
-   #endif
-   RenderFrameDraws();
-   #ifdef GL_BACKEND
-   static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
-   #endif
+    #ifdef GL_BACKEND
+    // Canvas-domain shift: record coords are X11-canvas-relative (80-based);
+    // GL has no canvas indirection, so translate by playAreaXY-80.
+    static_cast<GLBackend&>(engine).setCanvasOffset(
+        (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+    #elif defined(VK_BACKEND)
+    // VK mirrors GL exactly (no canvas indirection either).
+    static_cast<VKBackend&>(engine).setCanvasOffset(
+        (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+    #endif
+    RenderFrameDraws();
+    #ifdef GL_BACKEND
+    static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+    #elif defined(VK_BACKEND)
+    static_cast<VKBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+    #endif
   engine.setScissorRect(nullptr);
   engine.endRenderTo();
   // (6) HUD lives outside the play rect;
@@ -1094,11 +1104,21 @@ inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
       engine.beginFrame();
       int numEvents=engine.pollEvents(events,256);
 #ifdef GL_BACKEND
-      // GL-only until task 42: bridge drain + close latch need the concrete
-      // GLBackend; VK compiles guards-closed with neither backend macro and
-      // gets its own pollEvents wiring at plan task 42.
+      // GL-only: the task-35 key bridge drain (VK's pollEvents delivers the
+      // full D16 stream natively since task 42 — no bridge exists there).
       numEvents+=glDrainEvents(events+numEvents,256-numEvents);
-      if (static_cast<GLBackend&>(engine).closeRequested_)
+#endif
+#if defined(GL_BACKEND) || defined(VK_BACKEND)
+      // Window-close latch (M13): the backend's close callback only sets the
+      // flag; the loop consumes it here, exactly like the X11 leg's
+      // takeCloseRequest.
+      if (
+#ifdef GL_BACKEND
+          static_cast<GLBackend&>(engine)
+#elif defined(VK_BACKEND)
+          static_cast<VKBackend&>(engine)
+#endif
+            .closeRequested_)
         return on;
 #endif
       // Task 44a: the menu consumes the SAME drained stream before the game
@@ -1253,15 +1273,22 @@ inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
       yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+hiScoreFm.max_bounds.ascent,
       yPos=yPosSave;
   char str[23];
+  // Task 43: open the frame before the table draws — GL's endFrame swap
+  // needs no preceding begin, but VK's endFrame submits nothing unless
+  // beginFrame acquired (the table would never reach the window).
+  engine.beginFrame();
   engine.beginRenderTo((TextureId)pixmap);
   engine.clear();
    // Task-36: base+chrome BEFORE the table (clear() wiped the whole window
    // on this leg).
-   DrawHudChrome();
-   #ifdef GL_BACKEND
-   static_cast<GLBackend&>(engine).setCanvasOffset(
-       (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
-   #endif
+    DrawHudChrome();
+    #ifdef GL_BACKEND
+    static_cast<GLBackend&>(engine).setCanvasOffset(
+        (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+    #elif defined(VK_BACKEND)
+    static_cast<VKBackend&>(engine).setCanvasOffset(
+        (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+    #endif
   for(int i=0;i<score->NumScores();++i)
    {const int nameWidth=12-(int)strlen(score->TopTenName(i));
     snprintf(str,sizeof(str),"%s%*s%10d",
@@ -1284,9 +1311,11 @@ inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
                    (float)(yPosSave-hiScoreFm.max_bounds.ascent),
                    (float)(hiScoreFm.max_bounds.width*22),
                    (float)(15*fontHeight));
-   #ifdef GL_BACKEND
-   static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
-   #endif
+    #ifdef GL_BACKEND
+    static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+    #elif defined(VK_BACKEND)
+    static_cast<VKBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+    #endif
    engine.endRenderTo();
    stage->DrawPlayingField();
    engine.endFrame();
@@ -1399,7 +1428,15 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv,
     int numEvents=engine.pollEvents(events,64);
 #ifdef GL_BACKEND
     numEvents+=glDrainEvents(events+numEvents,64-numEvents);
-    if (static_cast<GLBackend&>(engine).closeRequested_)
+#endif
+#if defined(GL_BACKEND) || defined(VK_BACKEND)
+    if (
+#ifdef GL_BACKEND
+        static_cast<GLBackend&>(engine)
+#elif defined(VK_BACKEND)
+        static_cast<VKBackend&>(engine)
+#endif
+          .closeRequested_)
       return localHighScore;
 #endif
     for (int i=0;i<numEvents;++i)
@@ -1539,6 +1576,9 @@ void PlayingField::GenHelpScreen()
   #ifdef GL_BACKEND
   static_cast<GLBackend&>(engine).setCanvasOffset(
       (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
+  #elif defined(VK_BACKEND)
+  static_cast<VKBackend&>(engine).setCanvasOffset(
+      (float)(stage->playAreaX-80),(float)(stage->playAreaY-80));
   #endif
   engine.drawStringTransparent("        S -- start",(float)xPos,(float)yPos,
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
@@ -1574,6 +1614,8 @@ void PlayingField::GenHelpScreen()
                   (float)(12*fontHeight));
   #ifdef GL_BACKEND
   static_cast<GLBackend&>(engine).setCanvasOffset(0.0f,0.0f);
+  #elif defined(VK_BACKEND)
+  static_cast<VKBackend&>(engine).setCanvasOffset(0.0f,0.0f);
   #endif
    engine.endRenderTo();
    #endif

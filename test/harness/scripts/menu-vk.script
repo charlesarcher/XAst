@@ -1,0 +1,105 @@
+# menu-vk.script — Q5 VK leg (task 44b): Dear ImGui Options menu end-to-end.
+#
+# Drives: open menu (Options button click) -> no-op click (deterministic
+# resume checkpoint) -> FPS slider drag 16->32 (D4 uSecondsPerFrame path,
+# applied per drag step like XmNvalueChangedCallback) -> Save -> drag away
+# -> Load (round-trip restores 32) -> Mute on/off (toggle round-trip) ->
+# Close (pause ends, simulation resumes at the new period).
+#
+# Geometry and assertions mirror the GL leg (menu-gl.script / task 44a)
+# exactly: the seam class is engine-typed, so the same widget layout applies
+# through the vkBackend adapter. Assertions live in qa/menu-vk-q5.sh (the
+# driver): measured frame-period shift via live frame-counter sampling,
+# pause via frozen state-hash/counter files, state-hash continuity (no
+# reset/skip across the pause), and pixel identities between captures
+# (compare -metric AE). Menu screens are backend-specific BY DESIGN
+# (D9/F2) — no cross-backend reference diff.
+#
+# Geometry (deterministic: fixed ImGui window at (40,60) 430x190, canonical
+# 688x702 client, identity letterbox):
+#   Options button   (2,2)..(~62,32)          -> click (20,15)
+#   FPS slider row   y 90..108, x 50..325     -> grab (150,99), release (132,99) = 32
+#                                             -> release (90,99)  = ~20
+#   Mute checkbox    (50,135)..(62,148)       -> click (56,141)
+#   Save button      (50,158)..(80,175)       -> click (55,166)
+#   Load button      (90,158)..(127,175)      -> click (108,166)
+#   Close button     (137,158)..(178,175)     -> click (157,166)
+#   dead space       inside window, no widget -> click (350,220)
+#
+# Run (via the driver, which also samples the counter/state-hash files):
+#   qa/menu-vk-q5.sh
+# Manual:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/menu-vk.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data \
+#       --handshake frame --keep
+
+1    capture title             # title/help screen; menu usable from here too
+
+3    keydown s                 # start the game (16 fps baseline)
+6    keyup s
+40   capture start
+
+# --- baseline pacing window (16 fps, ~62.5 ms/frame) -----------------------
+90   capture pre_a
+130  capture pre_b
+
+# --- open the menu via the Options button (pause begins) -------------------
+150  mousedown 20 15
+154  mouseup 20 15
+160  mousedown 350 220      # focus click: active title bar from here on
+164  mouseup 350 220
+170  capture menu_open
+
+# --- no-op click in dead space: Q12-style checkpoint must not move ---------
+200  mousedown 350 220
+204  mouseup 350 220
+240  move 350 220           # park the pointer: identical hover state
+242  capture menu_noop
+
+# --- FPS slider drag to 32 (each drag step applies through the D4 path) ----
+260  mousedown 150 99
+264  move 132 99
+268  mouseup 132 99
+296  move 350 220
+300  capture menu_fps32
+
+# --- Save preferences (writes the options.H-format file) -------------------
+320  mousedown 55 166
+324  mouseup 55 166
+348  move 350 220
+350  capture menu_saved
+
+# --- drag away, then Load: round-trip must restore the saved state ---------
+370  mousedown 150 99
+374  move 90 99
+378  mouseup 90 99
+398  move 350 220
+400  capture menu_dragged
+
+420  mousedown 108 166
+424  mouseup 108 166
+458  move 350 220
+460  capture menu_loaded
+
+# --- volume/mute toggle round-trip -----------------------------------------
+480  mousedown 56 141
+484  mouseup 56 141
+508  move 350 220
+510  capture menu_muted
+
+530  mousedown 56 141
+534  mouseup 56 141
+558  move 350 220
+560  capture menu_unmuted
+
+# --- close (pause ends; simulation resumes at the new period) --------------
+580  mousedown 157 166
+584  mouseup 157 166
+620  capture menu_closed
+
+# --- post window (32 fps, ~31.25 ms/frame) ---------------------------------
+660  capture post_a
+700  capture post_b
+740  capture post_c
+
+exit

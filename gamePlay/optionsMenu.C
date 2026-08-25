@@ -30,9 +30,10 @@ namespace
    }
  }
 
-// Ordering contract: main() calls GLBackend::installMenuInputBridge()
-// immediately after this constructor — it configures io on the context
-// created here, so the context must already exist.
+// Ordering contract: main() calls the backend's installMenuInputBridge()
+// (glBackend on GL, vkBackend on VK) immediately after this constructor —
+// it configures io on the context created here, so the context must already
+// exist.
 ImGuiOptionsMenu::ImGuiOptionsMenu(RenderingEngine& engine,
                                    OptionsMenuHost& host)
   :engine_(engine),

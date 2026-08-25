@@ -32,16 +32,18 @@ ifneq ($(filter $(BACKEND),GL VK),)
 BACKEND_CXXFLAGS=$(VENDOR_INCS)
 endif
 # Task 31: the GL leg compiles main()'s GL backend branch (GLBackend engine +
-# paced stub loop). VK stays macro-free: task 37 lands vkBackend.H WITHOUT any
-# backend define (domain stays macro-free), so XAsteroids.C compiles
-# guards-closed on VK and main() falls through to the stub return 0.
+# paced stub loop). Task 43: the VK leg compiles main()'s VK backend branch
+# the same way (-DVK_BACKEND rides the leg's objects exactly like -DGL_BACKEND
+# rides the GL leg) — before 43 the domain stayed macro-free and main() fell
+# through to the stub return 0.
 ifeq ($(BACKEND),GL)
 BACKEND_CXXFLAGS+=-DGL_BACKEND
 endif
-# Task 37: the VK leg adds ONLY the vendored Vulkan C headers (-I). No macro,
-# nothing else — GL/X11 compile lines stay byte-identical.
+# Tasks 37/43: the VK leg carries the vendored Vulkan C headers (-I) plus the
+# backend macro that opens XAsteroids.C/playingField.H VK branches. GL/X11
+# compile lines stay byte-identical.
 ifeq ($(BACKEND),VK)
-BACKEND_CXXFLAGS+=-Ivendor/vulkan/include
+BACKEND_CXXFLAGS+=-Ivendor/vulkan/include -DVK_BACKEND
 endif
 
 # Objects feeding the X11 link always carry the X11 macro, whatever BACKEND says.
@@ -82,11 +84,11 @@ endif
 ifeq ($(BACKEND),GL)
 GL_OBJECTS=$(OBJDIR)/glad.o $(OBJDIR)/stbTruetypeImpl.o
 endif
-# Task 44a: the ImGuiOptionsMenu unit lands on the GL leg ONLY (44a); any
-# VK-leg menu-unit additions belong to 44b. The seam header itself is
-# include-guarded and only reaches TUs that ask for it.
+# Task 44a/44b: the ImGuiOptionsMenu unit lands on BOTH GPU legs (44a = GL,
+# 44b = VK). The seam header itself is include-guarded and only reaches TUs
+# that ask for it.
 MENU_OBJECTS=
-ifeq ($(BACKEND),GL)
+ifneq ($(filter $(BACKEND),GL VK),)
 MENU_OBJECTS=$(OBJDIR)/optionsMenu.o
 endif
 # Task 38: the VK leg consumes stb font METRICS (pass-1 window sizing via the
@@ -129,7 +131,7 @@ $(OBJDIR)/stbTruetypeImpl.o: utilities/rendering/stbTruetypeImpl.C vendor/stb/st
 $(IMGUI_OBJECTS): $(OBJDIR)/%.o: vendor/dear_imgui/%.cpp vendor/dear_imgui/imgui.h vendor/dear_imgui/imconfig.h vendor/dear_imgui/imgui_internal.h $(wildcard vendor/dear_imgui/imstb_*.h) | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
-# Task 44a: ImGuiOptionsMenu implementation (GL leg only — see MENU_OBJECTS).
+# Task 44a: ImGuiOptionsMenu implementation (GL + VK legs — see MENU_OBJECTS).
 $(OBJDIR)/optionsMenu.o: gamePlay/optionsMenu.C gamePlay/optionsMenu.H utilities/rendering/menuAdapter.H vendor/dear_imgui/imgui.h | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
@@ -182,7 +184,7 @@ OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon.xbm \
  bitmaps/ENEMYScoringIcon.xbm bitmaps/rockScoringIcon.xbm bitmaps/ROckScoringIcon.xbm \
  bitmaps/ROCKScoringIcon.xbm
 
-$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H gamePlay/optionsMenu.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
+$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H utilities/rendering/vkBackend.H gamePlay/optionsMenu.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 # --- Link rules (task 29, F3/D10/U23; three-way since task 37) --------------
@@ -204,9 +206,11 @@ ifeq ($(BACKEND),GL)
 XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS)
 	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} -lglfw -lGL -o XAsteroids
 else ifeq ($(BACKEND),VK)
-XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT)
+# Task 43/44b: the real game links the menu units too (ImGuiOptionsMenu +
+# dear_imgui core — the adapter consumes only RenderingEngine types, D9).
+XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS)
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) ${LDFLAGS} -lglfw -lvulkan -o XAsteroids
+	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} -lglfw -lvulkan -o XAsteroids
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids

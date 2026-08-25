@@ -1,0 +1,4 @@
+[vk-loader-error:Loader Message] loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so"
+[vk-loader-error:Loader Message] loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "liblsfg-vk-layer.so".  Skipping layer.
+counted=0
+loader_noise_uncounted=2

@@ -1,0 +1,48 @@
+# harness manifest (task 9, D17.3)
+seed: 12345
+handshake: frame
+display: :99
+xvfb_geometry: 1280x1024x24
+script: test/harness/scripts/session.script
+binary: /home/archerc/code/XAst/XAsteroids
+binary_size_mtime: 2066424 1787666849
+hiscore_fixture: test/harness/fixtures/hiScore.nul.data
+game_cwd: /tmp/xast-harness.ICbNWn
+client_geometry: 688x702 border=0 depth=24 at +296+161
+sync_params: poll_ms=10 stability=3 tick_gap_ms=30
+frame_counter_file: /tmp/xast-harness.ICbNWn/framecount
+frame_base: 3
+mask_dir: /tmp/opencode/t43-q11/masks
+run_ms: 69675
+game_exit_rc: 0
+checkpoints: 13
+  cp help boundary=1 t=410968563ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/help.png
+  cp start boundary=40 t=410970894ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/start.png
+  cp gp1 boundary=120 t=410975908ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp1.png
+  cp gp2 boundary=200 t=410980907ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp2.png
+  cp gp3 boundary=240 t=410983411ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp3.png
+  cp gp4 boundary=340 t=410989678ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp4.png
+  cp gp5 boundary=400 t=410993422ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp5.png
+  cp gp6 boundary=600 t=411001505ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp6.png
+  cp gp7 boundary=800 t=411007943ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp7.png
+  cp gp8 boundary=1000 t=411014391ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp8.png
+  cp gp9 boundary=1200 t=411020821ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp9.png
+  cp gp10 boundary=1400 t=411027260ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/gp10.png
+  cp hiscore boundary=1700 t=411036933ms 688x702 /tmp/opencode/t43-q11/vk-gate-final/hiscore.png
+diff_reference: /tmp/opencode/t43-q11/gl-caps
+mine_crop: 24,175,640,512
+ref_crop: 24,175,640,512
+  diff help AE=0.000000 mask=/tmp/opencode/t43-q11/masks/help.mask.png PASS
+  diff start AE=0.000000 mask=/tmp/opencode/t43-q11/masks/start.mask.png PASS
+  diff gp1 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp1.mask.png PASS
+  diff gp2 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp2.mask.png PASS
+  diff gp3 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp3.mask.png PASS
+  diff gp4 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp4.mask.png PASS
+  diff gp5 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp5.mask.png PASS
+  diff gp6 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp6.mask.png PASS
+  diff gp7 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp7.mask.png PASS
+  diff gp8 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp8.mask.png PASS
+  diff gp9 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp9.mask.png PASS
+  diff gp10 AE=0.000000 mask=/tmp/opencode/t43-q11/masks/gp10.mask.png PASS
+  diff hiscore AE=0.000000 mask=/tmp/opencode/t43-q11/masks/hiscore.mask.png PASS
+result: PASS

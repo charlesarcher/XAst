@@ -10,6 +10,9 @@
 #include"utilities/rendering/glBackend.H"
 #include"utilities/pixmaps/xbmDecode.H"
 #include"gamePlay/optionsMenu.H"
+#elif defined(VK_BACKEND)
+#include"utilities/rendering/vkBackend.H"
+#include"gamePlay/optionsMenu.H"
 #endif
 #include"gamePlay/stage.H"
 #include"gamePlay/score.H"
@@ -278,6 +281,80 @@ int main (int argc, char *argv[])
   // polled GameEvent, ticks it once per frame, and renders its overlay after
   // the letterboxed game frame. Opening the menu pauses the simulation;
   // closing re-arms startTime = ResumePlay(...) like the X11 modal pause.
+  ImGuiOptionsMenu* menu=new ImGuiOptionsMenu(engine,
+                                             playingFieldOptionsMenuHost());
+  engine.installMenuInputBridge();
+
+  // Initial present: the ctor-drawn help screen reaches the window here
+  // (the guarded branch's stage present legs own this step on X11).
+  engine.beginFrame();
+  engine.endFrame();
+
+  cout<<"Your highest score this game was "<<playingField->PlayTheGame(argc>1 ? atoi(argv[1])
+                                                                                    : 1,
+                                                                           argc, argv,
+                                                                           *menu)<<'.'<<endl;
+
+  delete menu;
+  delete playingField;
+  delete enemyBulletGroup;
+  delete enemyGroup;
+  delete rockGroup;
+  delete shipBulletGroup;
+  delete shipYard;
+  delete shipGroup;
+  delete explosionGraphic;
+  delete score;
+  delete button;
+  delete stage;
+  engine.shutdown();
+  return 0;
+  #endif
+  #ifdef VK_BACKEND
+  // Task 43: the REAL game on VK — mirrors the GL branch exactly (same
+  // global construction order, same ::operator new + placement-new staging,
+  // same ctor arguments modulo the guarded X11-only ones; shipYard colors
+  // use StarDestroyer::glColor like GL — the iconColor path is the X11
+  // colormap leg). No key trampoline is installed: vkBackend's pollEvents
+  // self-contains the D16 key+mouse callbacks since task 42. Task 44b:
+  // main() constructs the backend-appropriate OptionsMenu and hands it to
+  // PlayTheGame exactly like GL.
+  VKBackend engine;
+  engine.setCanonicalLayout(PlayingField::playArea.Width(),
+                            PlayingField::playArea.Height(),
+                            ShipGroup::maxIconHeight);
+  if (!engine.initWindow("Asteroids"))
+   {fprintf(stderr,"XAsteroids: initialization failed.\n");
+    return 1;
+   }
+  stage = new Stage(engine);
+  stage->display=nullptr;                    // deterministic shim values: the
+  stage->window=0;                           // VK rotator-data path ignores them
+  button = new Button(engine,
+                      "Options",
+                      stage->buttonX,stage->buttonY);
+  score = new Score;
+  explosionGraphic = new ExplosionGraphic(engine);
+  shipGroup = (ShipGroup*)::operator new(sizeof(ShipGroup));
+  ShipGroup::ship=&shipGroup->starDestroyer;
+  ShipGroup::thrust=&shipGroup->starDestroyerThrust;
+  new (shipGroup) ShipGroup(engine);
+  shipYard = new ShipYard(engine,
+                          shipGroup->ship->icon,
+                          shipGroup->ship->iconWidth,
+                          shipGroup->ship->iconHeight,
+                          StarDestroyer::glColor.red,
+                          StarDestroyer::glColor.green,
+                          StarDestroyer::glColor.blue,
+                          stage->shipYardWidth,stage->shipYardHeight);
+  shipBulletGroup = (ShipBulletGroup*)::operator new(sizeof(ShipBulletGroup));
+  new (shipBulletGroup) ShipBulletGroup(engine);
+  rockGroup = new RockGroup(engine);
+  enemyGroup = new EnemyGroup(engine);
+  enemyBulletGroup = (EnemyBulletGroup*)::operator new(sizeof(EnemyBulletGroup));
+  new (enemyBulletGroup) EnemyBulletGroup(engine);
+  playingField = new PlayingField(engine);
+
   ImGuiOptionsMenu* menu=new ImGuiOptionsMenu(engine,
                                              playingFieldOptionsMenuHost());
   engine.installMenuInputBridge();
