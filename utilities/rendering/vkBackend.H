@@ -51,9 +51,55 @@
 //   - swapchainDirty_ (task-38 framebuffer-size callback) is consumed
 //     HERE, at the top of beginFrame, via the same re-bootstrap path —
 //     resize needs no separate mechanism (S2/D17.4a).
-//   - endFrame submits a MINIMAL CLEAR-ONLY command buffer (layout
-//     barriers + vkCmdClearColorImage — no render pass, no pipeline;
-//     those are tasks 40/41) so the cycle is real end-to-end.
+//   - endFrame submits the frame's command buffer: a REAL RENDER-PASS
+//     cycle since task 40 — vkCmdBeginRenderPass (load op CLEAR with
+//     black = the background-GC equivalent, R4-M1) -> dynamic scissor ->
+//     [task 41 pipeline slot] -> vkCmdEndRenderPass. The render pass's
+//     implicit layout transitions (UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
+//     -> PRESENT_SRC_KHR via finalLayout) replaced task 39's manual
+//     barriers + vkCmdClearColorImage entirely.
+//
+// Task-40 render pass + framebuffers (this revision): ONE render pass
+// (single color attachment = the swapchain image view; format follows
+// swapchainFormat_; loadOp CLEAR / storeOp STORE; initialLayout UNDEFINED,
+// finalLayout PRESENT_SRC_KHR; one external dependency feeding subpass 0's
+// COLOR_ATTACHMENT_OUTPUT) + ONE FRAMEBUFFER PER SWAPCHAIN IMAGE. Both are
+// created at createSwapchain_'s commit point — so the task-39 re-bootstrap
+// path recreates them automatically: OLD FRAMEBUFFERS ARE DESTROYED BEFORE
+// THE OLD VIEWS/SWAPCHAIN RETIRE (framebuffers reference views), and the
+// existing drainPresentEngine_ + vkDeviceWaitIdle inside re-bootstrap covers
+// in-flight safety (no framebuffer may be in use by a pending submission
+// when destroyed). The render pass itself survives re-bootstraps unless the
+// swapchain format changes (destroy+recreate then).
+//
+// TASK-40 SCISSOR CONTRACT (D7/D8, v6.1): setScissorRect(const int* xywh)
+// takes LOGICAL CLIENT coords {x,y,w,h}; the backend applies the present
+// transform on the way to VkRect2D (identity today — the letterbox math is
+// D17.4a and lands later); nullptr = full extent (the HUD pass is
+// un-scissored, the D8 split). The rect rides ONE dynamic vkCmdSetScissor
+// recorded per frame between BeginRenderPass and EndRenderPass. beginFrame
+// does NOT own the scissor — callers set it per pass exactly like GL/X11.
+//
+// DRIVER FINDING (task 40, RTX 5090 + KHRONOS validation, see qa/vk-soak.log
+// RUN T40-1): vkCmdClearAttachments is NOT clipped by the dynamic scissor
+// here — the current spec states the command "is not affected by the bound
+// pipeline state" and its page never mentions scissor; without a bound
+// VK_DYNAMIC_STATE_SCISSOR pipeline the set scissor has NO consumer, and
+// NVIDIA washed the full framebuffer. Scissor CLIPPING therefore becomes
+// pixel-provable from task 41 (pipelines bind + draw inside this pass,
+// consuming the latched vkCmdSetScissor). Until then the vkpass.C proof
+// drives its clip region through the SAME setScissorRect ->
+// applyPresentTransformToScissor_ chain via VkClearRect (spec-guaranteed),
+// which pins the coordinate mapping end-to-end.
+//
+// QA HOOKS (task-40 scissor proof only; NULL by default, zero cost):
+//   qaInRenderPassHook(cb,imageIndex,image,ud)    runs INSIDE the render
+//                    pass, after the scissor is applied;
+//   qaAfterRenderPassHook(cb,imageIndex,image,ud) runs AFTER
+//                    vkCmdEndRenderPass (image back in PRESENT_SRC_KHR).
+// test/vk/vkpass.C uses them to inject vkCmdClearAttachments (scissor-
+// clipped) and a PRESENT_SRC->TRANSFER_SRC->copy->PRESENT_SRC readback into
+// otherwise-normal frames.
 // FRAMES-IN-FLIGHT CHOICE: 2. The swapchain itself stays triple-buffered
 // (3 images, task 38); 2 frames-in-flight is the classic CPU/GPU overlap
 // point — the CPU never laps the GPU by more than one frame, halving the
@@ -68,7 +114,7 @@
 // acquiredImageIndex_] (per swapchain image — VUID-
 // vkQueueSubmit-pSignalSemaphores-00067), fence=inFlightFences_[
 // currentFrame_]. Render-pass/framebuffer creation slots in around
-// recordClearCommands_.
+// recordFrameCommands_ (task 40 landed it there).
 //
 //   - ONE public init entry point: initInstanceAndDevice(bool
 //     withGlfwExtensions). initWindow(title) calls it with true and returns;
@@ -113,6 +159,8 @@
 //   | GLFWwindow              | VKBackend| pass 2a; dies before the device  |
 //   | VkSurfaceKHR            | VKBackend| pass 2a; after window, b4 device |
 //   | VkSwapchainKHR + views  | VKBackend| pass 2b; FIRST things destroyed  |
+//   | VkRenderPass            | VKBackend| task 40; after framebuffers die  |
+//   | VkFramebuffer per image | VKBackend| task 40; destroyed BEFORE views  |
 //   | VkCommandPool/buffers   | VKBackend| task 39; freed before the device |
 //   | fences/semaphores (x2f) | VKBackend| task 39; freed before the device |
 //
@@ -187,22 +235,31 @@ class VKBackend : public RenderingEngine
         fbWidth_(0),fbHeight_(0),
         canonicalWidth_(0),canonicalHeight_(0),
         commandPool(VK_NULL_HANDLE),
+        renderPass(VK_NULL_HANDLE),
         frameCount_(0),
         rebootstrapCount_(0),
         stallSkipCount_(0),
         presentationSuspended_(false),
         fatalStallShutdown_(false),
+        qaInRenderPassHook(NULL),
+        qaInRenderPassHookUserData(NULL),
+        qaAfterRenderPassHook(NULL),
+        qaAfterRenderPassHookUserData(NULL),
         shutdownDone_(false),
         vkDestroyDebugUtilsMessengerEXT_(NULL),
         canonicalPlayAreaWidth_(0),canonicalPlayAreaHeight_(0),
         canonicalMaxIconHeight_(0),
+        renderPassFormat_(VK_FORMAT_UNDEFINED),
+        scissorActive_(false),
+        scissorRect_{0,0,0,0},
         acquiredImageIndex_(0),
         currentFrame_(0),
         frameAcquired_(false),
         sessionDead_(false),
         swapchainTransferDstSupported_(false),
+        swapchainTransferSrcSupported_(false),
         consecutiveStallCount_(0)
-      {deviceName_[0]='\0';
+       {deviceName_[0]='\0';
        for (int i=0;i<4;++i)
         {fontInfo_[i]=NULL;fontData_[i]=NULL;
          fontDataLen_[i]=0;fontScale_[i]=0.0f;maxAsciiAdvance_[i]=0.0f;
@@ -638,6 +695,9 @@ class VKBackend : public RenderingEngine
         // beyond queue execution), then free device-level objects BEFORE
         // the device.
         drainPresentEngine_();
+        destroySwapchainFramebuffers_();   // task 40: BEFORE views (fbs
+                                           // reference views); render pass
+                                           // dies with them, before swapchain
         for (size_t i=0;i<swapchainImageViews_.size();++i)
           vkDestroyImageView(device,swapchainImageViews_[i],NULL);
         swapchainImageViews_.clear();
@@ -701,7 +761,7 @@ class VKBackend : public RenderingEngine
     //   -> consume swapchainDirty_ via re-bootstrap -> degenerate-extent
     //   guard -> fence wait (recovered-stall path) -> FINITE acquire
     //   (kAcquireTimeoutMs; B4) with OUT_OF_DATE/SUBOPTIMAL handling ->
-    //   record the clear-only command buffer for this in-flight slot.
+    //   record the frame's render-pass cycle for this in-flight slot.
     //   endFrame: fence-armed submit + present, then advance the slot.
     //   Skipped frames (stall/suspend/re-bootstrap) make endFrame a no-op
     //   via frameAcquired_.
@@ -773,7 +833,7 @@ class VKBackend : public RenderingEngine
          {handleFatalStall_("acquire failed");
           return;
          }
-        if (!recordClearCommands_(acquiredImageIndex_))
+        if (!recordFrameCommands_(acquiredImageIndex_))
           return;
         frameAcquired_=true;
       }
@@ -842,7 +902,19 @@ class VKBackend : public RenderingEngine
       }
 
     virtual void setScissorRect(const int* xywh) override
-      {(void)xywh;   // TODO(task 42): dynamic scissor state
+      {// D7/D8 (v6.1): LOGICAL CLIENT {x,y,w,h} in; the present transform is
+       // applied at record time (applyPresentTransformToScissor_, identity
+       // today). nullptr = full extent — the HUD pass is un-scissored.
+       // beginFrame does NOT own the scissor; callers set it per pass.
+       if (!xywh)
+        {scissorActive_=false;
+         return;
+        }
+       scissorRect_[0]=xywh[0];
+       scissorRect_[1]=xywh[1];
+       scissorRect_[2]=xywh[2];
+       scissorRect_[3]=xywh[3];
+       scissorActive_=true;
       }
 
     virtual RenderTargetId createRenderTarget(int w,int h) override
@@ -1038,11 +1110,20 @@ class VKBackend : public RenderingEngine
                                          // requested client size)
     VkCommandPool commandPool;           // task 39: TRANSIENT+RESET_COMMAND_
                                          // BUFFER, graphicsFamily
+    VkRenderPass renderPass;             // task 40: ONE pass, color attachment
+                                         // = swapchain image, finalLayout
+                                         // PRESENT_SRC_KHR, loadOp CLEAR black
     unsigned frameCount_;                // completed submit+present cycles
     unsigned rebootstrapCount_;          // swapchain rebuilds performed
     unsigned stallSkipCount_;            // recovered stalls (skipped frames)
     bool presentationSuspended_;         // degenerate extent (minimized)
     bool fatalStallShutdown_;            // stall-limit shutdown has run
+
+    // Task-40 QA hooks (see header comment; NULL = absent, zero cost).
+    void (*qaInRenderPassHook)(VkCommandBuffer,uint32_t,VkImage,void*);
+    void* qaInRenderPassHookUserData;
+    void (*qaAfterRenderPassHook)(VkCommandBuffer,uint32_t,VkImage,void*);
+    void* qaAfterRenderPassHookUserData;
 
    private:
     bool shutdownDone_;
@@ -1056,6 +1137,10 @@ class VKBackend : public RenderingEngine
     float maxAsciiAdvance_[4];
     std::vector<VkImage> swapchainImages_;
     std::vector<VkImageView> swapchainImageViews_;
+    std::vector<VkFramebuffer> swapchainFramebuffers_;   // task 40, per image
+    VkFormat renderPassFormat_;          // format renderPass was built for
+    bool scissorActive_;                 // setScissorRect state (D7/D8)
+    int scissorRect_[4];                 // LOGICAL CLIENT {x,y,w,h}
 
     // Task-39 frame-sync objects (device-level; independent of the
     // swapchain — re-bootstrap never recreates them). EXCEPTION:
@@ -1074,6 +1159,8 @@ class VKBackend : public RenderingEngine
     bool frameAcquired_;
     bool sessionDead_;
     bool swapchainTransferDstSupported_;
+    bool swapchainTransferSrcSupported_;   // task-40 QA readback + task-42
+
     int consecutiveStallCount_;
 
     static VKBackend* s_instance;        // callback routing (single instance)
@@ -1219,8 +1306,12 @@ class VKBackend : public RenderingEngine
     //   task 39: oldSwapchain-chained rebuilds pass the live swapchain in;
     //           the new one is built fully (images + views) BEFORE the old
     //           is retired/destroyed at the commit point. TRANSFER_DST
-    //           usage is added when the surface supports it so the task-39
-    //           clear-only command buffer can vkCmdClearColorImage.
+    //           usage is kept when the surface supports it (task 42's
+    //           offscreen blits are the remaining consumer; the task-40
+    //           render pass no longer needs it).
+    //   task 40: the commit point destroys old framebuffers BEFORE old
+    //           views, then ensureRenderPassAndFramebuffers_ builds the
+    //           render pass (format-change-aware) + per-image framebuffers.
     // ------------------------------------------------------------------
     bool createSwapchain_(VkSwapchainKHR oldSwapchain)
       {VkSurfaceCapabilitiesKHR caps{};
@@ -1234,6 +1325,11 @@ class VKBackend : public RenderingEngine
         }
        swapchainTransferDstSupported_=
          (caps.supportedUsageFlags&VK_IMAGE_USAGE_TRANSFER_DST_BIT)!=0;
+       // TRANSFER_SRC: consumed by the task-40 QA readback (vkpass.C copies
+       // a presented frame to a host-visible buffer) and later by task-42
+       // offscreen blits. Added only when the surface supports it.
+       swapchainTransferSrcSupported_=
+         (caps.supportedUsageFlags&VK_IMAGE_USAGE_TRANSFER_SRC_BIT)!=0;
 
        uint32_t nfmt=0;
        if (!vkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice,
@@ -1319,9 +1415,11 @@ class VKBackend : public RenderingEngine
        sci.imageColorSpace=chosen.colorSpace;
        sci.imageExtent=ext;
        sci.imageArrayLayers=1;
-       sci.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                      |(swapchainTransferDstSupported_
-                         ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0);
+        sci.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                       |(swapchainTransferDstSupported_
+                          ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0)
+                       |(swapchainTransferSrcSupported_
+                          ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0);
        uint32_t families[2]={graphicsFamily,presentFamily};
        if (presentFamily!=graphicsFamily)
         {sci.imageSharingMode=VK_SHARING_MODE_CONCURRENT;
@@ -1380,10 +1478,12 @@ class VKBackend : public RenderingEngine
          newViews.push_back(view);
         }
 
-       // Commit point: everything for the new swapchain exists — retire the
-       // old one (the implementation defers its actual destruction until
-       // the presentation engine is done with retired images) and publish.
-       for (size_t i=0;i<swapchainImageViews_.size();++i)
+        // Commit point: everything for the new swapchain exists — retire the
+        // old one (the implementation defers its actual destruction until
+        // the presentation engine is done with retired images) and publish.
+        // Task 40: framebuffers reference views, so they die FIRST.
+        destroySwapchainFramebuffers_();
+        for (size_t i=0;i<swapchainImageViews_.size();++i)
          vkDestroyImageView(device,swapchainImageViews_[i],NULL);
        swapchainImageViews_.clear();
        swapchainImages_.clear();
@@ -1409,13 +1509,18 @@ class VKBackend : public RenderingEngine
           }
         }
 
-       swapchainImageCount_=nimgs;
-       swapchainFormat_=chosen.format;
-       swapchainColorSpace_=chosen.colorSpace;
-       swapchainExtent_=ext;
-       swapchainDirty_=false;
-       return true;
-      }
+        swapchainImageCount_=nimgs;
+        swapchainFormat_=chosen.format;
+        swapchainColorSpace_=chosen.colorSpace;
+        swapchainExtent_=ext;
+        swapchainDirty_=false;
+        // Task 40: render pass (reused unless the format changed) + one
+        // framebuffer per new view. Living here means BOTH the initial
+        // bootstrap AND every task-39 re-bootstrap recreate them.
+        if (!ensureRenderPassAndFramebuffers_())
+          return false;
+        return true;
+       }
 
     // ------------------------------------------------------------------
     // Task-39 frame sync — object creation/teardown + re-bootstrap.
@@ -1559,12 +1664,119 @@ class VKBackend : public RenderingEngine
        return true;
       }
 
-    bool recordClearCommands_(uint32_t imageIndex)
-      {// Minimal CLEAR-ONLY submit (sanctioned for task 39; render
-       // passes/framebuffers/pipelines are tasks 40-41): barrier to
-       // TRANSFER_DST, vkCmdClearColorImage(black), barrier to PRESENT_SRC.
-       // Without TRANSFER_DST usage this degrades to the single
-       // UNDEFINED->PRESENT_SRC barrier — still a real submit.
+    // ------------------------------------------------------------------
+    // Task 40: ONE render pass (color attachment = swapchain image,
+    // loadOp CLEAR black = the R4-M1 background-GC equivalent, finalLayout
+    // PRESENT_SRC_KHR) + one framebuffer per swapchain image. The pass
+    // survives re-bootstraps unless the swapchain format changes;
+    // framebuffers are recreated with every swapchain.
+    // ------------------------------------------------------------------
+    bool ensureRenderPassAndFramebuffers_()
+      {if (renderPass==VK_NULL_HANDLE)
+        {if (!createRenderPass_())
+           return false;
+        }
+       else if (renderPassFormat_!=swapchainFormat_)
+        {vkDestroyRenderPass(device,renderPass,NULL);
+         renderPass=VK_NULL_HANDLE;
+         if (!createRenderPass_())
+           return false;
+        }
+       swapchainFramebuffers_.resize(swapchainImageViews_.size(),
+                                     VK_NULL_HANDLE);
+       for (size_t i=0;i<swapchainImageViews_.size();++i)
+        {VkFramebufferCreateInfo fci{};
+         fci.sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+         fci.renderPass=renderPass;
+         fci.attachmentCount=1;
+         fci.pAttachments=&swapchainImageViews_[i];
+         fci.width=swapchainExtent_.width;
+         fci.height=swapchainExtent_.height;
+         fci.layers=1;
+         if (!vkCheck(vkCreateFramebuffer(device,&fci,NULL,
+                        &swapchainFramebuffers_[i]),
+                      "vkCreateFramebuffer"))
+          {destroySwapchainFramebuffers_();
+           return false;
+          }
+        }
+       return true;
+      }
+
+    bool createRenderPass_()
+      {VkAttachmentDescription color{};
+       color.format=swapchainFormat_;
+       color.samples=VK_SAMPLE_COUNT_1_BIT;
+       color.loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR;    // black clear lives HERE
+       color.storeOp=VK_ATTACHMENT_STORE_OP_STORE;
+       color.stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+       color.stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+       color.initialLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+       color.finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+       VkAttachmentReference colorRef{};
+       colorRef.attachment=0;
+       colorRef.layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+       VkSubpassDescription subpass{};
+       subpass.pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS;
+       subpass.colorAttachmentCount=1;
+       subpass.pColorAttachments=&colorRef;
+       VkSubpassDependency dep{};
+       dep.srcSubpass=VK_SUBPASS_EXTERNAL;
+       dep.dstSubpass=0;
+       dep.srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+       dep.dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+       dep.srcAccessMask=0;
+       dep.dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+       VkRenderPassCreateInfo rpi{};
+       rpi.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+       rpi.attachmentCount=1;
+       rpi.pAttachments=&color;
+       rpi.subpassCount=1;
+       rpi.pSubpasses=&subpass;
+       rpi.dependencyCount=1;
+       rpi.pDependencies=&dep;
+       if (!vkCheck(vkCreateRenderPass(device,&rpi,NULL,&renderPass),
+                    "vkCreateRenderPass"))
+         return false;
+       renderPassFormat_=swapchainFormat_;
+       return true;
+      }
+
+    void destroySwapchainFramebuffers_()
+      {for (size_t i=0;i<swapchainFramebuffers_.size();++i)
+         if (swapchainFramebuffers_[i]!=VK_NULL_HANDLE)
+           vkDestroyFramebuffer(device,swapchainFramebuffers_[i],NULL);
+       swapchainFramebuffers_.clear();
+       if (renderPass!=VK_NULL_HANDLE&&device!=VK_NULL_HANDLE)
+        {vkDestroyRenderPass(device,renderPass,NULL);
+         renderPass=VK_NULL_HANDLE;
+         renderPassFormat_=VK_FORMAT_UNDEFINED;
+        }
+      }
+
+    // D7/v6.1 seam: logical client rect -> framebuffer-space VkRect2D.
+    // Identity while the present transform is identity (task 38 always
+    // creates extent == window); D17.4a letterbox math lands here later.
+    VkRect2D applyPresentTransformToScissor_() const
+      {if (!scissorActive_)
+        {VkRect2D full{};
+         full.offset.x=0;
+         full.offset.y=0;
+         full.extent=swapchainExtent_;
+         return full;
+        }
+       VkRect2D r{};
+       r.offset.x=scissorRect_[0];
+       r.offset.y=scissorRect_[1];
+       r.extent.width=(uint32_t)scissorRect_[2];
+       r.extent.height=(uint32_t)scissorRect_[3];
+       return r;
+      }
+
+    bool recordFrameCommands_(uint32_t imageIndex)
+      {// The load-op CLEAR performs the black clear; the pass's implicit
+       // layout transitions (UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL ->
+       // PRESENT_SRC_KHR) replace any manual barriers.
        VkCommandBuffer cb=commandBuffers_[currentFrame_];
        if (!vkCheck(vkResetCommandBuffer(cb,0),"vkResetCommandBuffer"))
          return false;
@@ -1574,44 +1786,37 @@ class VKBackend : public RenderingEngine
        if (!vkCheck(vkBeginCommandBuffer(cb,&bi),
                     "vkBeginCommandBuffer"))
          return false;
-       VkImageMemoryBarrier bar{};
-       bar.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-       bar.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
-       bar.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
-       bar.image=swapchainImages_[imageIndex];
-       bar.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
-       bar.subresourceRange.levelCount=1;
-       bar.subresourceRange.layerCount=1;
-       if (swapchainTransferDstSupported_)
-        {bar.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
-         bar.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-         bar.srcAccessMask=0;
-         bar.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
-         vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                              VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,
-                              0,NULL,1,&bar);
-         VkClearColorValue black{};
-         black.float32[3]=1.0f;
-         vkCmdClearColorImage(cb,bar.image,
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&black,
-                              1,&bar.subresourceRange);
-         bar.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-         bar.newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-         bar.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
-         bar.dstAccessMask=0;
-         vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TRANSFER_BIT,
-                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,
-                              NULL,0,NULL,1,&bar);
-        }
-       else
-        {bar.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
-         bar.newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-         bar.srcAccessMask=0;
-         bar.dstAccessMask=0;
-         vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,
-                              NULL,0,NULL,1,&bar);
-        }
+       VkClearValue clearBlack{};
+       clearBlack.color.float32[0]=0.0f;
+       clearBlack.color.float32[1]=0.0f;
+       clearBlack.color.float32[2]=0.0f;
+       clearBlack.color.float32[3]=1.0f;
+       VkRenderPassBeginInfo rp{};
+       rp.sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+       rp.renderPass=renderPass;
+       rp.framebuffer=swapchainFramebuffers_[imageIndex];
+       rp.renderArea.offset.x=0;
+       rp.renderArea.offset.y=0;
+       rp.renderArea.extent=swapchainExtent_;
+       rp.clearValueCount=1;
+       rp.pClearValues=&clearBlack;
+       vkCmdBeginRenderPass(cb,&rp,VK_SUBPASS_CONTENTS_INLINE);
+       // Dynamic scissor (task 40): full extent unless setScissorRect
+       // overrode it. Dynamic state needs no pipeline; it latches here for
+       // task 41's draws inside this same pass.
+       VkRect2D sci=applyPresentTransformToScissor_();
+       vkCmdSetScissor(cb,0,1,&sci);
+       if (qaInRenderPassHook)
+         qaInRenderPassHook(cb,imageIndex,
+                            swapchainImages_[imageIndex],
+                            qaInRenderPassHookUserData);
+       // [task 41 PIPELINE SLOT] graphics pipelines bind here:
+       // vkCmdBindPipeline + draw commands between Begin/EndRenderPass.
+       vkCmdEndRenderPass(cb);
+       if (qaAfterRenderPassHook)
+         qaAfterRenderPassHook(cb,imageIndex,
+                               swapchainImages_[imageIndex],
+                               qaAfterRenderPassHookUserData);
        return vkCheck(vkEndCommandBuffer(cb),"vkEndCommandBuffer");
       }
 

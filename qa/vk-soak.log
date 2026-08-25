@@ -58,3 +58,78 @@ vkprobe: PASS-0 REPORT
   validation ERROR count (VUID-/UNASSIGNED only): 0
   loader ERROR noise (not counted): 2
 vkprobe: PASS
+
+## RUN T40-1: vkpass NEGATIVE CONTROL (pre-fix): vkCmdClearAttachments full-rect while scissor active.
+# Finding: the clear was NOT clipped by the dynamic scissor (no pipeline bound => no consumer of
+# vkCmdSetScissor state; refpage: "not affected by the bound pipeline state", scissor absent from its
+# spec page). Outside pixels read back non-black (washed white), inside white. Drove the fixes:
+# VkClearRect-region proof + TRANSFER_SRC usage on swapchain images. See vkBackend.H DRIVER FINDING.
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+[vk-validation-error:VUID-VkImageMemoryBarrier-oldLayout-01212] vkCmdPipelineBarrier(): pImageMemoryBarriers[0].newLayout (VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) is not compatible with VkImage 0x1c000000001c usage flags VK_IMAGE_USAGE_2_TRANSFER_DST_BIT_KHR|VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR.
+The Vulkan spec states: If layouts are not ignored, oldLayout or newLayout is VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL then image must have been created with the VK_IMAGE_USAGE_TRANSFER_SRC_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/synchronization.html#VUID-VkImageMemoryBarrier-oldLayout-01212)
+[vk-validation-error:VUID-vkCmdCopyImageToBuffer-srcImage-00186] vkCmdCopyImageToBuffer(): srcImage (VkImage 0x1c000000001c) was created with VK_IMAGE_USAGE_2_TRANSFER_DST_BIT_KHR|VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR but requires VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR.
+The Vulkan spec states: srcImage must have been created with the VK_IMAGE_USAGE_TRANSFER_SRC_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/copies.html#VUID-vkCmdCopyImageToBuffer-srcImage-00186)
+[vk-validation-error:VUID-VkImageMemoryBarrier-oldLayout-01212] vkCmdPipelineBarrier(): pImageMemoryBarriers[0].oldLayout (VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) is not compatible with VkImage 0x1c000000001c usage flags VK_IMAGE_USAGE_2_TRANSFER_DST_BIT_KHR|VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR.
+The Vulkan spec states: If layouts are not ignored, oldLayout or newLayout is VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL then image must have been created with the VK_IMAGE_USAGE_TRANSFER_SRC_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/synchronization.html#VUID-VkImageMemoryBarrier-oldLayout-01212)
+vkpass: FAIL: B1 mismatches: 0 inside (first -1,-1), 506880 outside (first 0,0)
+[vk-validation-error:VUID-VkImageMemoryBarrier-oldLayout-01212] vkCmdPipelineBarrier(): pImageMemoryBarriers[0].newLayout (VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) is not compatible with VkImage 0x1a000000001a usage flags VK_IMAGE_USAGE_2_TRANSFER_DST_BIT_KHR|VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR.
+The Vulkan spec states: If layouts are not ignored, oldLayout or newLayout is VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL then image must have been created with the VK_IMAGE_USAGE_TRANSFER_SRC_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/synchronization.html#VUID-VkImageMemoryBarrier-oldLayout-01212)
+[vk-validation-error:VUID-vkCmdCopyImageToBuffer-srcImage-00186] vkCmdCopyImageToBuffer(): srcImage (VkImage 0x1a000000001a) was created with VK_IMAGE_USAGE_2_TRANSFER_DST_BIT_KHR|VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR but requires VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR.
+The Vulkan spec states: srcImage must have been created with the VK_IMAGE_USAGE_TRANSFER_SRC_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/copies.html#VUID-vkCmdCopyImageToBuffer-srcImage-00186)
+[vk-validation-error:VUID-VkImageMemoryBarrier-oldLayout-01212] vkCmdPipelineBarrier(): pImageMemoryBarriers[0].oldLayout (VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) is not compatible with VkImage 0x1a000000001a usage flags VK_IMAGE_USAGE_2_TRANSFER_DST_BIT_KHR|VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR.
+The Vulkan spec states: If layouts are not ignored, oldLayout or newLayout is VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL then image must have been created with the VK_IMAGE_USAGE_TRANSFER_SRC_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/synchronization.html#VUID-VkImageMemoryBarrier-oldLayout-01212)
+vkpass: FAIL: 6 validation ERROR(s)
+vkpass: swapchain 688x702, 3 image(s), format 44
+vkpass: render pass created: yes
+vkpass: phase A: 800/800 frames in 4.86s (164.5 fps), re-bootstraps 0->1, stalls 0
+vkpass: re-bootstrap ENGAGED x1 under validation; framebuffers recreated
+vkpass: B1 scissored rect {100,80,320,256}: inside 81920/81920 white, outside 0/506880 black
+vkpass: B2 nullptr scissor: 588800/588800 pixels white
+vkpass: B2 PASS — full-extent behavior restored
+vkpass: validation errors (VUID-/UNASSIGNED): 6 (layer LIVE)
+vkpass: FAIL: 2 assertion(s)
+
+## RUN T40-2: vkpass FINAL — render pass + framebuffers + scissor proof (validation LIVE)
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vkpass: swapchain 688x702, 3 image(s), format 44
+vkpass: render pass created: yes
+vkpass: phase A: 800/800 frames in 5.01s (159.8 fps), re-bootstraps 0->1, stalls 0
+vkpass: re-bootstrap ENGAGED x1 under validation; framebuffers recreated
+vkpass: B1 scissored rect {100,80,320,256}: inside 81920/81920 white, outside 506880/506880 black
+vkpass: B1 PASS — scissor CLIPPED the clear (0 px outside, 81920 px inside all white)
+vkpass: B2 nullptr scissor: 588800/588800 pixels white
+vkpass: B2 PASS — full-extent behavior restored
+vkpass: validation errors (VUID-/UNASSIGNED): 0 (layer LIVE)
+vkpass: PASS
+
+## RUN T40-3: vksoak regression at task-39 default scale (3600+600) through the NEW render-pass cycle
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vksoak: config: frames-in-flight=2 acquire-timeout=100ms fence-timeout=125ms stall-limit=100
+vksoak: plan: 3600 frames + resize at 1440 + 600 post-resize
+vksoak: SOAK REPORT
+  frames completed (submit+present): 4200 / 4200
+  wall time: 28.29s -> 148.5 frames/s
+  re-bootstraps: 1 (was 0 before the resize)
+  recovered stalls skipped: 0
+  presentation suspended: no
+  validation layer enabled: yes
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+vksoak: re-bootstrap ENGAGED (1 rebuild(s)); cycle continued for 4200 frame(s) after it
+  final extent: 920x640 (framebuffer 920x640)
+vksoak: PASS
+
+## RUN T40-4: vksoak short regression 600+200 frames (the brief's ~600-frame ask)
+vkBackend: swapchain re-bootstrapped at 920x640 (count 1)
+vksoak: config: frames-in-flight=2 acquire-timeout=100ms fence-timeout=125ms stall-limit=100
+vksoak: plan: 600 frames + resize at 240 + 200 post-resize
+vksoak: SOAK REPORT
+  frames completed (submit+present): 800 / 800
+  wall time: 4.91s -> 163.0 frames/s
+  re-bootstraps: 1 (was 0 before the resize)
+  recovered stalls skipped: 0
+  presentation suspended: no
+  validation layer enabled: yes
+  validation ERROR count (VUID-/UNASSIGNED only): 0
+vksoak: re-bootstrap ENGAGED (1 rebuild(s)); cycle continued for 800 frame(s) after it
+  final extent: 920x640 (framebuffer 920x640)
+vksoak: PASS

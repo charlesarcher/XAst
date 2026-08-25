@@ -244,6 +244,16 @@ obj/VK/vksoak: test/vk/vksoak.C utilities/rendering/vkBackend.H utilities/render
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
 
+# Task 40: render-pass/framebuffer + scissor-proof driver (test/vk/vkpass.C
+# -> 600-frame soak + QA-hook readback proof of the dynamic scissor). Same
+# run recipe as vksoak.
+.PHONY: vkpass
+vkpass: obj/VK/vkpass
+
+obj/VK/vkpass: test/vk/vkpass.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+	$(VK_LOADER_GATE)
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 
