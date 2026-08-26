@@ -5,7 +5,6 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #endif
-#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
@@ -29,7 +28,7 @@ class Enemy: public MovableObject
  {friend class EnemyGroup;
   public:
 
-    Enemy(const Vector2d* const vectors, const int numVecs, XColor& color,
+    Enemy(const Vector2d* const vectors, const int numVecs, const RotColor& color,
           const unsigned char* const decor, const int decorWidth, const int decorHeight,
           const int score);
 
@@ -71,7 +70,7 @@ class ENEMY: public Enemy
 
     static int score;
 
-    static XColor color;
+    static RotColor color;
 
   private:
     static const int shiftRate,
@@ -94,7 +93,7 @@ class enemy: public Enemy
 
     static int score;
 
-    static XColor color;
+    static RotColor color;
 
   private:
     static const Vector2d vectors[8];
@@ -170,10 +169,10 @@ inline void Enemy::GLEnsureTexture()
 #include"enemyBulletGroup.H"
 #include"../../gamePlay/playingField.H"
 
-inline Enemy::Enemy(const Vector2d* const vectors, const int numVecs, XColor& color,
+inline Enemy::Enemy(const Vector2d* const vectors, const int numVecs, const RotColor& color,
                     const unsigned char* const decor, const int decorWidth, const int decorHeight,
                     const int s):
-                             graphic(stage->display,stage->window,color,
+                             graphic(stage->engine,color,
                                      vectors,numVecs,
                                      decor,decorWidth,decorHeight),
                              rotator(&graphic,0,PlayingField::maxLinearVelocity),
@@ -228,11 +227,10 @@ inline const Vector2d ENEMY::vectors[10]={Vector2d(2,-5),
                                    Vector2d(-5,-2),
                                    Vector2d(-2,-5)};
 
-inline XColor ENEMY::color={0,
-                     39064,//152
-                     64507,//251
-                     39064,//152
-                     DoRed|DoGreen|DoBlue};
+inline RotColor ENEMY::color={39064,//152
+                              64507,//251
+                              39064//152
+                              };
 
 inline ENEMY::ENEMY(): Enemy(vectors,sizeof(vectors)/sizeof(Vector2d),color,
                              ENEMYDecor_bits,ENEMYDecor_width,ENEMYDecor_height,
@@ -300,11 +298,9 @@ inline const Vector2d enemy::vectors[8]={Vector2d(1,-3),
                                   Vector2d(-3,-1),
                                   Vector2d(-1,-3)};
 
-inline XColor enemy::color={0,
-                     0,
-                     65535,//255
-                     0,
-                     DoRed|DoGreen|DoBlue};
+inline RotColor enemy::color={0,
+                              65535,//255
+                              0};
 
 inline enemy::enemy(): Enemy(vectors,sizeof(vectors)/sizeof(Vector2d),color,
                              enemyDecor_bits,enemyDecor_width,enemyDecor_height,

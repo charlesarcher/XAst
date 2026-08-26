@@ -123,6 +123,8 @@
 #include"../../bitmaps/starDestroyerIcon.xbm"
 
 #ifdef X11_BACKEND
+
+#ifdef X11_BACKEND
 // D17.4(b): the RENDER extension is bound at RUN TIME (dlopen/dlsym) — no new
 // link-time dependency, and a missing library degrades cleanly to the core-
 // X11 fallback path. Signatures mirror Xrender.h exactly.
@@ -858,8 +860,11 @@ class X11Backend : public RenderingEngine
      {}
 
     // ------------------------------------------------------------------
-    // Transition accessors (main() populates Stage's non-owning members from
-    // the concrete backend until task 13's DI ctors / task 47 deletion).
+    // Transition accessors. Survivors (task 47): fonts/icon/state/atoms are
+    // load-bearing — options.H (the D9 X11-consumer island) and playingField's
+    // guarded X11 loop read them now that Stage's non-owning alias members
+    // are gone. The GC accessors and the windowWidth/windowHeight pair died
+    // with their last readers at 47.
     // ------------------------------------------------------------------
     inline Pixmap icon() const {return iconPixmap;}
     inline XFontStruct* titleFont() const {return fonts_[EngineFont_Title];}
@@ -867,21 +872,13 @@ class X11Backend : public RenderingEngine
     inline XFontStruct* hiScoreFont() const {return fonts_[EngineFont_HiScore];}
     inline XFontStruct* scoreFont() const {return fonts_[EngineFont_Score];}
     inline XFontStruct* errorFont() const {return fonts_[EngineFont_Error];}
-    inline GC titleGC() const {return titleGC_;}
-    inline GC hiScoreGC() const {return hiScoreGC_;}
-    inline GC scoreGC() const {return scoreGC_;}
-    inline GC defaultGC() const {return defaultGC_;}
-    // Task-15 accessors: canvas + gxor GC feed PlayingField's non-owning
-    // alias members (pixmap/gc survive until task 22 per D-C C3); the atom
-    // values are captured in pass 2 and read by PlayingField's ctor aliases
-    // (options.H readers compile unchanged until task 47).
+    // Task-15 accessors: canvas feeds PlayingField's render-target brackets
+    // (the GPU twin returns 0, where beginRenderTo is a documented no-op);
+    // atoms are captured in pass 2, consumed by options.H's modal pump.
     inline Pixmap canvas() const {return canvasPixmap_;}
-    inline GC gxorGC() const {return gxorGC_;}
     inline Atom wmProtocolsAtom() const {return wmProtocolsAtom_;}
     inline Atom wmDeleteWindowAtom() const {return wmDeleteWindowAtom_;}
     inline int autoRepeatState() const {return autoRepeatState_;}
-    inline int windowWidth() const {return windowWidth_;}
-    inline int windowHeight() const {return windowHeight_;}
     // Task-14 frame-present plumbing (transition alias class — DELETED at
     // task 47): Stage publishes the two present regions it computes in its
     // constructor plus the live yard texture (the yard re-creates itself on
@@ -934,6 +931,22 @@ class X11Backend : public RenderingEngine
     // here instead of allocating directly.
     inline unsigned long allocateColor(float r,float g,float b)
      {return pixelFor(r,g,b);}
+    // Colored stamp (task 47): engine-level closure of the last raw
+    // colored-stamp sites (shipYard ctor/AlterIcon). Same allocate-or-fallback
+    // arithmetic as allocateColor for both colors, then one colored-stamp
+    // request parented to the window at DefaultDepth — the yard-parented
+    // originals resolved the identical depth, and a pixmap's drawable argument
+    // contributes nothing else, so the created resource is identical.
+    virtual TextureId createColoredStamp(const unsigned char* bits,int w,int h,
+                                         float fgR,float fgG,float fgB,
+                                         float bgR,float bgG,float bgB) override
+     {if (!display) return 0;
+      unsigned long fg=pixelFor(fgR,fgG,fgB),
+                    bg=pixelFor(bgR,bgG,bgB);
+      Pixmap p=XCreatePixmapFromBitmapData(display,window,(char*)bits,w,h,
+                                           fg,bg,
+                                           DefaultDepth(display,screen));
+      return (TextureId)p;}
     // Depth-1 bitmap creation for clip-mask consumers (D6): the generic texture
     // path targets window depth; GC clip masks require depth 1.
     inline TextureId createBitmapMask(const uint8_t* bits,int w,int h)
@@ -1574,5 +1587,21 @@ inline void X11Backend::drawTriangles(const float* verts,int count,
     XDestroyImage(src);
   XDestroyImage(dst);
  }
+
+#else
+// Guards-closed twin (task 47). Domain code calls four X11Backend transition
+// helpers WITHOUT preprocessor guards (Stage's present publishing, the canvas
+// render-target brackets); this mirror keeps those call sites legal on the
+// GPU legs. Every entry is provably inert there: canvas() returns 0 and
+// beginRenderTo(0) is a documented no-op on GL/VK, and the frame-publish trio
+// has no GPU consumer (GL/VK present through their own endFrame).
+class X11Backend : public RenderingEngine
+ {public:
+    inline TextureId canvas() const {return 0;}
+    inline void setFrameGeometry(int,int,int,int,int,int) {}
+    inline void setFrameYardTexture(TextureId) {}
+    inline void requestFieldPresent() {}
+ };
+#endif
 
 #endif

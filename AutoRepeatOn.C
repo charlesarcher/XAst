@@ -3,7 +3,7 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #endif
-#include"utilities/rendering/x11types.H"
+#include<X11/Xlib.h>
 using namespace std;
 int main ()
  {Display* display;

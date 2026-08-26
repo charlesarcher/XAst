@@ -1,0 +1,95 @@
+===================================================================
+qa/f1-final.txt — F1 TERMINAL AUDIT (plan row 47)
+Base tree: 6e7963cb0d709c0ee9eba559452e2aca1b964e01 + uncommitted row-47 work; 2026-08-26T01:29:08Z
+===================================================================
+
+## Gate 1a — the plan's EXACT command (verbatim, plan lines 400-402)
+raw hits: 48 lines — ALL inside test/ (QA infrastructure,
+outside the census denominator per qa/phase1-evidence.md; zero in gamePlay/, objects/,
+utilities/frames, utilities/rendering non-backend, XAsteroids.C):
+         25 test/harness
+          9 test/numeric
+          7 test/vk
+          7 test/composite
+
+## Gate 1b — PRODUCT-TREE domain sweep (THE domain=0 assertion)
+DOMAIN WHITELIST HITS: 0   <== EXPECT 0 (TERMINAL STATE)
+
+## Gate 2 — D14 preprocess with the macro UNDEFINED (plan lines 405-406)
+rotatorDisplayData.C: 0  (expect 0)
+compositePixmap.C: 0  (expect 0)
+
+## Exception-zone census (whitelist symbol hits; pinned totals)
+  rotatorDisplayData.C      146   (pinned 146)
+  compositePixmap.C         11   (pinned 11)
+  options.H                 47   (pinned 47)
+  AutoRepeatOn.C            3   (pinned 3)
+  x11Backend.H total       128   (zone (a): backend implementation;
+                             its event-island region contributes the census 22)
+  EXCEPTION TOTAL (146+11+47+3+22 island) = 229   <== EXPECT 229
+  GRAND CENSUS: 229 exception + 205 engine-migrated = 434 (intact; 0 load-bearing calls deleted)
+
+## Shim deletion receipts
+  utilities/rendering/x11types.H present: NO — DELETED
+  'x11types' references outside .git/.omo/obj/this-file: 0
+
+## Deleted-member reader migrations (each traced before cut)
+  Stage display/window/icon/buttonInfo/errorInfo/titleInfo/hiScoreInfo/scoreInfo/autoRepeatState:
+    -> options.H island reads backend accessors + nativeHandle() seam (D9);
+       playingField guarded regions read backend.hiScoreFont(); QA flush uses nativeHandle();
+       D14 pipeline ctors take RenderingEngine& and source handles via nativeHandle().
+  Stage windowWidth/windowHeight: GPU DrawHudChrome recomputes via WindowSizeFormula
+    with the Stage ctor's exact inputs (identical values).
+  Stage statics windowBg/shipYardBg/buttonFg/buttonBg: values moved to options.H
+    (46260 components / lazy allocateColor(28527-gray)); buttonFg/buttonBg had ZERO readers.
+  playingField gc/pixmap/WM_PROTOCOLS/WM_DELETE_WINDOW aliases: deleted; brackets use
+    backend canvas() (GPU twin returns 0 = documented beginRenderTo no-op); options.H pump
+    reads backend atom accessors.
+  explosionGraphic gc[5]: vestigial zero-filled alias, zero readers since T22 — deleted.
+    clipMask[3] KEPT (load-bearing: MaskId + dtor deleteTexture x3, both legs).
+  shipYard Display* member + glUploadColoredStamp free function: absorbed by unified bodies.
+  rotator GetMaskGCAtTime: unconsumed since W6-hotfix-followup — deleted.
+  Backend accessors RETIRED: titleGC/hiScoreGC/scoreGC/defaultGC/gxorGC/windowWidth/
+    windowHeight (last readers died). KEPT (load-bearing): icon/titleFont/buttonFont/
+    hiScoreFont/scoreFont/errorFont/autoRepeatState/canvas/atom pair/allocateColor/
+    createBitmapMask/textFirstCharLbearing/frameClockSync/takeRefreshRequest/takeCloseRequest/
+    requestRaise/setFrameGeometry/setFrameYardTexture/requestFieldPresent/nativeHandle.
+
+## Stopped-site closures (byte-identity arguments on record in-file)
+  shipYard.H x5 (:129/:140/:146/:233/:245 pre-edit): unified macro-free bodies via the new
+    engine virtual createColoredStamp — X11 override issues allocate-or-fallback for both
+    colors (pixelFor == the old raw colormap pattern, T17 round-trip proof) then ONE
+    colored-stamp request parented to window at DefaultDepth (the yard-parented originals
+    resolved the identical depth; a pixmap drawable arg contributes only depth).
+    GL/VK: default impl = the former glUploadColoredStamp decode verbatim.
+  shipGroup.H Ship::Ship raw colormap alloc: backend allocateColor on the same component
+    triple (same colormap request, same pixel for options.H icon foregrounds).
+
+## #ifdef X11_BACKEND inventory outside the 5 exception files (post-cleanup)
+    gamePlay/options/button.H
+    gamePlay/options/options.H
+    gamePlay/playingField.H
+    objects/bullet.H
+    objects/enemies/enemyBulletGroup.H
+    objects/enemies/enemyGroup.H
+    objects/explosions/explosionGraphic.H
+    objects/explosions/explosion.H
+    objects/glSprites.H
+    objects/movableObject.H
+    objects/rocks/rockGroup.H
+    objects/ships/shipBulletGroup.H
+    objects/ships/shipGroup.H
+    test/numeric/angles.C
+    utilities/frames/frameList.H
+    utilities/pixmaps/composite/compositePixmap.C
+    utilities/pixmaps/composite/compositePixmap.H
+    utilities/pixmaps/rotated/rotatorDisplayData.C
+    utilities/pixmaps/rotated/rotatorDisplayData.H
+    utilities/pixmaps/rotated/rotator.H
+    utilities/rendering/x11Backend.H
+    XAsteroids.C
+  Classification: XAsteroids.C main branches = DI structure (dispatch-sanctioned);
+  group headers / playingField RunGame+PlayTheGame flavors / GenHelpScreen legs /
+  glSprites+composite #ifndef halves = per-backend PIPELINE selection (load-bearing both
+  legs, not transitional); stage.H and shipYard.H reached ZERO guards; every TRANSITIONAL
+  guard (task-12 population, task-13 PlayTheGame remnants, static_cast wrappers) is gone.

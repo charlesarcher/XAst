@@ -287,7 +287,7 @@ class GLBackend : public RenderingEngine
       glBindTexture(GL_TEXTURE_2D,t);
       glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,
                    nullptr);
-      // Task-36 Defect B: pixel-exact blits (X11 XCopyArea parity) demand
+      // Task-36 Defect B: pixel-exact blits (X11-copy parity) demand
       // nearest-neighbor sampling — LINEAR blended edge texels into 1px
       // rings around every rotated decor bitmap.
       glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
@@ -458,7 +458,7 @@ class GLBackend : public RenderingEngine
     virtual void drawStringOpaque(const char* text,float x,float y,int fontId,
                                   float r,float g,float b,
                                   float bgR,float bgG,float bgB) override
-     {// XDrawImageString mapping (D12): cell background quad THEN glyphs.
+     {// Opaque-text mapping (D12): cell background quad THEN glyphs.
       if (!window||!validFont(fontId)||!text||!*text)
         return;
       if (glTraceOn()) fprintf(stderr,"[TRACE] drawStringOpaque \"%s\" (%.1f,%.1f) f%d\n",text,x,y,fontId);
@@ -473,7 +473,7 @@ class GLBackend : public RenderingEngine
     virtual void drawStringTransparent(const char* text,float x,float y,
                                        int fontId,
                                        float r,float g,float b) override
-     {// XDrawString mapping (D12): glyphs only, no background cell.
+     {// Transparent-text mapping (D12): glyphs only, no background cell.
       if (!window||!validFont(fontId)||!text||!*text)
         return;
       if (glTraceOn()) fprintf(stderr,"[TRACE] drawStringTransparent \"%s\" (%.1f,%.1f) f%d\n",text,x,y,fontId);
@@ -1423,7 +1423,7 @@ class GLBackend : public RenderingEngine
 
     void drawGlyphs(const char* text,float x,float y,int fontId,
                     float r,float g,float b)
-     {      // Pen starts at (x, y) with y = BASELINE (X11 XDrawString semantics).
+     {      // Pen starts at (x, y) with y = BASELINE (X11 text semantics).
       // The present transform rides the MVP exclusively (one source of
       // truth: presentScale_/presentOffX_/presentOffY_).
       float penX=x;

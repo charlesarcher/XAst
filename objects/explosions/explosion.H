@@ -4,7 +4,6 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #endif
-#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
 #include"../../utilities/frames/frameList.H"

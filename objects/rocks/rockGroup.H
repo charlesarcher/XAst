@@ -3,8 +3,8 @@ class Rock;
 #include<math.h>
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#include"../../utilities/rendering/x11Backend.H"
 #endif
-#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/pixmaps/rotated/rotatorDisplayData.H"
 #include"../../utilities/pixmaps/rotated/rotator.H"
@@ -521,6 +521,12 @@ inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int n
                                  const int graphicIndex)
   {
    #ifdef X11_BACKEND
+   // Task 47: RockColor.pixel feeds options.H's scoring-icon foregrounds, so
+   // this leg allocates it here — the same request the D14 ctor issued when
+   // the color rode in as an XColor reference.
+   if (!RockColor.pixel)
+     RockColor.pixel=static_cast<X11Backend&>(engine).allocateColor(
+         56026.0f/65535.0f,42405.0f/65535.0f,8224.0f/65535.0f);
    Vector2d* scaledROCK=new Vector2d[numvecs],
             * scaledROck=new Vector2d[numvecs],
             * scaledrock=new Vector2d[numvecs];
@@ -529,14 +535,14 @@ inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int n
      scaledROck[i]=RockVecs[i]*ROck::scale;
      scaledrock[i]=RockVecs[i]*rock::scale;
     }
-   ROCKGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
+   ROCKGraphic[graphicIndex]=new MaskedRotVectorData(engine,RotColor{RockColor.red,RockColor.green,RockColor.blue},
                                                      scaledROCK,numvecs,
                                                      ROCKDecor_bits[graphicIndex],
                                                      ROCKDecor_width[graphicIndex],
                                                      ROCKDecor_height[graphicIndex]);
-   ROckGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
+   ROckGraphic[graphicIndex]=new MaskedRotVectorData(engine,RotColor{RockColor.red,RockColor.green,RockColor.blue},
                                                      scaledROck,numvecs);
-   rockGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,RockColor,
+   rockGraphic[graphicIndex]=new MaskedRotVectorData(engine,RotColor{RockColor.red,RockColor.green,RockColor.blue},
                                                      scaledrock,numvecs);
    delete [] scaledrock;
    delete [] scaledROck;
@@ -555,19 +561,18 @@ inline void RockGroup::SetVectorData(const Vector2d* const RockVecs, const int n
      scaledROck[i]=RockVecs[i]*ROck::scale;
      scaledrock[i]=RockVecs[i]*rock::scale;
     }
-   XColor rockColor={0,
-                     56026,//218
-                     42405,//165
-                     8224,//32
-                     DoRed|DoGreen|DoBlue};
-   ROCKGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,rockColor,
+   const RotColor rockColor={56026,//218
+                             42405,//165
+                             8224//32
+                             };
+   ROCKGraphic[graphicIndex]=new MaskedRotVectorData(engine,rockColor,
                                                      scaledROCK,numvecs,
                                                      ROCKDecor_bits[graphicIndex],
                                                      ROCKDecor_width[graphicIndex],
                                                      ROCKDecor_height[graphicIndex]);
-   ROckGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,rockColor,
+   ROckGraphic[graphicIndex]=new MaskedRotVectorData(engine,rockColor,
                                                      scaledROck,numvecs);
-   rockGraphic[graphicIndex]=new MaskedRotVectorData(stage->display,stage->window,rockColor,
+   rockGraphic[graphicIndex]=new MaskedRotVectorData(engine,rockColor,
                                                      scaledrock,numvecs);
    delete [] scaledrock;
    delete [] scaledROck;

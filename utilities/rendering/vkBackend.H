@@ -1549,7 +1549,7 @@ class VKBackend : public RenderingEngine
     virtual void drawStringOpaque(const char* text,float x,float y,int fontId,
                                   float r,float g,float b,
                                   float bgR,float bgG,float bgB) override
-      {// XDrawImageString mapping (D12): cell background quad THEN glyphs
+      {// Opaque-text mapping (D12): cell background quad THEN glyphs
        // (glBackend verbatim).
        if (!passOpen_||!validFont(fontId)||!text||!*text)
          return;
@@ -1564,7 +1564,7 @@ class VKBackend : public RenderingEngine
     virtual void drawStringTransparent(const char* text,float x,float y,
                                         int fontId,
                                         float r,float g,float b) override
-      {// XDrawString mapping (D12): glyphs only, no background cell.
+      {// Transparent-text mapping (D12): glyphs only, no background cell.
        if (!passOpen_||!validFont(fontId)||!text||!*text)
          return;
        drawGlyphs_(text,x,y,fontId,r,g,b);
@@ -2262,7 +2262,7 @@ class VKBackend : public RenderingEngine
 
     void drawGlyphs_(const char* text,float x,float y,int fontId,
                      float r,float g,float b)
-      {// Pen starts at (x, y) with y = BASELINE (X11 XDrawString semantics).
+      {// Pen starts at (x, y) with y = BASELINE (X11 text semantics).
        // 6 expanded triangle verts x 8 floats per quad, up to 512 quads per
        // call — the stride discipline of the task-36 Defect-A fix.
        TexRef atlas=lookupTex_(atlasTex_);

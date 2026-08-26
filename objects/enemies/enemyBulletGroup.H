@@ -2,7 +2,6 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #endif
-#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
@@ -65,7 +64,7 @@ class EnemyBulletGroup
 
     static int numBullets;
 
-    static XColor color;
+    static RotColor color;
 
 #ifndef X11_BACKEND
     // Task-35 m13 static-texture path: one pre-baked sprite shared by every
@@ -228,14 +227,12 @@ inline const Vector2d EnemyBulletGroup::vectors[4]={Vector2d(0,-2),
                                              Vector2d(0,2),
                                              Vector2d(-2,0)};
 
-inline XColor EnemyBulletGroup::color={0,
-                                65535,//255
-                                0,
-                                0,
-                                DoRed|DoGreen|DoBlue};
+inline RotColor EnemyBulletGroup::color={65535,//255
+                                         0,
+                                         0};
 
 inline EnemyBulletGroup::EnemyBulletGroup(RenderingEngine& eng): engine(eng),
-                                                 graphic(stage->display,stage->window,color,
+                                                 graphic(eng,color,
                                                       vectors,sizeof(vectors)/sizeof(Vector2d),
                                                       enemyBulletDecor_bits,
                                                       enemyBulletDecor_width,enemyBulletDecor_height),

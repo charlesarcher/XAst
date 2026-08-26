@@ -1,8 +1,8 @@
 #include<stdlib.h>
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
+#include"../../utilities/rendering/x11Backend.H"
 #endif
-#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/vector2d.H"
 #include"../../utilities/box.H"
@@ -51,7 +51,7 @@ class Ship: public MovableObject
 #ifdef X11_BACKEND
     Ship(const unsigned char* const icon,
          const int iconWidth, const int iconHeight,
-         XColor& iconColor);
+         const RotColor& iconColorComponents);
 #else
     Ship(const unsigned char* const icon,
          const int iconWidth, const int iconHeight);
@@ -98,11 +98,11 @@ class StarDestroyer: public Ship
   private:
     static const Vector2d vectors[5];
 #ifdef X11_BACKEND
-    static XColor color;
+    static RotColor color;
 #else
   public:
     // GL twin of the guarded color static (main() feeds it to ShipYard).
-    static XColor glColor;
+    static RotColor glColor;
 #endif
     RotVectorData graphic;
     Rotator rotator;
@@ -117,10 +117,10 @@ class NextGenerationEnterprise: public Ship
   private:
     static const Vector2d vectors[34];
 #ifdef X11_BACKEND
-    static XColor bottomColor,
+    static RotColor bottomColor,
                   topColor;
 #else
-    static XColor glColor;
+    static RotColor glColor;
 #endif
     static const double area;
     RotVectorData* graphic;
@@ -135,9 +135,9 @@ class MovieEnterprise: public Ship
   private:
     static const Vector2d vectors[32];
 #ifdef X11_BACKEND
-    static XColor color;
+    static RotColor color;
 #else
-    static XColor glColor;
+    static RotColor glColor;
 #endif
     static const double area;
     RotVectorData graphic;
@@ -176,11 +176,11 @@ class StarDestroyerThrust: public Thrust
 
    private:
 #ifdef X11_BACKEND
-    static XColor edgeColor,
-                  middleColor,
-                  centerColor;
+    static RotColor edgeColor,
+                    middleColor,
+                    centerColor;
 #else
-    static XColor glEdgeColor;
+    static RotColor glEdgeColor;
 #endif
     RotPixmapData* graphic;
     Rotator* rotator;
@@ -193,9 +193,9 @@ class NextGenerationEnterpriseThrust: public Thrust
 
    private:
 #ifdef X11_BACKEND
-    static XColor color;
+    static RotColor color;
 #else
-    static XColor glColor;
+    static RotColor glColor;
 #endif
     RotPixmapData graphic;
     Rotator rotator;
@@ -210,9 +210,9 @@ class MovieEnterpriseThrust: public Thrust
 
    private:
 #ifdef X11_BACKEND
-    static XColor color;
+    static RotColor color;
 #else
-    static XColor glColor;
+    static RotColor glColor;
 #endif
     MaskedRotPixmapData graphic;
     Rotator rotator;
@@ -300,8 +300,7 @@ inline void glUploadShipDecor(RenderingEngine& engine,
 #endif
 
 #ifdef X11_BACKEND
-// Engine-first DI ctor (task 13, consumed from task 20). Members still pull
-// stage->display themselves until task 22 migrates them. Memberwise
+// Engine-first DI ctor (task 13, consumed from task 20). Memberwise
 // construction in declaration order replicates the implicit ctor the
 // placement-new staging has always relied on (task-6 order); the leading
 // engine binding is a side-effect-free reference init and preserves it.
@@ -324,19 +323,22 @@ inline double Ship::maxVelocity=.43*PlayingField::maxLinearVelocity,
 #ifdef X11_BACKEND
 inline Ship::Ship(const unsigned char* const i,
                   const int iWidth, const int iHeight,
-                  XColor& iColor): icon(i),
-                                   iconWidth(iWidth),
-                                   iconHeight(iHeight),
-                                   iconColor(iColor),
-                                   dead(on)
-  {/* STOPPED SITE (task 20): colormap allocation retained for its external
-      readers — the assigned pixel value is consumed directly by the options
-      header's icon foregrounds; closure path = backend-exposed color
-      primitive. */
-   if (!XAllocColor(stage->display,DefaultColormap(stage->display,
-                                                   DefaultScreen(stage->display)),
-                    &iconColor))
-       iconColor.pixel=WhitePixel(stage->display,DefaultScreen(stage->display));
+                  const RotColor& iColor): icon(i),
+                                           iconWidth(iWidth),
+                                           iconHeight(iHeight),
+                                           iconColor{0,iColor.red,iColor.green,
+                                                     iColor.blue,
+                                                     DoRed|DoGreen|DoBlue,0},
+                                           dead(on)
+  {/* Former STOPPED SITE (task 20, closed at 47): the pixel comes from the
+      backend color seam — the identical allocate-or-white-fallback colormap
+      request for this component triple (TrueColor arithmetic, exact ushort
+      round-trip), so the options header's icon foregrounds read the same
+      value as before. */
+   iconColor.pixel=static_cast<X11Backend&>(stage->engine)
+                     .allocateColor(iColor.red/65535.0f,
+                                    iColor.green/65535.0f,
+                                    iColor.blue/65535.0f);
   }
 #else
 inline Ship::Ship(const unsigned char* const i,
@@ -435,11 +437,10 @@ inline const Vector2d StarDestroyer::vectors[5]={Vector2d(0,-19),
                                           Vector2d(-8,11)};
 
 #ifdef X11_BACKEND
-inline XColor StarDestroyer::color={0,
-                             44461,//173
-                             55512,//216
-                             59110,//230
-                             DoRed|DoGreen|DoBlue};
+inline RotColor StarDestroyer::color={44461,//173
+                                      55512,//216
+                                      59110//230
+                                      };
 #endif
 
 #ifdef X11_BACKEND
@@ -447,7 +448,7 @@ inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
                                             starDestroyerIcon_width,
                                             starDestroyerIcon_height,
                                             color),
-                                       graphic(stage->display,stage->window,color,
+                                       graphic(shipGroup->engine,color,
                                                vectors,sizeof(vectors)/sizeof(Vector2d),
 #ifdef _CORP_LOGO_
                                                starDestroyerDecor_bits,
@@ -461,16 +462,15 @@ inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
                    Vector2d(),maxVelocity,Vector2d());
  }
 #else
-inline XColor StarDestroyer::glColor={0,
-                              44461,//173
-                              55512,//216
-                              59110,//230
-                              DoRed|DoGreen|DoBlue};
+inline RotColor StarDestroyer::glColor={44461,//173
+                                        55512,//216
+                                        59110//230
+                                        };
 
 inline StarDestroyer::StarDestroyer(): Ship(starDestroyerIcon_bits,
                                             starDestroyerIcon_width,
                                             starDestroyerIcon_height),
-                                       graphic(stage->display,stage->window,glColor,
+                                       graphic(shipGroup->engine,glColor,
                                                vectors,sizeof(vectors)/sizeof(Vector2d),
 #ifdef _CORP_LOGO_
                                                starDestroyerDecor_bits,
@@ -537,16 +537,14 @@ inline const Vector2d NextGenerationEnterprise::vectors[34]={Vector2d(0,-10),
                                                       Vector2d(-8,-8)};
 
 #ifdef X11_BACKEND
-inline XColor NextGenerationEnterprise::bottomColor={0,
-                                              61680,//240
-                                              61680,//240
-                                              61680,//240
-                                              DoRed|DoGreen|DoBlue},
-       NextGenerationEnterprise::topColor={0,
-                                           49344,//192
+inline RotColor NextGenerationEnterprise::bottomColor={61680,//240
+                                                       61680,//240
+                                                       61680//240
+                                                       },
+       NextGenerationEnterprise::topColor={49344,//192
                                            0,//0
-                                           0,//0
-                                           DoRed|DoGreen|DoBlue};
+                                           0//0
+                                           };
 #endif
 
 inline const double NextGenerationEnterprise::area=472;
@@ -556,7 +554,7 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
                                                                   NCC1701DIcon_width,
                                                                   NCC1701DIcon_height,
                                                                   bottomColor)
- {CompositePixmap NextGenerationEnterpriseCP(stage->display,stage->window,
+ {CompositePixmap NextGenerationEnterpriseCP(shipGroup->engine,
                                              NCC1701DDecorBottom_width,
                                              NCC1701DDecorBottom_height);
   NextGenerationEnterpriseCP.AddBitmapData(NCC1701DDecorBottom_bits,
@@ -567,7 +565,7 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
                                            NCC1701DDecorTop_width,
                                            NCC1701DDecorTop_height,
                                            topColor);
-  graphic=new RotVectorData(stage->display,stage->window,bottomColor,
+  graphic=new RotVectorData(shipGroup->engine,bottomColor,
                             vectors,sizeof(vectors)/sizeof(Vector2d),
                             area,
                             NextGenerationEnterpriseCP);
@@ -576,11 +574,10 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
                    Vector2d(),maxVelocity,Vector2d());
   }
 #else
-inline XColor NextGenerationEnterprise::glColor={0,
-                                          61680,//240
-                                          61680,//240
-                                          61680,//240
-                                          DoRed|DoGreen|DoBlue};
+inline RotColor NextGenerationEnterprise::glColor={61680,//240
+                                                   61680,//240
+                                                   61680//240
+                                                   };
 
 inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_bits,
                                                                   NCC1701DIcon_width,
@@ -588,7 +585,7 @@ inline NextGenerationEnterprise::NextGenerationEnterprise(): Ship(NCC1701DIcon_b
  {// No CompositePixmap on GL (its engine branch aborts): the wireframe-only
   // D2 path needs the outline data only, so the no-decor RotVectorData
   // overload feeds the identical geometry.
-  graphic=new RotVectorData(stage->display,stage->window,glColor,
+  graphic=new RotVectorData(shipGroup->engine,glColor,
                             vectors,sizeof(vectors)/sizeof(Vector2d),
                             area);
   rotator=new Rotator(graphic,angularVelocity,PlayingField::maxLinearVelocity);
@@ -668,11 +665,10 @@ inline const Vector2d MovieEnterprise::vectors[32]={Vector2d(0,-16),
                                               Vector2d(-6,-14)};
 
 #ifdef X11_BACKEND
-inline XColor MovieEnterprise::color={0,
-                               61680,//240
-                               61680,//240
-                               61680,//240
-                               DoRed|DoGreen|DoBlue};
+inline RotColor MovieEnterprise::color={61680,//240
+                                        61680,//240
+                                        61680//240
+                                        };
 #endif
 
 inline const double MovieEnterprise::area=446;
@@ -682,7 +678,7 @@ inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
                                                 NCC1701AIcon_width,
                                                 NCC1701AIcon_height,
                                                 color),
-                                           graphic(stage->display,stage->window,color,
+                                           graphic(shipGroup->engine,color,
                                                    vectors,sizeof(vectors)/sizeof(Vector2d),
                                                    area,
                                                    NCC1701ADecor_bits,
@@ -692,16 +688,15 @@ inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
                    Vector2d(),maxVelocity,Vector2d());
   }
 #else
-inline XColor MovieEnterprise::glColor={0,
-                                 61680,//240
-                                 61680,//240
-                                 61680,//240
-                                 DoRed|DoGreen|DoBlue};
+inline RotColor MovieEnterprise::glColor={61680,//240
+                                          61680,//240
+                                          61680//240
+                                          };
 
 inline MovieEnterprise::MovieEnterprise(): Ship(NCC1701AIcon_bits,
                                                 NCC1701AIcon_width,
                                                 NCC1701AIcon_height),
-                                           graphic(stage->display,stage->window,glColor,
+                                           graphic(shipGroup->engine,glColor,
                                                    vectors,sizeof(vectors)/sizeof(Vector2d),
                                                    area,
                                                    NCC1701ADecor_bits,
@@ -762,24 +757,21 @@ void Thrust::MissScript(Intersector& intersector, const double createTime,
   }
 
 #ifdef X11_BACKEND
-inline XColor StarDestroyerThrust::edgeColor={0,
-                                       0,
-                                       0,
-                                       65535,//255
-                                       DoRed|DoGreen|DoBlue},
+inline RotColor StarDestroyerThrust::edgeColor={0,
+                                                0,
+                                                65535//255
+                                                },
        StarDestroyerThrust::middleColor={0,
-                                         0,
                                          49087,//191
-                                         65535,//255
-                                         DoRed|DoGreen|DoBlue},
-       StarDestroyerThrust::centerColor={0,
-                                         61680,//240
+                                         65535//255
+                                         },
+       StarDestroyerThrust::centerColor={61680,//240
                                          63736,//248
-                                         65535,//255
-                                         DoRed|DoGreen|DoBlue};
+                                         65535//255
+                                         };
 
 inline StarDestroyerThrust::StarDestroyerThrust()
- {CompositePixmap thrustCP(stage->display,stage->window,
+ {CompositePixmap thrustCP(shipGroup->engine,
                            starDestroyerThrustEdge_width,starDestroyerThrustEdge_height);
   thrustCP.AddBitmapData(starDestroyerThrustEdge_bits,
                          starDestroyerThrustEdge_width,starDestroyerThrustEdge_height,
@@ -790,17 +782,16 @@ inline StarDestroyerThrust::StarDestroyerThrust()
           .AddBitmapData(starDestroyerThrustCenter_bits,
                          starDestroyerThrustCenter_width,starDestroyerThrustCenter_height,
                          centerColor);
-  graphic=new RotPixmapData(stage->display,stage->window,thrustCP);
+  graphic=new RotPixmapData(shipGroup->engine,thrustCP);
   rotator=new Rotator(graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity);
   SetMovableObject(Vector2d(),2*rotator->Radius(),2*rotator->Radius(),
                    Vector2d(),Ship::maxVelocity,Vector2d());
   }
 #else
-inline XColor StarDestroyerThrust::glEdgeColor={0,
-                                         0,
-                                         0,
-                                         65535,//255
-                                         DoRed|DoGreen|DoBlue};
+inline RotColor StarDestroyerThrust::glEdgeColor={0,
+                                                  0,
+                                                  65535//255
+                                                  };
 
 inline StarDestroyerThrust::StarDestroyerThrust()
  {// CPU composite mirrors the guarded stack (edge/middle/center, later
@@ -827,7 +818,7 @@ inline StarDestroyerThrust::StarDestroyerThrust()
                                                            rot.side,rot.side,4);
    glSide=rot.side;
   }
-  graphic=new RotPixmapData(stage->display,stage->window,glEdgeColor,
+  graphic=new RotPixmapData(shipGroup->engine,glEdgeColor,
                             starDestroyerThrustEdge_bits,
                             starDestroyerThrustEdge_width,
                             starDestroyerThrustEdge_height);
@@ -847,13 +838,12 @@ Rotator& StarDestroyerThrust::ObjectRotator()
  }
 
 #ifdef X11_BACKEND
-inline XColor NextGenerationEnterpriseThrust::color={0,
-                                              65535,//255
-                                              0,
-                                              0,
-                                              DoRed|DoGreen|DoBlue};
+inline RotColor NextGenerationEnterpriseThrust::color={65535,//255
+                                                       0,//0
+                                                       0//0
+                                                       };
 
-inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic(stage->display,stage->window,color,
+inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic(shipGroup->engine,color,
                                                                                  NCC1701DThrustDecor_bits,
                                                                                  NCC1701DThrustDecor_width,
                                                                                  NCC1701DThrustDecor_height),
@@ -863,13 +853,11 @@ inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic
                    Vector2d(),Ship::maxVelocity,Vector2d());
   }
 #else
-inline XColor NextGenerationEnterpriseThrust::glColor={0,
-                                                65535,//255
-                                                0,
-                                                0,
-                                                DoRed|DoGreen|DoBlue};
+inline RotColor NextGenerationEnterpriseThrust::glColor={65535,//255
+                                                         0,
+                                                         0};
 
-inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic(stage->display,stage->window,glColor,
+inline NextGenerationEnterpriseThrust::NextGenerationEnterpriseThrust(): graphic(shipGroup->engine,glColor,
                                                                                  NCC1701DThrustDecor_bits,
                                                                                  NCC1701DThrustDecor_width,
                                                                                  NCC1701DThrustDecor_height),
@@ -901,14 +889,13 @@ Rotator& NextGenerationEnterpriseThrust::ObjectRotator()
  }
 
 #ifdef X11_BACKEND
-inline XColor MovieEnterpriseThrust::color={0,
-                                     65535,//255
-                                     0,
-                                     0,
-                                     DoRed|DoGreen|DoBlue};
+inline RotColor MovieEnterpriseThrust::color={65535,//255
+                                              0,//0
+                                              0//0
+                                              };
 
 inline MovieEnterpriseThrust::MovieEnterpriseThrust():
-                       graphic(stage->display,stage->window,color,
+                       graphic(shipGroup->engine,color,
                                NCC1701AThrustDecor_bits,
                                NCC1701AThrustDecor_width,NCC1701AThrustDecor_height),
                        rotator(&graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity)
@@ -916,14 +903,12 @@ inline MovieEnterpriseThrust::MovieEnterpriseThrust():
                    Vector2d(),Ship::maxVelocity,Vector2d());
   }
 #else
-inline XColor MovieEnterpriseThrust::glColor={0,
-                                       65535,//255
-                                       0,
-                                       0,
-                                       DoRed|DoGreen|DoBlue};
+inline RotColor MovieEnterpriseThrust::glColor={65535,//255
+                                                0,
+                                                0};
 
 inline MovieEnterpriseThrust::MovieEnterpriseThrust():
-                       graphic(stage->display,stage->window,glColor,
+                       graphic(shipGroup->engine,glColor,
                                NCC1701AThrustDecor_bits,
                                NCC1701AThrustDecor_width,NCC1701AThrustDecor_height),
                        rotator(&graphic,Ship::angularVelocity,PlayingField::maxLinearVelocity)

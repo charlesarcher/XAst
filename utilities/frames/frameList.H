@@ -4,7 +4,6 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #endif
-#include"../rendering/x11types.H"
 #include"../pixmaps/composite/compositePixmap.H"
 
 
@@ -13,7 +12,11 @@ class FrameList
    FrameList(const CompositePixmap* const,
              const int numFrames,
              const int firstFrame=0);
+#ifdef X11_BACKEND
+   // Task 47: the guarded draw branches consume the raw frame handle; the
+   // GPU legs use ExplosionGraphic::FrameId instead.
    const Pixmap& GetFrame() const;
+#endif
    const int PixWidth() const;
    const int PixHeight() const;
    const int GetNumFrames() const;
@@ -39,9 +42,11 @@ inline FrameList::FrameList(const CompositePixmap* const fData,
  {
  }
 
+#ifdef X11_BACKEND
 inline const Pixmap& FrameList::GetFrame() const
  {return frameData[currentFrame].GetPixmap();
  }
+#endif
 
 inline const int FrameList::PixWidth() const
  {return frameData->GetPixWidth();

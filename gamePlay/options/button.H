@@ -6,7 +6,6 @@
 #include<X11/Intrinsic.h>
 #include"../../utilities/rendering/x11Backend.H"
 #endif
-#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/rendering/renderingEngine.H"
 #include"../../utilities/rendering/windowSize.H"
 
@@ -39,11 +38,6 @@ class Button
     // Task-16 transition member (T17/T19/T21/T22 pattern): the dtor pairs the
     // face creation/deletion through the engine; deleted at task 47.
     RenderingEngine& engine;
-
-    // Task-13 demotion (D11): was `Drawable&` — a reference cannot bind to
-    // the prvalue nativeHandle() returns, so the member is now a value copy
-    // of the backend window taken at construction.
-    Window drawable;
 
     // Task-16 (M1/R4-B6): the two faces are render targets — off-screen
     // buffers on X11, FBO textures on GL/VK. Engine-managed memory, caller
@@ -80,7 +74,6 @@ inline Button::Button(RenderingEngine& eng,
                       const char* const label,
                       const int x, const int y,
 		      const int borderSize): engine(eng),
-                                             drawable(eng.nativeHandle().window),
                                              upperLeftX(x),
                                              upperLeftY(y),
                                              borderWidth(borderSize>3 ? borderSize

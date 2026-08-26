@@ -170,14 +170,47 @@ static const Vector2d pentVecs[5] = { Vector2d(0,-14), Vector2d(13,-4), Vector2d
 enum Shape { SHAPE_TRI=0, SHAPE_SQ=1, SHAPE_PENT=2, SHAPE_COUNT=3 };
 static RotVectorData* shapeRVD[SHAPE_COUNT];
 
+// Task 47: the D14 pipeline constructors take the injected engine (they source
+// display/window from its native handle) and the color as components. This
+// stub surfaces the probe's own X11 connection through that seam — the server
+// requests issued by the pipeline are unchanged.
+namespace {
+struct ProbeEngine final : RenderingEngine {
+  Display* dpy; Window win;
+  ProbeEngine(Display* d, Window w): dpy(d), win(w) {}
+  bool initWindow(const char*) override { return true; }
+  void shutdown() override {}
+  X11NativeHandle nativeHandle() const override { return { (void*)dpy, (unsigned long)win }; }
+  void beginFrame() override {} void endFrame() override {}
+  int pollEvents(GameEvent*, int) override { return 0; }
+  void setScissorRect(const int*) override {}
+  RenderTargetId createRenderTarget(int,int) override { return 0; }
+  void beginRenderTo(RenderTargetId) override {} void endRenderTo() override {}
+  void getPresentTransform(float& s,int& ox,int& oy) override { s=1.0f; ox=0; oy=0; }
+  void clear() override {}
+  void drawLine(float,float,float,float,float,float,float,float) override {}
+  void drawPolygon(const float*,int,float,float,float,bool) override {}
+  void drawRect(float,float,float,float,float,float,float,bool) override {}
+  void drawTriangles(const float*,int,TextureId) override {}
+  void drawStringOpaque(const char*,float,float,int,float,float,float,float,float,float) override {}
+  void drawStringTransparent(const char*,float,float,int,float,float,float) override {}
+  float measureText(const char*,int) override { return 0.0f; }
+  void getFontMetrics(int,FontMetrics&) override {}
+  TextureId createTextureFromBitmap(const uint8_t*,int,int,int) override { return 0; }
+  void drawTexture(TextureId,float,float,float,float,float) override {}
+  void drawTextureMasked(TextureId,TextureId,float,float,float,float) override {}
+  void deleteTexture(TextureId) override {}
+  TextureId createTextureFromRGBA32(const uint8_t*,int,int) override { return 0; }
+  void setTransform(float,float,float) override {} void resetTransform() override {}
+};
+}
+
 static void buildShapes(Display* dpy, Window win) {
-  XColor color;
-  memset(&color,0,sizeof(color));
-  color.flags=DoRed|DoGreen|DoBlue;
-  color.red=color.green=color.blue=65535;
-  shapeRVD[SHAPE_TRI]  = new RotVectorData(dpy,win,color,triVecs,3);
-  shapeRVD[SHAPE_SQ]   = new RotVectorData(dpy,win,color,sqVecs,4);
-  shapeRVD[SHAPE_PENT] = new RotVectorData(dpy,win,color,pentVecs,5);
+  static ProbeEngine engine(dpy,win);   // pipeline only reads the native handle
+  const RotColor color={65535,65535,65535};
+  shapeRVD[SHAPE_TRI]  = new RotVectorData(engine,color,triVecs,3);
+  shapeRVD[SHAPE_SQ]   = new RotVectorData(engine,color,sqVecs,4);
+  shapeRVD[SHAPE_PENT] = new RotVectorData(engine,color,pentVecs,5);
 }
 
 // ---------------------------------------------------------------------------

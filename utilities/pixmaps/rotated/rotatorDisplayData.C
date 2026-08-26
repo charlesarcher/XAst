@@ -5,14 +5,13 @@
 #include<X11/Xutil.h>
 #include<X11/Intrinsic.h>
 #endif
-#include"../../rendering/x11types.H"
 
 using namespace std;
 
 #ifdef X11_BACKEND
-RotatorDisplayData::RotatorDisplayData(Display* const disp,
+RotatorDisplayData::RotatorDisplayData(RenderingEngine& eng,
                                        const Vector2d* const vecs,
-                                       const int numVecs): display(disp),
+                                       const int numVecs): display((Display*)eng.nativeHandle().display),
                                                            radius(0),
                                                            area(0)
 
@@ -34,9 +33,9 @@ RotatorDisplayData::RotatorDisplayData(Display* const disp,
   box.SetBox(Vector2d(),radius);
  }
 
-RotatorDisplayData::RotatorDisplayData(Display* const disp,
+RotatorDisplayData::RotatorDisplayData(RenderingEngine& eng,
                                        const Vector2d* const vecs, const int numVecs,
-				                               const double a): display(disp),
+				                               const double a): display((Display*)eng.nativeHandle().display),
                                                         radius(0),
                                                         area(a)
  {for (int i=0;i<numVecs;++i)
@@ -49,8 +48,8 @@ RotatorDisplayData::RotatorDisplayData(Display* const disp,
   box.SetBox(Vector2d(),radius);
  }
 
-RotatorDisplayData::RotatorDisplayData(Display* const disp,
-                                       const int sideSz): display(disp),
+RotatorDisplayData::RotatorDisplayData(RenderingEngine& eng,
+                                       const int sideSz): display((Display*)eng.nativeHandle().display),
                                                           radius((sideSz-1)/2.0),
                                                           area(0),
                                                           sideSize(sideSz)
@@ -83,65 +82,71 @@ const Pixmap& RotatorDisplayData::GetMaskAtTime(const double angle) const
   return *(Pixmap*)NULL;
  }
 
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
-                                   const Vector2d* const vecs, const int nVecs): RotatorDisplayData(disp,vecs,nVecs),
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                   
+                                   const Vector2d* const vecs, const int nVecs): RotatorDisplayData(eng,vecs,nVecs),
                                                                                  numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
+ {NoDecorInit((Drawable)eng.nativeHandle().window,color,vecs);
  }
 
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                   
                                    const Vector2d* const vecs, const int nVecs,
                                    const double area):
-                                        RotatorDisplayData(disp,vecs,nVecs,area),
+                                        RotatorDisplayData(eng,vecs,nVecs,area),
                                         numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
+ {NoDecorInit((Drawable)eng.nativeHandle().window,color,vecs);
  }
 
 
-void NonRotVectorData::NoDecorInit(Display* const disp, Drawable& drawable,
-                                   XColor& color,
+void NonRotVectorData::NoDecorInit(Drawable drawable,
+                                   const RotColor& color,
 				   const Vector2d* const vecs)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   BuildPixmap(drawable,screen,foreground,background,gc,vecs);
   XFreeGC(display,gc);
  }
 
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                   
                                    const Vector2d* const vecs, const int nVecs,
                                    const unsigned char* const bitmap,
-                                   const int width , const int height): RotatorDisplayData(disp,vecs,nVecs),
+                                   const int width , const int height): RotatorDisplayData(eng,vecs,nVecs),
                                                                         numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
+ {BitmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,bitmap,width,height);
  }
 
 
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                   
                                    const Vector2d* const vecs, const int nVecs,
                                    const double area,
                                    const unsigned char* const bitmap,
-                                   const int width , const int height): RotatorDisplayData(disp,vecs,nVecs,area),
+                                   const int width , const int height): RotatorDisplayData(eng,vecs,nVecs,area),
                                                                         numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
+ {BitmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,bitmap,width,height);
  }
 
-void NonRotVectorData::BitmapDecorInit(Display* const disp, Drawable& drawable,
-                                       XColor& color,
+void NonRotVectorData::BitmapDecorInit(Drawable drawable,
+                                       const RotColor& color,
                                        const Vector2d* const vecs,
                                        const unsigned char* const bitmap, const int width, const int height)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   BuildPixmap(drawable,screen,foreground,background,gc,vecs);
   Pixmap bitPixmap=XCreateBitmapFromData(display,drawable,
@@ -155,32 +160,35 @@ void NonRotVectorData::BitmapDecorInit(Display* const disp, Drawable& drawable,
   XFreeGC(display,gc);
  }
 
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                   
                                    const Vector2d* const vecs, const int nVecs,
-			                             const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs),
+			                             const CompositePixmap& compositePixmap): RotatorDisplayData(eng,vecs,nVecs),
                                                                             numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
+ {PixmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,compositePixmap);
  }
 
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                   
                                    const Vector2d* const vecs, const int nVecs,
                                    const double area,
-			                             const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs,area),
+			                             const CompositePixmap& compositePixmap): RotatorDisplayData(eng,vecs,nVecs,area),
                                                                             numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
+ {PixmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,compositePixmap);
  }
 
-void NonRotVectorData::PixmapDecorInit(Display* const disp, Drawable& drawable,
-                                       XColor& color,
+void NonRotVectorData::PixmapDecorInit(Drawable drawable,
+                                       const RotColor& color,
                                        const Vector2d* const vecs,
                                        const CompositePixmap& compositePixmap)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   BuildPixmap(drawable,screen,foreground,background,gc,vecs);
   XSetGraphicsExposures(display,gc,FALSE);
@@ -191,7 +199,7 @@ void NonRotVectorData::PixmapDecorInit(Display* const disp, Drawable& drawable,
   XFreeGC(display,gc);
  }
 
-void NonRotVectorData::BuildPixmap(Drawable& drawable, const int screen,
+void NonRotVectorData::BuildPixmap(Drawable drawable, const int screen,
 				                           const int foreground, const int background, GC& gc,
                                    const Vector2d* const vecs)
  {vectors=new Vector2d[numVecs];
@@ -233,63 +241,69 @@ const int NonRotVectorData::GetNumPix() const
  {return 1;
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
-                             const Vector2d* const vecs, const int nVecs): RotatorDisplayData(disp,vecs,nVecs),
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             
+                             const Vector2d* const vecs, const int nVecs): RotatorDisplayData(eng,vecs,nVecs),
                                                                            numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
+ {NoDecorInit((Drawable)eng.nativeHandle().window,color,vecs);
  }
 
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             
                              const Vector2d* const vecs, const int nVecs,
-                             const double area): RotatorDisplayData(disp,vecs,nVecs,area),
+                             const double area): RotatorDisplayData(eng,vecs,nVecs,area),
                                                  numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
+ {NoDecorInit((Drawable)eng.nativeHandle().window,color,vecs);
  }
 
-void RotVectorData::NoDecorInit(Display* const disp, Drawable& drawable,
-                                XColor& color,
+void RotVectorData::NoDecorInit(Drawable drawable,
+                                const RotColor& color,
                                 const Vector2d* const vecs)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   RotateVecs(drawable,screen,foreground,background,gc,vecs);
   XFreeGC(display,gc);
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             
                              const Vector2d* const vecs, const int nVecs,
                              const unsigned char* const bitmap,
-                             const int width , const int height): RotatorDisplayData(disp,vecs,nVecs),
+                             const int width , const int height): RotatorDisplayData(eng,vecs,nVecs),
                                                                   numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
+ {BitmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,bitmap,width,height);
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             
                              const Vector2d* const vecs, const int nVecs,
                              const double area,
                              const unsigned char* const bitmap,
-                             const int width , const int height): RotatorDisplayData(disp,vecs,nVecs,area),
+                             const int width , const int height): RotatorDisplayData(eng,vecs,nVecs,area),
                                                                   numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
+ {BitmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,bitmap,width,height);
  }
 
-void RotVectorData::BitmapDecorInit(Display* const disp, Drawable& drawable,
-                                    XColor& color,
+void RotVectorData::BitmapDecorInit(Drawable drawable,
+                                    const RotColor& color,
                                     const Vector2d* const vecs,
                                     const unsigned char* const bitmap, const int width, const int height)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   RotateVecs(drawable,screen,foreground,background,gc,vecs);
   int lineFill=8-width%8,
@@ -312,32 +326,35 @@ void RotVectorData::BitmapDecorInit(Display* const disp, Drawable& drawable,
   XFreeGC(display,gc);
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             
                              const Vector2d* const vecs, const int nVecs,
-			                       const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs),
+			                       const CompositePixmap& compositePixmap): RotatorDisplayData(eng,vecs,nVecs),
                                                                       numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
+ {PixmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,compositePixmap);
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             
                              const Vector2d* const vecs, const int nVecs,
                              const double area,
-			                       const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs,area),
+			                       const CompositePixmap& compositePixmap): RotatorDisplayData(eng,vecs,nVecs,area),
                                                                       numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
+ {PixmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,compositePixmap);
  }
 
-void RotVectorData::PixmapDecorInit(Display* const disp, Drawable& drawable,
-                                    XColor& color,
+void RotVectorData::PixmapDecorInit(Drawable drawable,
+                                    const RotColor& color,
                                     const Vector2d* const vecs,
                                     const CompositePixmap& compositePixmap)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   RotateVecs(drawable,screen,foreground,background,gc,vecs);
   XImage* compositeImage=XGetImage(display,compositePixmap.GetPixmap(),
@@ -361,7 +378,7 @@ void RotVectorData::PixmapDecorInit(Display* const disp, Drawable& drawable,
   XFreeGC(display,gc);
  }
 
-void RotVectorData::RotateVecs(Drawable& drawable, const int screen,
+void RotVectorData::RotateVecs(Drawable drawable, const int screen,
                                const int foreground, const int background, GC& gc,
                                const Vector2d* const vecs)
  {numPix=6.28318530717958*radius+.5;
@@ -416,62 +433,68 @@ const int RotVectorData::GetNumPix() const
  {return numPix;
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
-                                         const Vector2d* const vecs, const int nVecs): RotatorDisplayData(disp,vecs,nVecs),
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                         
+                                         const Vector2d* const vecs, const int nVecs): RotatorDisplayData(eng,vecs,nVecs),
                                                                                        numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
+ {NoDecorInit((Drawable)eng.nativeHandle().window,color,vecs);
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                         
                                          const Vector2d* const vecs, const int nVecs,
-                                         const double area): RotatorDisplayData(disp,vecs,nVecs,area),
+                                         const double area): RotatorDisplayData(eng,vecs,nVecs,area),
                                                              numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
+ {NoDecorInit((Drawable)eng.nativeHandle().window,color,vecs);
  }
 
-void MaskedRotVectorData::NoDecorInit(Display* const disp, Drawable& drawable,
-                                      XColor& color,
+void MaskedRotVectorData::NoDecorInit(Drawable drawable,
+                                      const RotColor& color,
                                       const Vector2d* const vecs)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   RotateVecs(drawable,screen,foreground,background,gc,vecs);
   XFreeGC(display,gc);
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                         
                                          const Vector2d* const vecs, const int nVecs,
 			                                   const unsigned char* const bitmap,
-                                         const int width , const int height): RotatorDisplayData(disp,vecs,nVecs),
+                                         const int width , const int height): RotatorDisplayData(eng,vecs,nVecs),
                                                                               numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
+ {BitmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,bitmap,width,height);
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                         
                                          const Vector2d* const vecs, const int nVecs,
                                          const double area,
 			                                   const unsigned char* const bitmap,
-                                         const int width , const int height): RotatorDisplayData(disp,vecs,nVecs,area),
+                                         const int width , const int height): RotatorDisplayData(eng,vecs,nVecs,area),
                                                                               numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
+ {BitmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,bitmap,width,height);
  }
 
-void MaskedRotVectorData::BitmapDecorInit(Display* const disp, Drawable& drawable,
-                                          XColor& color,
+void MaskedRotVectorData::BitmapDecorInit(Drawable drawable,
+                                          const RotColor& color,
                                           const Vector2d* const vecs,
 	                                        const unsigned char* const bitmap, const int width, const int height)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   RotateVecs(drawable,screen,foreground,background,gc,vecs);
   int lineFill=8-width%8,
@@ -494,32 +517,35 @@ void MaskedRotVectorData::BitmapDecorInit(Display* const disp, Drawable& drawabl
   XFreeGC(display,gc);
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                         
                                          const Vector2d* const vecs, const int nVecs,
-			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs),
+			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(eng,vecs,nVecs),
                                                                                   numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
+ {PixmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,compositePixmap);
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                         
                                          const Vector2d* const vecs, const int nVecs,
                                          const double area,
-			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs,area),
+			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(eng,vecs,nVecs,area),
                                                                                   numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
+ {PixmapDecorInit((Drawable)eng.nativeHandle().window,color,vecs,compositePixmap);
  }
 
-void MaskedRotVectorData::PixmapDecorInit(Display* const disp, Drawable& drawable,
-                                          XColor& color,
+void MaskedRotVectorData::PixmapDecorInit(Drawable drawable,
+                                          const RotColor& color,
                                           const Vector2d* const vecs,
                                           const CompositePixmap& compositePixmap)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   RotateVecs(drawable,screen,foreground,background,gc,vecs);
   XImage* compositeImage=XGetImage(display,compositePixmap.GetPixmap(),
@@ -543,7 +569,7 @@ void MaskedRotVectorData::PixmapDecorInit(Display* const disp, Drawable& drawabl
   XFreeGC(display,gc);
  }
 
-void MaskedRotVectorData::RotateVecs(Drawable& drawable, const int screen,
+void MaskedRotVectorData::RotateVecs(Drawable drawable, const int screen,
                                const int foreground, const int background, GC& gc,
                                const Vector2d* const vecs)
  {numPix=6.28318530717958*radius+.5;
@@ -629,18 +655,21 @@ const Pixmap& MaskedRotVectorData::GetMaskAtTime(const double angle) const
                 /incAngle+.5)%numPix];
  }
 
-RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotPixmapData::RotPixmapData(RenderingEngine& eng, const RotColor& color,
+                             
 			     const unsigned char* const bitmap, const int width , const int height):
-                                  RotatorDisplayData(disp,width>height ? width
+                                  RotatorDisplayData(eng,width>height ? width
                                                                        : height)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
-  GC gc=XCreateGC(display,drawable,0,NULL);
-  CreatePix(drawable,screen,background,gc);
+  // The allocation request the referenced-XColor form issued, assembled from
+  // the RotColor components (same request, same pixel).
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
+  GC gc=XCreateGC(display,(Drawable)eng.nativeHandle().window,0,NULL);
+  CreatePix((Drawable)eng.nativeHandle().window,screen,background,gc);
   XSetForeground(display,gc,foreground);
   int lineFill=8-width%8,
       bitNum=0;
@@ -663,15 +692,13 @@ RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
  }
 
 
-RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
-			                       const CompositePixmap& compositePixmap): RotatorDisplayData(disp,
-                                                                                         compositePixmap.GetPixWidth()>compositePixmap.GetPixHeight()
+RotPixmapData::RotPixmapData(RenderingEngine& eng, const CompositePixmap& compositePixmap): RotatorDisplayData(eng,compositePixmap.GetPixWidth()>compositePixmap.GetPixHeight()
                                                                                           ? compositePixmap.GetPixWidth()
                                                                                           : compositePixmap.GetPixHeight())
  {int screen=DefaultScreen(display),
       background=BlackPixel(display,screen);
-  GC gc=XCreateGC(display,drawable,0,NULL);
-  CreatePix(drawable,screen,background,gc);
+  GC gc=XCreateGC(display,(Drawable)eng.nativeHandle().window,0,NULL);
+  CreatePix((Drawable)eng.nativeHandle().window,screen,background,gc);
   XImage* compositeImage=XGetImage(display,compositePixmap.GetPixmap(),
                                     0,0,compositePixmap.GetPixWidth(),compositePixmap.GetPixHeight(),
                                     AllPlanes,ZPixmap);
@@ -693,7 +720,7 @@ RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
   XFreeGC(display,gc);
  }
 
-void RotPixmapData::CreatePix(Drawable& drawable, const int screen, const int background, GC& gc)
+void RotPixmapData::CreatePix(Drawable drawable, const int screen, const int background, GC& gc)
  {numPix=6.28318530717958*radius+.5;
   incAngle=6.28318530717958/numPix;
   rotatedPix=new Pixmap[numPix];
@@ -720,20 +747,21 @@ const int RotPixmapData::GetNumPix() const
  {return numPix;
  }
 
-MaskedRotPixmapData::MaskedRotPixmapData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotPixmapData::MaskedRotPixmapData(RenderingEngine& eng, const RotColor& color,
+                                         
 			                                   const unsigned char* const bitmap,
-                                         const int width , const int height): RotatorDisplayData(disp,width>height
+                                         const int width , const int height): RotatorDisplayData(eng,width>height
                                                                                ? width
                                                                                : height)
  {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
-                 : WhitePixel(display,screen),
       background=BlackPixel(display,screen);
+  XColor requested_c47={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int foreground=XAllocColor(display,DefaultColormap(display,screen),&requested_c47)
+                 ? requested_c47.pixel
+                 : WhitePixel(display,screen);
   GC gcPixmap,
      gcBitmap;
-  CreatePix(drawable,screen,background,gcPixmap,gcBitmap);
+  CreatePix((Drawable)eng.nativeHandle().window,screen,background,gcPixmap,gcBitmap);
   XSetForeground(display,gcPixmap,foreground);
   int lineFill=8-width%8,
        bitNum=0;
@@ -760,16 +788,14 @@ MaskedRotPixmapData::MaskedRotPixmapData(Display* const disp, Drawable& drawable
  }
 
 
-MaskedRotPixmapData::MaskedRotPixmapData(Display* const disp, Drawable& drawable,
-			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(disp,
-                                                                                  compositePixmap.GetPixWidth()>compositePixmap.GetPixHeight()
+MaskedRotPixmapData::MaskedRotPixmapData(RenderingEngine& eng, const CompositePixmap& compositePixmap): RotatorDisplayData(eng,compositePixmap.GetPixWidth()>compositePixmap.GetPixHeight()
                                                                                    ? compositePixmap.GetPixWidth()
                                                                                    : compositePixmap.GetPixHeight())
  {int screen=DefaultScreen(display),
       background=BlackPixel(display,screen);
   GC gcPixmap,
      gcBitmap;
-  CreatePix(drawable,screen,background,gcPixmap,gcBitmap);
+  CreatePix((Drawable)eng.nativeHandle().window,screen,background,gcPixmap,gcBitmap);
   XImage* compositeImage=XGetImage(display,compositePixmap.GetPixmap(),
                                     0,0,compositePixmap.GetPixWidth(),compositePixmap.GetPixHeight(),
                                     AllPlanes,ZPixmap);
@@ -795,7 +821,7 @@ MaskedRotPixmapData::MaskedRotPixmapData(Display* const disp, Drawable& drawable
     XSetClipMask(display,maskGC[i],clipMasks[i]);
  }
 
-void MaskedRotPixmapData::CreatePix(Drawable& drawable, const int screen,
+void MaskedRotPixmapData::CreatePix(Drawable drawable, const int screen,
                                     const int background,
                                     GC& gcPixmap, GC& gcBitmap)
  {numPix=6.28318530717958*radius+.5;
@@ -866,27 +892,19 @@ const Pixmap& MaskedRotPixmapData::GetMaskAtTime(const double angle) const
 
 // ---------------------------------------------------------------------------
 // Engine-rotation data path — the D14 `#else` branch (rendering-abstraction
-// task 27). No server resources exist in this configuration: the
-// constructors capture the geometric outline, the decor bitmap reference and
-// the 16-bit color components so the rotation consumer (plan task 35) can
-// drive setTransform/drawTexture/drawTextureMasked from this data:
-//   NonRotVectorData / RotVectorData  -> wireframe outlines, uniform-matrix
-//                                        rotation at draw time;
-//   MaskedRotVectorData               -> outline + decor texture + mask
-//                                        (decor bits ride along as data);
-//   RotPixmapData / MaskedRotPixmapData -> pure-bitmap sources uploaded as
-//                                        pre-computed textures.
-// The vector pre-rotation below mirrors the guarded pipeline's math exactly
-// (same angle count formula, same index formula), so both paths agree
-// element-for-element. The pixmap/GC/mask accessors abort: those resources
-// become backend textures and masks at upload time (plan task 34), not here.
+// task 27, re-signed at task 47: the transitional Display/Drawable/XColor
+// parameters are gone, the color rides RotColor components). No server
+// resources exist in this configuration: the constructors capture the
+// geometric outline, the decor bitmap reference and the 16-bit color
+// components so the rotation consumer (plan task 35) can drive
+// setTransform/drawTexture/drawTextureMasked from this data. The vector
+// pre-rotation mirrors the guarded pipeline's math exactly (same angle count
+// formula, same index formula), so both paths agree element-for-element.
 // ---------------------------------------------------------------------------
 
-static GC s_unusedGCParameter=NULL;
-
-RotatorDisplayData::RotatorDisplayData(Display* const disp,
+RotatorDisplayData::RotatorDisplayData(RenderingEngine&,
                                        const Vector2d* const vecs,
-                                       const int numVecs): display(disp),
+                                       const int numVecs):
                                                            radius(0),
                                                            area(0)
 
@@ -908,9 +926,9 @@ RotatorDisplayData::RotatorDisplayData(Display* const disp,
   box.SetBox(Vector2d(),radius);
  }
 
-RotatorDisplayData::RotatorDisplayData(Display* const disp,
+RotatorDisplayData::RotatorDisplayData(RenderingEngine&,
                                        const Vector2d* const vecs, const int numVecs,
-				                               const double a): display(disp),
+				                               const double a):
                                                          radius(0),
                                                          area(a)
  {for (int i=0;i<numVecs;++i)
@@ -923,8 +941,8 @@ RotatorDisplayData::RotatorDisplayData(Display* const disp,
   box.SetBox(Vector2d(),radius);
  }
 
-RotatorDisplayData::RotatorDisplayData(Display* const disp,
-                                       const int sideSz): display(disp),
+RotatorDisplayData::RotatorDisplayData(RenderingEngine&,
+                                       const int sideSz):
                                                           radius((sideSz-1)/2.0),
                                                           area(0),
                                                           sideSize(sideSz)
@@ -945,110 +963,32 @@ const int RotatorDisplayData::GetNumVecs() const
  {return 0;
  }
 
-GC& RotatorDisplayData::GetGC(const double angle) const
- {cout<<endl<<"Reference made to nonexistent RotatorDislayData::GetGC virtual function.  Execution terminated."<<endl;
-  abort();
-  return *(GC*)NULL;
- }
-
-const Pixmap& RotatorDisplayData::GetMaskAtTime(const double angle) const
- {cout<<endl<<"Reference made to nonexistent RotatorDislayData::GetMaskAtTime virtual function.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
- }
-
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
-                                   const Vector2d* const vecs, const int nVecs): RotatorDisplayData(disp,vecs,nVecs),
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                   const Vector2d* const vecs, const int nVecs): RotatorDisplayData(eng,vecs,nVecs),
                                                                                  numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
- }
-
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
-                                   const Vector2d* const vecs, const int nVecs,
-                                   const double area):
-                                        RotatorDisplayData(disp,vecs,nVecs,area),
-                                        numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
- }
-
-void NonRotVectorData::NoDecorInit(Display*, Drawable&, XColor& color,
-                                   const Vector2d* const vecs)
  {decorRed=color.red;
   decorGreen=color.green;
   decorBlue=color.blue;
   decorBits=NULL;
   decorWidth=0;
   decorHeight=0;
-  BuildPixmap(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
+  vectors=new Vector2d[numVecs];
+  for(int i=0;i<numVecs;++i)
+    vectors[i]=vecs[i];
  }
 
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
+NonRotVectorData::NonRotVectorData(RenderingEngine& eng, const RotColor& color,
                                    const Vector2d* const vecs, const int nVecs,
                                    const unsigned char* const bitmap,
-                                   const int width , const int height): RotatorDisplayData(disp,vecs,nVecs),
+                                   const int width , const int height): RotatorDisplayData(eng,vecs,nVecs),
                                                                         numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
- }
-
-
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
-                                   const Vector2d* const vecs, const int nVecs,
-                                   const double area,
-                                   const unsigned char* const bitmap,
-                                   const int width , const int height): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                                        numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
- }
-
-void NonRotVectorData::BitmapDecorInit(Display*, Drawable&, XColor& color,
-                                       const Vector2d* const vecs,
-                                       const unsigned char* const bitmap, const int width, const int height)
  {decorRed=color.red;
   decorGreen=color.green;
   decorBlue=color.blue;
   decorBits=bitmap;
   decorWidth=width;
   decorHeight=height;
-  BuildPixmap(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
- }
-
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
-                                   const Vector2d* const vecs, const int nVecs,
-			                             const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs),
-                                                                            numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
- }
-
-NonRotVectorData::NonRotVectorData(Display* const disp, Drawable& drawable,
-                                   XColor& color,
-                                   const Vector2d* const vecs, const int nVecs,
-                                   const double area,
-			                             const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                                            numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
- }
-
-void NonRotVectorData::PixmapDecorInit(Display*, Drawable&, XColor& color,
-                                       const Vector2d* const vecs,
-                                       const CompositePixmap& compositePixmap)
- {decorRed=color.red;
-  decorGreen=color.green;
-  decorBlue=color.blue;
-  decorBits=NULL;
-  decorWidth=compositePixmap.GetPixWidth();
-  decorHeight=compositePixmap.GetPixHeight();
-  BuildPixmap(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
- }
-
-void NonRotVectorData::BuildPixmap(Drawable&, const int,
-                                   const int, const int, GC&,
-                                   const Vector2d* const vecs)
- {vectors=new Vector2d[numVecs];
+  vectors=new Vector2d[numVecs];
   for(int i=0;i<numVecs;++i)
     vectors[i]=vecs[i];
  }
@@ -1065,106 +1005,65 @@ const int NonRotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
-const Pixmap& NonRotVectorData::GetPixmap(const double angle) const
- {cout<<endl<<"NonRotVectorData::GetPixmap has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
- }
-
 const int NonRotVectorData::GetNumPix() const
  {return 1;
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
-                             const Vector2d* const vecs, const int nVecs): RotatorDisplayData(disp,vecs,nVecs),
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             const Vector2d* const vecs, const int nVecs): RotatorDisplayData(eng,vecs,nVecs),
                                                                            numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
- }
-
-
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
-                             const Vector2d* const vecs, const int nVecs,
-                             const double area): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                 numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
- }
-
-void RotVectorData::NoDecorInit(Display*, Drawable&, XColor& color,
-                                const Vector2d* const vecs)
  {decorRed=color.red;
   decorGreen=color.green;
   decorBlue=color.blue;
   decorBits=NULL;
   decorWidth=0;
   decorHeight=0;
-  RotateVecs(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
+  RotateVecs(vecs);
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
+                             const Vector2d* const vecs, const int nVecs,
+                             const double area): RotatorDisplayData(eng,vecs,nVecs,area),
+                                                 numVecs(nVecs)
+ {decorRed=color.red;
+  decorGreen=color.green;
+  decorBlue=color.blue;
+  decorBits=NULL;
+  decorWidth=0;
+  decorHeight=0;
+  RotateVecs(vecs);
+ }
+
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
                              const Vector2d* const vecs, const int nVecs,
                              const unsigned char* const bitmap,
-                             const int width , const int height): RotatorDisplayData(disp,vecs,nVecs),
+                             const int width , const int height): RotatorDisplayData(eng,vecs,nVecs),
                                                                   numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
- }
-
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
-                             const Vector2d* const vecs, const int nVecs,
-                             const double area,
-                             const unsigned char* const bitmap,
-                             const int width , const int height): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                                  numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
- }
-
-void RotVectorData::BitmapDecorInit(Display*, Drawable&, XColor& color,
-                                    const Vector2d* const vecs,
-                                    const unsigned char* const bitmap, const int width, const int height)
  {decorRed=color.red;
   decorGreen=color.green;
   decorBlue=color.blue;
   decorBits=bitmap;
   decorWidth=width;
   decorHeight=height;
-  RotateVecs(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
+  RotateVecs(vecs);
  }
 
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
-                             const Vector2d* const vecs, const int nVecs,
-			                       const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs),
-                                                                      numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
- }
-
-RotVectorData::RotVectorData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotVectorData::RotVectorData(RenderingEngine& eng, const RotColor& color,
                              const Vector2d* const vecs, const int nVecs,
                              const double area,
-			                       const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                                      numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
- }
-
-void RotVectorData::PixmapDecorInit(Display*, Drawable&, XColor& color,
-                                    const Vector2d* const vecs,
-                                    const CompositePixmap& compositePixmap)
+                             const unsigned char* const bitmap,
+                             const int width , const int height): RotatorDisplayData(eng,vecs,nVecs,area),
+                                                                  numVecs(nVecs)
  {decorRed=color.red;
   decorGreen=color.green;
   decorBlue=color.blue;
-  decorBits=NULL;
-  decorWidth=compositePixmap.GetPixWidth();
-  decorHeight=compositePixmap.GetPixHeight();
-  RotateVecs(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
+  decorBits=bitmap;
+  decorWidth=width;
+  decorHeight=height;
+  RotateVecs(vecs);
  }
 
-void RotVectorData::RotateVecs(Drawable&, const int,
-                               const int, const int, GC&,
-                               const Vector2d* const vecs)
+void RotVectorData::RotateVecs(const Vector2d* const vecs)
  {numPix=6.28318530717958*radius+.5;
   incAngle=6.28318530717958/numPix;
   rotatedVecs=new Vector2d*[numPix];
@@ -1191,105 +1090,37 @@ const int RotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
-const Pixmap& RotVectorData::GetPixmap(const double angle) const
- {cout<<endl<<"RotVectorData::GetPixmap has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
- }
-
 const int RotVectorData::GetNumPix() const
  {return numPix;
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
-                                         const Vector2d* const vecs, const int nVecs): RotatorDisplayData(disp,vecs,nVecs),
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
+                                         const Vector2d* const vecs, const int nVecs): RotatorDisplayData(eng,vecs,nVecs),
                                                                                        numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
- }
-
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
-                                         const Vector2d* const vecs, const int nVecs,
-                                         const double area): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                             numVecs(nVecs)
- {NoDecorInit(disp,drawable,color,vecs);
- }
-
-void MaskedRotVectorData::NoDecorInit(Display*, Drawable&, XColor& color,
-                                      const Vector2d* const vecs)
  {decorRed=color.red;
   decorGreen=color.green;
   decorBlue=color.blue;
   decorBits=NULL;
   decorWidth=0;
   decorHeight=0;
-  RotateVecs(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
+  RotateVecs(vecs);
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotVectorData::MaskedRotVectorData(RenderingEngine& eng, const RotColor& color,
                                          const Vector2d* const vecs, const int nVecs,
 			                                   const unsigned char* const bitmap,
-                                         const int width , const int height): RotatorDisplayData(disp,vecs,nVecs),
+                                         const int width , const int height): RotatorDisplayData(eng,vecs,nVecs),
                                                                               numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
- }
-
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
-                                         const Vector2d* const vecs, const int nVecs,
-                                         const double area,
-			                                   const unsigned char* const bitmap,
-                                         const int width , const int height): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                                              numVecs(nVecs)
- {BitmapDecorInit(disp,drawable,color,vecs,bitmap,width,height);
- }
-
-void MaskedRotVectorData::BitmapDecorInit(Display*, Drawable&, XColor& color,
-                                          const Vector2d* const vecs,
-	                                        const unsigned char* const bitmap, const int width, const int height)
  {decorRed=color.red;
   decorGreen=color.green;
   decorBlue=color.blue;
   decorBits=bitmap;
   decorWidth=width;
   decorHeight=height;
-  RotateVecs(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
+  RotateVecs(vecs);
  }
 
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
-                                         const Vector2d* const vecs, const int nVecs,
-			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs),
-                                                                                  numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
- }
-
-MaskedRotVectorData::MaskedRotVectorData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
-                                         const Vector2d* const vecs, const int nVecs,
-                                         const double area,
-			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(disp,vecs,nVecs,area),
-                                                                                  numVecs(nVecs)
- {PixmapDecorInit(disp,drawable,color,vecs,compositePixmap);
- }
-
-void MaskedRotVectorData::PixmapDecorInit(Display*, Drawable&, XColor& color,
-                                          const Vector2d* const vecs,
-                                          const CompositePixmap& compositePixmap)
- {decorRed=color.red;
-  decorGreen=color.green;
-  decorBlue=color.blue;
-  decorBits=NULL;
-  decorWidth=compositePixmap.GetPixWidth();
-  decorHeight=compositePixmap.GetPixHeight();
-  RotateVecs(*(Drawable*)NULL,0,0,0,s_unusedGCParameter,vecs);
- }
-
-void MaskedRotVectorData::RotateVecs(Drawable&, const int,
-                               const int, const int, GC&,
-                               const Vector2d* const vecs)
+void MaskedRotVectorData::RotateVecs(const Vector2d* const vecs)
  {numPix=6.28318530717958*radius+.5;
   incAngle=6.28318530717958/numPix;
   rotatedVecs=new Vector2d*[numPix];
@@ -1316,32 +1147,13 @@ const int MaskedRotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
-const Pixmap& MaskedRotVectorData::GetPixmap(const double angle) const
- {cout<<endl<<"MaskedRotVectorData::GetPixmap has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
- }
-
 const int MaskedRotVectorData::GetNumPix() const
  {return numPix;
  }
 
-GC& MaskedRotVectorData::GetGC(const double angle) const
- {cout<<endl<<"MaskedRotVectorData::GetGC has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(GC*)NULL;
- }
-
-const Pixmap& MaskedRotVectorData::GetMaskAtTime(const double angle) const
- {cout<<endl<<"MaskedRotVectorData::GetMaskAtTime has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
- }
-
-RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
-                             XColor& color,
+RotPixmapData::RotPixmapData(RenderingEngine& eng, const RotColor& color,
 			     const unsigned char* const bitmap, const int width , const int height):
-                                  RotatorDisplayData(disp,width>height ? width
+                                  RotatorDisplayData(eng,width>height ? width
                                                                        : height)
  {decorRed=color.red;
   decorGreen=color.green;
@@ -1349,48 +1161,21 @@ RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
   decorBits=bitmap;
   decorWidth=width;
   decorHeight=height;
-  CreatePix(*(Drawable*)NULL,0,0,s_unusedGCParameter);
- }
-
-
-RotPixmapData::RotPixmapData(Display* const disp, Drawable& drawable,
-			                       const CompositePixmap& compositePixmap): RotatorDisplayData(disp,
-                                                                                         compositePixmap.GetPixWidth()>compositePixmap.GetPixHeight()
-                                                                                          ? compositePixmap.GetPixWidth()
-                                                                                          : compositePixmap.GetPixHeight())
- {decorRed=0;
-  decorGreen=0;
-  decorBlue=0;
-  decorBits=NULL;
-  decorWidth=compositePixmap.GetPixWidth();
-  decorHeight=compositePixmap.GetPixHeight();
-  CreatePix(*(Drawable*)NULL,0,0,s_unusedGCParameter);
- }
-
-void RotPixmapData::CreatePix(Drawable&, const int, const int, GC&)
- {numPix=6.28318530717958*radius+.5;
+  numPix=6.28318530717958*radius+.5;
   incAngle=6.28318530717958/numPix;
-  rotatedPix=NULL;
  }
 
 RotPixmapData::~RotPixmapData()
  {
  }
 
-const Pixmap& RotPixmapData::GetPixmap(const double angle) const
- {cout<<endl<<"RotPixmapData::GetPixmap has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
- }
-
 const int RotPixmapData::GetNumPix() const
  {return numPix;
  }
 
-MaskedRotPixmapData::MaskedRotPixmapData(Display* const disp, Drawable& drawable,
-                                         XColor& color,
+MaskedRotPixmapData::MaskedRotPixmapData(RenderingEngine& eng, const RotColor& color,
 			                                   const unsigned char* const bitmap,
-                                         const int width , const int height): RotatorDisplayData(disp,width>height
+                                         const int width , const int height): RotatorDisplayData(eng,width>height
                                                                                ? width
                                                                                : height)
  {decorRed=color.red;
@@ -1399,55 +1184,15 @@ MaskedRotPixmapData::MaskedRotPixmapData(Display* const disp, Drawable& drawable
   decorBits=bitmap;
   decorWidth=width;
   decorHeight=height;
-  CreatePix(*(Drawable*)NULL,0,0,s_unusedGCParameter,s_unusedGCParameter);
- }
-
-
-MaskedRotPixmapData::MaskedRotPixmapData(Display* const disp, Drawable& drawable,
-			                                   const CompositePixmap& compositePixmap): RotatorDisplayData(disp,
-                                                                                  compositePixmap.GetPixWidth()>compositePixmap.GetPixHeight()
-                                                                                   ? compositePixmap.GetPixWidth()
-                                                                                   : compositePixmap.GetPixHeight())
- {decorRed=0;
-  decorGreen=0;
-  decorBlue=0;
-  decorBits=NULL;
-  decorWidth=compositePixmap.GetPixWidth();
-  decorHeight=compositePixmap.GetPixHeight();
-  CreatePix(*(Drawable*)NULL,0,0,s_unusedGCParameter,s_unusedGCParameter);
- }
-
-void MaskedRotPixmapData::CreatePix(Drawable&, const int, const int,
-                                    GC&, GC&)
- {numPix=6.28318530717958*radius+.5;
+  numPix=6.28318530717958*radius+.5;
   incAngle=6.28318530717958/numPix;
-  rotatedPix=NULL;
  }
 
 MaskedRotPixmapData::~MaskedRotPixmapData()
  {
  }
 
-const Pixmap& MaskedRotPixmapData::GetPixmap(const double angle) const
- {cout<<endl<<"MaskedRotPixmapData::GetPixmap has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
- }
-
 const int MaskedRotPixmapData::GetNumPix() const
  {return numPix;
- }
-
-
-GC& MaskedRotPixmapData::GetGC(const double angle) const
- {cout<<endl<<"MaskedRotPixmapData::GetGC has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(GC*)NULL;
- }
-
-const Pixmap& MaskedRotPixmapData::GetMaskAtTime(const double angle) const
- {cout<<endl<<"MaskedRotPixmapData::GetMaskAtTime has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *(Pixmap*)NULL;
  }
 #endif

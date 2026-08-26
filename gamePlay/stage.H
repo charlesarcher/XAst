@@ -9,11 +9,7 @@
 #include<string.h>
 #include<signal.h>
 #include<time.h>
-#ifdef X11_BACKEND
-#include<X11/Xlib.h>
 #include"../utilities/rendering/x11Backend.H"
-#endif
-#include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
 #include"../utilities/rendering/windowSize.H"
 #include"options/button.H"
@@ -54,53 +50,23 @@ class Stage
     inline Stage& DrawPlayingField();
     inline Stage& Refresh();
 
-    // TRANSITION members (D11 single-ownership-seam extension; DELETED at
-    // task 47): non-owning aliases onto X11Backend-owned resources (the D15
-    // map — exactly one owner, the backend). The Stage ctor populates them
-    // from the engine it is injected with (task 13 DI). Shim-typed members
-    // stay outside the guards; XFontStruct* has no shim stand-in (x11types.H),
-    // so those declarations are guarded with their readers. The engine
-    // reference is the task-14 addition (the draw methods consume it —
-    // T19/T21 group pattern).
+    // Task 47: every non-owning X11 alias member (display/window/icon/fonts/
+    // GCs/autoRepeatState/windowWidth/windowHeight) and the four static
+    // color structs are GONE — the backend owns the resources (D15), options.H
+    // consumes the backend accessors directly (D9), and the present-region
+    // publishing rides the guards-closed backend twin so this header compiles
+    // macro-free on every leg. The engine reference feeds the draw methods.
     RenderingEngine& engine;
-    Display* display;
-    Window window;
-
-    Pixmap icon;
 
     int shipYardWidth,
-        shipYardHeight,
-        autoRepeatState;
+        shipYardHeight;
 
     int buttonX,
         buttonY;
 
-#ifdef X11_BACKEND
-    XFontStruct* buttonInfo,
-               * errorInfo;
-
-    XFontStruct* titleInfo,
-               * hiScoreInfo,
-               * scoreInfo;
-#endif
-
-    GC titleGC,
-       hiScoreGC,
-       scoreGC,
-       defaultGC;
-
-#ifdef X11_BACKEND
-    static XColor windowBg,
-                  shipYardBg,
-                  buttonFg,
-                  buttonBg;
-#endif
-
   private:
 
-    int windowWidth,
-        windowHeight,
-        titleX,
+    int titleX,
         titleY,
         hiScoreUserX,
         hiScoreUserY,
@@ -120,35 +86,12 @@ extern Stage* stage;
 #include"../objects/ships/shipGroup.H"
 extern PlayingField* playingField;
 
-#ifdef X11_BACKEND
-inline XColor Stage::windowBg={0,
-                        46260,//180
-                        46260,//180
-                        46260,//180
-                        DoRed|DoGreen|DoBlue},
-       Stage::shipYardBg={0,
-                          28527,//111
-                          28527,//111
-                          28527,//111
-                          DoRed|DoGreen|DoBlue},
-       Stage::buttonFg={0,
-                        0,//0
-                        0,//0
-                        0,//0
-                        DoRed|DoGreen|DoBlue},
-       Stage::buttonBg={0,
-                        46260,//180
-                        46260,//180
-                        46260,//180
-                        DoRed|DoGreen|DoBlue};
-#endif
-
 inline Stage::Stage(RenderingEngine& engine): engine(engine)
  {cout<<"XAsteroids is a Unix version of the original Atari Asteroids video game.  It features color, arbitrarily shaped drawables with interior decor, hidden line elimination, accurate collision detection, and dynamically selectable options including gravitation.  Game initialization requires a minute or two so please be patient.  If XAsteroids abnormally terminates the keyboard may no longer auto-repeat.  Auto-repeat can be reactivated by executing AutoRepeatOn."<<endl<<endl;
   // The X11 creation block that used to live here (display/fonts/window/icon/
-  // GCs/KBState/signals — stage.H:130-221 pre-task-12) is now owned by
+  // GCs/KBState/signals — stage.H:130-221 pre-task-12) is owned by
   // X11Backend::initWindow (D15 map); main() constructs the backend FIRST and
-  // populates this class's non-owning transition members from it afterwards.
+  // injects it here.
   //
   // Layout math kept (stage.H:143-181 pre-task-12) with metrics obtained
   // through the engine (D15/D7). Every FontMetrics field is a small integer
@@ -161,18 +104,19 @@ inline Stage::Stage(RenderingEngine& engine): engine(engine)
   engine.getFontMetrics(EngineFont_Title,titleFm);
   engine.getFontMetrics(EngineFont_HiScore,hiScoreFm);
   engine.getFontMetrics(EngineFont_Score,scoreFm);
-  int titleWidth=(int)engine.measureText("Asteroids",EngineFont_Title)
-                +2*(int)titleFm.max_bounds.width,
-      hiScoreWidth=10*(int)hiScoreFm.max_bounds.width,
-      scoreWidth=10*(int)scoreFm.max_bounds.width,
-      headerHeight;
+  int windowWidth,
+      windowHeight;
   WindowSizeFormula::Compute(titleFm,hiScoreFm,scoreFm,
                              (int)engine.measureText("Asteroids",EngineFont_Title),
                              PlayingField::playArea.Width(),
                              PlayingField::playArea.Height(),
                              shipGroup->maxIconHeight,
                              windowWidth,windowHeight);
-  headerHeight=2*((int)hiScoreFm.max_bounds.ascent+(int)hiScoreFm.max_bounds.descent)+4;
+  int titleWidth=(int)engine.measureText("Asteroids",EngineFont_Title)
+                +2*(int)titleFm.max_bounds.width,
+      hiScoreWidth=10*(int)hiScoreFm.max_bounds.width,
+      scoreWidth=10*(int)scoreFm.max_bounds.width,
+      headerHeight=2*((int)hiScoreFm.max_bounds.ascent+(int)hiScoreFm.max_bounds.descent)+4;
   if ((int)titleFm.max_bounds.ascent+(int)titleFm.max_bounds.descent>headerHeight)
     headerHeight=(int)titleFm.max_bounds.ascent+(int)titleFm.max_bounds.descent;
   if ((int)scoreFm.max_bounds.ascent+(int)scoreFm.max_bounds.descent>headerHeight)
@@ -198,54 +142,24 @@ inline Stage::Stage(RenderingEngine& engine): engine(engine)
   playAreaY=headerHeight+shipYardHeight+35;
   const char* seedEnv=getenv("XAST_SEED");
   srand(seedEnv ? (time_t)strtoul(seedEnv,0,10) : (time_t)time(NULL));
-#ifdef X11_BACKEND
-  // Task-13 DI: the ctor populates its own non-owning transition members
-  // from the injected engine, replacing main()'s task-12 population block.
-  // display/window come through the RenderingEngine seam; the font/GC/icon
-  // accessors are concrete-backend transition accessors (die at 14/47 with
-  // the members they feed).
-  X11NativeHandle native=engine.nativeHandle();
-  display=(Display*)native.display;
-  window=(Window)native.window;
-  X11Backend& backend=static_cast<X11Backend&>(engine);
-  icon=backend.icon();
-  buttonInfo=backend.buttonFont();
-  errorInfo=backend.errorFont();
-  autoRepeatState=backend.autoRepeatState();
-  titleInfo=backend.titleFont();
-  hiScoreInfo=backend.hiScoreFont();
-  scoreInfo=backend.scoreFont();
-  titleGC=backend.titleGC();
-  hiScoreGC=backend.hiScoreGC();
-  scoreGC=backend.scoreGC();
-  defaultGC=backend.defaultGC();
   // Task-14: publish the two present regions this ctor computed so the
   // backend's frame-end replay copies them to the coordinates the raw pair
-  // used; the yard texture publishes per draw (it re-creates on icon
-  // changes).
-  backend.setFrameGeometry(shipYardX,shipYardY,shipYardWidth,shipYardHeight,
-                           playAreaX,playAreaY);
-  // shipYardBg.pixel must stay valid for its one external reader
-  // (options.H's yard-icon background); allocating through the backend seam
-  // keeps that invariant now that the raw allocation left this header.
-  shipYardBg.pixel=backend.allocateColor(28527.0f/65535.0f,
-                                         28527.0f/65535.0f,
-                                         28527.0f/65535.0f);
-#endif
+  // used. No-op on the GPU legs (their present path is transform-driven).
+  static_cast<X11Backend&>(engine).setFrameGeometry(shipYardX,shipYardY,
+                                                    shipYardWidth,shipYardHeight,
+                                                    playAreaX,playAreaY);
  }
 
 inline Stage::~Stage()
  {// DISARMED (task 12/D15/M4): every resource-freeing call that used to live
-   // here moved into X11Backend::shutdown, which also adds the missing fifth
-   // font free (errorInfo). Layout + logic only remain — i.e. nothing at all
-   // today.
+   // here moved into X11Backend::shutdown. Layout + logic only remain — i.e.
+   // nothing at all today.
  }
 
 inline Stage& Stage::DrawScore()
  {char str[12];
-  // Task-36: the drawString calls are pure engine calls — the guards that
-  // used to wrap them (GL had no backend when task 14 landed) are gone so
-  // the score header renders on every leg; X11 emits the identical calls.
+  // Task-36: the drawString calls are pure engine calls so the score header
+  // renders on every leg; X11 emits the identical calls.
   if (score->CurrentScore()>=score->TopTenScore(0))
    {snprintf(str,sizeof(str),"%10.10s",score->CurrentName());
     engine.drawStringOpaque(str,(float)hiScoreUserX,(float)hiScoreUserY,
@@ -271,27 +185,22 @@ inline Stage& Stage::DrawScore()
   }
 
 inline Stage& Stage::DrawShipYard()
- {
-  #ifdef X11_BACKEND
+ {// Publish the live yard texture (re-created on icon changes), then the
+  // request-gated frame end. GPU legs: both calls are inert twins.
   static_cast<X11Backend&>(engine).setFrameYardTexture(shipYard->GetYard());
   engine.endFrame();
-  #endif
   return *this;
- }
+  }
 
 inline Stage& Stage::DrawPlayingField()
- {
-  #ifdef X11_BACKEND
+ {// Request the field-present leg, then the request-gated frame end.
   static_cast<X11Backend&>(engine).requestFieldPresent();
   engine.endFrame();
-  #endif
   return *this;
- }
+  }
 
 inline Stage& Stage::Refresh()
- {
-  #ifdef X11_BACKEND
-  engine.drawStringTransparent("Asteroids",(float)titleX,(float)titleY,
+ {engine.drawStringTransparent("Asteroids",(float)titleX,(float)titleY,
                                EngineFont_Title,0.0f,0.0f,0.0f);
   char str[12];
   snprintf(str,sizeof(str),"%10.10s",score->TopTenName(0));
@@ -306,10 +215,9 @@ inline Stage& Stage::Refresh()
                           0.0f,0.0f,0.0f,
                           46260.0f/65535.0f,46260.0f/65535.0f,
                           46260.0f/65535.0f);
-  #endif
   button->DrawButton();
   DrawScore().DrawShipYard().DrawPlayingField();
   return *this;
- }
+  }
 
 #endif

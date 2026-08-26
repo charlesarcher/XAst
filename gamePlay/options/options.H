@@ -24,7 +24,7 @@
 #include<Xm/FileSB.h>
 #include<Xm/MessageB.h>
 #endif
-#include"../../utilities/rendering/x11types.H"
+#include"../../utilities/rendering/x11Backend.H"
 
 #include"../../bitmaps/ROCKScoringIcon.xbm"
 #include"../../bitmaps/ROckScoringIcon.xbm"
@@ -538,32 +538,46 @@ inline const int Options::weightGlobalMaxVel=40,
                                +Options::weightEnemyBulletDuration
                                +Options::weightNumEnemyBullets;
 
+// Task 47: the scoring-icon foregrounds were the .pixel values the D14
+// constructors wrote back into the referenced color structs; with those
+// colors as plain RotColor component triples, this island issues the same
+// allocation itself through the backend seam (same request, same pixel).
+inline unsigned long d14ColorPixel(const RotColor& c)
+ {return static_cast<X11Backend&>(stage->engine).allocateColor(
+     c.red/65535.0f,c.green/65535.0f,c.blue/65535.0f);
+ }
+
 inline Options::Options(int argc, char** argv): exitFlag(on),
                                                   valueChanged(off),
                                                   lastScoreFactor(1),
                                                   IOState(noIOInProgress)
- {XtToolkitInitialize();
+ {// Task 47: the Stage alias members are gone — the D9 island reads the
+  // backend accessors / the nativeHandle seam directly. Same values, same
+  // requests (windowBg.pixel was never allocated: 0 since task 12).
+  X11Backend& backend=static_cast<X11Backend&>(stage->engine);
+  Display* const display=(Display*)stage->engine.nativeHandle().display;
+  XtToolkitInitialize();
   appContext=XtCreateApplicationContext();
-  XtDisplayInitialize(appContext,stage->display,
+  XtDisplayInitialize(appContext,display,
                       "XAsteroids",argv[0],NULL,0,&argc,argv);
 
-  Pixel background=stage->windowBg.pixel,
-        foreground=BlackPixel(stage->display,DefaultScreen(stage->display));
+  Pixel background=0,
+        foreground=BlackPixel(display,DefaultScreen(display));
   XmString string;
 
 /********** Create Shell Widget **********/
 
   XmFontListEntry fontListEntry=XmFontListEntryCreate(XmFONTLIST_DEFAULT_TAG,
-                                                      XmFONT_IS_FONT,stage->buttonInfo);
+                                                      XmFONT_IS_FONT,backend.buttonFont());
   fontList=XmFontListAppendEntry(NULL,fontListEntry);
   XmFontListEntryFree(&fontListEntry);
   fontListEntry=XmFontListEntryCreate("errorFont",
-                                      XmFONT_IS_FONT,stage->errorInfo);
+                                      XmFONT_IS_FONT,backend.errorFont());
   fontList=XmFontListAppendEntry(fontList,fontListEntry);
   XmFontListEntryFree(&fontListEntry);
-  shell=XtVaAppCreateShell("XAsteroids",argv[0],applicationShellWidgetClass,stage->display,
+  shell=XtVaAppCreateShell("XAsteroids",argv[0],applicationShellWidgetClass,display,
                            XmNbackground,background,
-                           XmNiconPixmap,stage->icon,
+                           XmNiconPixmap,backend.icon(),
                            XmNiconName,"Options",
                            XmNtitle,"Asteroids Options",
                            XmNdeleteResponse,XmDO_NOTHING,
@@ -572,7 +586,7 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
                            XmNtextFontList,fontList,
                            XmNkeyboardFocusPolicy,XmPOINTER,
                            NULL);
-  XmAddWMProtocolCallback(shell,playingField->WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(shell,backend.wmDeleteWindowAtom(),
                           CloseCallback,(caddr_t)this);
 
 
@@ -1015,7 +1029,7 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
 /********** Create ENEMY Pixmap Label Gadget **********/
 
   CreateScoringIconPixmaps(ENEMYScoringIcon_bits,ENEMYScoringIcon_width,ENEMYScoringIcon_height,
-			   ENEMY::color.pixel,ENEMYIconPixmap);
+			   d14ColorPixel(ENEMY::color),ENEMYIconPixmap);
   ENEMYPixmapLabel=XtVaCreateManagedWidget("ENEMYPixmapLabel",
                                            xmLabelGadgetClass,mainForm,
                                            XmNbackground,background,
@@ -1055,7 +1069,7 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
 /********** Create enemy Pixmap Label Gadget **********/
 
   CreateScoringIconPixmaps(enemyScoringIcon_bits,enemyScoringIcon_width,enemyScoringIcon_height,
-			   enemy::color.pixel,enemyIconPixmap);
+			   d14ColorPixel(enemy::color),enemyIconPixmap);
   enemyPixmapLabel=XtVaCreateManagedWidget("enemyPixmapLabel",
                                            xmLabelGadgetClass,mainForm,
                                            XmNbackground,background,
@@ -1096,7 +1110,7 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
 /********** Create bullet Pixmap Label Gadget **********/
 
   CreateScoringIconPixmaps(bulletScoringIcon_bits,bulletScoringIcon_width,bulletScoringIcon_height,
-			   EnemyBulletGroup::color.pixel,bulletIconPixmap);
+			   d14ColorPixel(EnemyBulletGroup::color),bulletIconPixmap);
   bulletPixmapLabel=XtVaCreateManagedWidget("bulletPixmapLabel",
                                             xmLabelGadgetClass,mainForm,
                                             XmNbackground,background,
@@ -2351,7 +2365,8 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
   XtSetArg(args[n],XmNdirMask,string); ++n;
   fileSelectionDialog=XmCreateFileSelectionDialog(mainForm,"fileSelectionDialog",args,n);
   XmStringFree(string);
-  XmAddWMProtocolCallback(XtParent(fileSelectionDialog),playingField->WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(XtParent(fileSelectionDialog),
+                          static_cast<X11Backend&>(stage->engine).wmDeleteWindowAtom(),
                           CancelFileSelect,(caddr_t)this);
   XtUnmanageChild(XmFileSelectionBoxGetChild(fileSelectionDialog,XmDIALOG_HELP_BUTTON));
   Pixel topShadowColor,
@@ -2361,13 +2376,14 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
                              NULL);
   XColor troughColor;
   troughColor.pixel=bottomShadowColor;
-  XQueryColor(stage->display,DefaultColormap(stage->display,DefaultScreen(stage->display)),
+  XQueryColor(display,DefaultColormap(display,DefaultScreen(display)),
               &troughColor);
-  troughColor.red=(troughColor.red+stage->windowBg.red)/2;
-  troughColor.green=(troughColor.green+stage->windowBg.green)/2;
-  troughColor.blue=(troughColor.blue+stage->windowBg.blue)/2;
+  // windowBg components (the former Stage::windowBg static, task 47).
+  troughColor.red=(troughColor.red+46260)/2;
+  troughColor.green=(troughColor.green+46260)/2;
+  troughColor.blue=(troughColor.blue+46260)/2;
   troughColor.flags=DoRed|DoGreen|DoBlue;
-  XAllocColor(stage->display,DefaultColormap(stage->display,DefaultScreen(stage->display)),
+  XAllocColor(display,DefaultColormap(display,DefaultScreen(display)),
               &troughColor);
   SetWidgetChildrenColors(fileSelectionDialog,foreground,background,
                                               topShadowColor,bottomShadowColor,
@@ -2395,7 +2411,7 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
   XtVaSetValues(fileExistsQuestionDialog,
                 XmNdefaultButton,XmMessageBoxGetChild(fileExistsQuestionDialog,XmDIALOG_CANCEL_BUTTON),
                 NULL);
-  XmAddWMProtocolCallback(XtParent(fileExistsQuestionDialog),playingField->WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(XtParent(fileExistsQuestionDialog),backend.wmDeleteWindowAtom(),
                           CancelFileExistsQuestion,(caddr_t)this);
   XtUnmanageChild(XmMessageBoxGetChild(fileExistsQuestionDialog,XmDIALOG_HELP_BUTTON));
   SetWidgetChildrenColors(fileExistsQuestionDialog,foreground,background,
@@ -2420,7 +2436,7 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
   fileErrorDialog=XmCreateErrorDialog(fileSelectionDialog,"fileErrorDialog",args,n);
   XmStringFree(string2);
   XmStringFree(string);
-  XmAddWMProtocolCallback(XtParent(fileErrorDialog),playingField->WM_DELETE_WINDOW,
+  XmAddWMProtocolCallback(XtParent(fileErrorDialog),backend.wmDeleteWindowAtom(),
                           CancelFileError,(caddr_t)this);
   XtUnmanageChild(XmMessageBoxGetChild(fileErrorDialog,XmDIALOG_CANCEL_BUTTON));
   XtUnmanageChild(XmMessageBoxGetChild(fileErrorDialog,XmDIALOG_HELP_BUTTON));
@@ -2435,19 +2451,19 @@ horizontalSeparator4=XtVaCreateManagedWidget("horizontalSeparator4",
  }
 
 inline Options::~Options()
- {
-  XFreePixmap(stage->display,bulletIconPixmap);
-  XFreePixmap(stage->display,enemyIconPixmap);
-  XFreePixmap(stage->display,ENEMYIconPixmap);
-  XFreePixmap(stage->display,rockIconPixmap);
-  XFreePixmap(stage->display,ROckIconPixmap);
-  XFreePixmap(stage->display,ROCKIconPixmap);
-  XFreePixmap(stage->display,NCC1701DNotSelectedPixmap);
-  XFreePixmap(stage->display,NCC1701DSelectedPixmap);
-  XFreePixmap(stage->display,NCC1701ANotSelectedPixmap);
-  XFreePixmap(stage->display,NCC1701ASelectedPixmap);
-  XFreePixmap(stage->display,starDestroyerNotSelectedPixmap);
-  XFreePixmap(stage->display,starDestroyerSelectedPixmap);
+ {Display* const display=(Display*)stage->engine.nativeHandle().display;
+  XFreePixmap(display,bulletIconPixmap);
+  XFreePixmap(display,enemyIconPixmap);
+  XFreePixmap(display,ENEMYIconPixmap);
+  XFreePixmap(display,rockIconPixmap);
+  XFreePixmap(display,ROckIconPixmap);
+  XFreePixmap(display,ROCKIconPixmap);
+  XFreePixmap(display,NCC1701DNotSelectedPixmap);
+  XFreePixmap(display,NCC1701DSelectedPixmap);
+  XFreePixmap(display,NCC1701ANotSelectedPixmap);
+  XFreePixmap(display,NCC1701ASelectedPixmap);
+  XFreePixmap(display,starDestroyerNotSelectedPixmap);
+  XFreePixmap(display,starDestroyerSelectedPixmap);
   XmFontListFree(fontList);
   /*XtDestroyApplicationContext(appContext);*/ //Apparently this operation is implicit in Xorg implementation
  }
@@ -2455,60 +2471,70 @@ inline Options::~Options()
 void Options::CreateScoringIconPixmaps(const unsigned char* const bitmapData,
                                        const int width, const int height, const int color,
                                        Pixmap& pixmap)
- {GC gc=XCreateGC(stage->display,stage->window,0,NULL);
-  XSetGraphicsExposures(stage->display,gc,FALSE);
-  Pixmap bitmap=XCreateBitmapFromData(stage->display,stage->window,
+ {Display* const display=(Display*)stage->engine.nativeHandle().display;
+  Window const window=(Window)stage->engine.nativeHandle().window;
+  GC gc=XCreateGC(display,window,0,NULL);
+  XSetGraphicsExposures(display,gc,FALSE);
+  Pixmap bitmap=XCreateBitmapFromData(display,window,
                                       (const char * const)bitmapData,width,height);
   int iconWidth=ROCKScoringIcon_width+10,
       iconHeight=ROCKScoringIcon_height+10;
-  pixmap=XCreatePixmap(stage->display,stage->window,
+  pixmap=XCreatePixmap(display,window,
                        iconWidth,iconHeight,
-                       DefaultDepth(stage->display,DefaultScreen(stage->display)));
-  XSetBackground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
-  XSetForeground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
-  XFillRectangle(stage->display,pixmap,gc,0,0,
+                       DefaultDepth(display,DefaultScreen(display)));
+  XSetBackground(display,gc,BlackPixel(display,DefaultScreen(display)));
+  XSetForeground(display,gc,BlackPixel(display,DefaultScreen(display)));
+  XFillRectangle(display,pixmap,gc,0,0,
                  iconWidth,iconHeight);
-  XSetForeground(stage->display,gc,color);
-  XCopyPlane(stage->display,bitmap,pixmap,gc,0,0,width,height,
+  XSetForeground(display,gc,color);
+  XCopyPlane(display,bitmap,pixmap,gc,0,0,width,height,
              (iconWidth-width)/2,(iconHeight-height)/2,
              1);
-  XFreePixmap(stage->display,bitmap);
-  XFreeGC(stage->display,gc);
+  XFreePixmap(display,bitmap);
+  XFreeGC(display,gc);
  }
 
 void Options::CreateToggleButtonPixmaps(const unsigned char* const bitmapData,
                                        const int width, const int height, const int color,
                                        Pixmap& selectedPixmap, Pixmap& notSelectedPixmap)
- {GC gc=XCreateGC(stage->display,stage->window,0,NULL);
-  XSetGraphicsExposures(stage->display,gc,FALSE);
-  Pixmap bitmap=XCreateBitmapFromData(stage->display,stage->window,
+ {// Task 47: the yard-icon background pixel (former Stage::shipYardBg.pixel)
+  // allocates here on first use through the backend color seam — the same
+  // request/arithmetic as the old Stage-ctor allocation, so the same pixel.
+  static const unsigned long shipYardBgPixel=
+      static_cast<X11Backend&>(stage->engine).allocateColor(
+          28527.0f/65535.0f,28527.0f/65535.0f,28527.0f/65535.0f);
+  Display* const display=(Display*)stage->engine.nativeHandle().display;
+  Window const window=(Window)stage->engine.nativeHandle().window;
+  GC gc=XCreateGC(display,window,0,NULL);
+  XSetGraphicsExposures(display,gc,FALSE);
+  Pixmap bitmap=XCreateBitmapFromData(display,window,
                                       (const char * const)bitmapData,width,height);
   int buttonWidth=shipGroup->maxIconWidth+10,
       buttonHeight=shipGroup->maxIconHeight+10;
-  selectedPixmap=XCreatePixmap(stage->display,stage->window,
+  selectedPixmap=XCreatePixmap(display,window,
                                buttonWidth,buttonHeight,
-                               DefaultDepth(stage->display,DefaultScreen(stage->display)));
-  notSelectedPixmap=XCreatePixmap(stage->display,stage->window,
+                               DefaultDepth(display,DefaultScreen(display)));
+  notSelectedPixmap=XCreatePixmap(display,window,
                                   buttonWidth,buttonHeight,
-                                  DefaultDepth(stage->display,DefaultScreen(stage->display)));
-  XSetBackground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
-  XSetForeground(stage->display,gc,BlackPixel(stage->display,DefaultScreen(stage->display)));
-  XFillRectangle(stage->display,selectedPixmap,gc,0,0,
+                                  DefaultDepth(display,DefaultScreen(display)));
+  XSetBackground(display,gc,BlackPixel(display,DefaultScreen(display)));
+  XSetForeground(display,gc,BlackPixel(display,DefaultScreen(display)));
+  XFillRectangle(display,selectedPixmap,gc,0,0,
                  buttonWidth,buttonHeight);
-  XSetForeground(stage->display,gc,color);
-  XCopyPlane(stage->display,bitmap,selectedPixmap,gc,0,0,width,height,
+  XSetForeground(display,gc,color);
+  XCopyPlane(display,bitmap,selectedPixmap,gc,0,0,width,height,
              (buttonWidth-width)/2,(buttonHeight-height)/2,
              1);
-  XSetBackground(stage->display,gc,stage->shipYardBg.pixel);
-  XSetForeground(stage->display,gc,stage->shipYardBg.pixel);
-  XFillRectangle(stage->display,notSelectedPixmap,gc,0,0,
+  XSetBackground(display,gc,shipYardBgPixel);
+  XSetForeground(display,gc,shipYardBgPixel);
+  XFillRectangle(display,notSelectedPixmap,gc,0,0,
                  buttonWidth,buttonHeight);
-  XSetForeground(stage->display,gc,color);
-  XCopyPlane(stage->display,bitmap,notSelectedPixmap,gc,0,0,width,height,
+  XSetForeground(display,gc,color);
+  XCopyPlane(display,bitmap,notSelectedPixmap,gc,0,0,width,height,
              (buttonWidth-width)/2,(buttonHeight-height)/2,
              1);
-  XFreePixmap(stage->display,bitmap);
-  XFreeGC(stage->display,gc);
+  XFreePixmap(display,bitmap);
+  XFreeGC(display,gc);
  }
 
 inline void Options::SetWidgetChildrenColors(Widget& parent,const Pixel foreground,
@@ -2548,26 +2574,31 @@ inline void Options::RealizeWindow()
                       XmNmaxHeight,windowAttributes.height,
                       NULL);
   XEvent event;
+  // Task 47: modal-pump reads ride the backend accessors / nativeHandle seam
+  // (the Stage alias members and PlayingField atom aliases are gone).
+  X11Backend& backend=static_cast<X11Backend&>(stage->engine);
+  Display* const display=(Display*)stage->engine.nativeHandle().display;
+  Window const window=(Window)stage->engine.nativeHandle().window;
   do
    {XtAppNextEvent(appContext,&event);
-    if (event.xany.window==stage->window)
+    if (event.xany.window==window)
      {switch(event.type)
       {case MappingNotify:   XRefreshKeyboardMapping((XMappingEvent*)&event);
                              break;
-       case LeaveNotify:     if (stage->autoRepeatState==AutoRepeatModeOn)
-                               XAutoRepeatOn(stage->display);
+       case LeaveNotify:     if (backend.autoRepeatState()==AutoRepeatModeOn)
+                               XAutoRepeatOn(display);
                              break;
-       case EnterNotify:     XAutoRepeatOff(stage->display);
+       case EnterNotify:     XAutoRepeatOff(display);
                              break;
        case Expose:
        case MapNotify:
        case ConfigureNotify: stage->Refresh();
                              break;
        case ClientMessage:   if (((XClientMessageEvent*)&event)->message_type==
-                                 playingField->WM_PROTOCOLS&&
+                                 backend.wmProtocolsAtom()&&
                                  ((XClientMessageEvent*)&event)->data.l[0]==
-                                 playingField->WM_DELETE_WINDOW)
-                              {XPutBackEvent(stage->display,&event);
+                                 backend.wmDeleteWindowAtom())
+                              {XPutBackEvent(display,&event);
                                XtUnrealizeWidget(shell);
                                return;
                               }
@@ -3501,7 +3532,8 @@ void Options::AlterShipShape(Ship& newip,Thrust& newrust)
   playingField->AddShip();
   shipYard->AlterIcon(newip.icon,
 	             newip.iconWidth,newip.iconHeight,
-                     newip.iconColor);
+                     newip.iconColor.red,newip.iconColor.green,
+                     newip.iconColor.blue);
   stage->DrawShipYard();
  }
 

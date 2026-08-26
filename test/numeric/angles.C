@@ -16,11 +16,10 @@
 //   identical under both preprocessor configurations.
 //
 // Why not reuse probe.C for this: probe.C pre-includes the real <X11/Xlib.h>
-// before the game web, which conflicts with x11types.H's guards-closed
-// anonymous-tag XColor mirror (`typedef struct {...} XColor` vs Xlib's
-// tag==typedef-name form). probe.C is the 45a golden-capture artifact and
-// stays byte-pristine; this TU instead includes playingField.H FIRST and lets
-// x11types.H own the configuration, touching real Xlib only under
+// before the game web (pre-task-47 that collided with the transitional
+// shim's guards-closed XColor mirror; probe.C is the 45a golden-capture
+// artifact and stays byte-pristine). This TU includes playingField.H FIRST —
+// it owns the backend configuration — touching real Xlib only under
 // #ifdef X11_BACKEND.
 //
 // Randomness flows exclusively through the repo's own gary_rand::rand_16()
@@ -38,7 +37,7 @@
 
 using namespace std;
 
-// The game web first — x11types.H resolves the backend configuration and the
+// The game web first — playingField.H resolves the backend configuration and the
 // whole pristine header chain (intersection2d.H, movableObject.H, rotator.H,
 // liner.H, box.H, vector2d.H, linkedArray.H, ...) comes in with it.
 #include "../../gamePlay/playingField.H"
@@ -140,14 +139,45 @@ static const Vector2d pentVecs[5] = { Vector2d(0,-14), Vector2d(13,-4), Vector2d
 enum Shape { SHAPE_TRI=0, SHAPE_SQ=1, SHAPE_PENT=2, SHAPE_COUNT=3 };
 static RotVectorData* shapeRVD[SHAPE_COUNT];
 
-static void buildShapes(Display* dpy, Window win) {
-  XColor color;
-  memset(&color,0,sizeof(color));
-  color.flags=DoRed|DoGreen|DoBlue;
-  color.red=color.green=color.blue=65535;
-  shapeRVD[SHAPE_TRI]  = new RotVectorData(dpy,win,color,triVecs,3);
-  shapeRVD[SHAPE_SQ]   = new RotVectorData(dpy,win,color,sqVecs,4);
-  shapeRVD[SHAPE_PENT] = new RotVectorData(dpy,win,color,pentVecs,5);
+// Task 47: the D14 pipeline constructors take the injected engine (the X11
+// flavor sources display/window from its native handle; the guards-closed
+// data-capture path ignores it) and the color as components.
+namespace {
+struct AnglesEngine final : RenderingEngine {
+  X11NativeHandle h{nullptr,0};
+  bool initWindow(const char*) override { return true; }
+  void shutdown() override {}
+  X11NativeHandle nativeHandle() const override { return h; }
+  void beginFrame() override {} void endFrame() override {}
+  int pollEvents(GameEvent*, int) override { return 0; }
+  void setScissorRect(const int*) override {}
+  RenderTargetId createRenderTarget(int,int) override { return 0; }
+  void beginRenderTo(RenderTargetId) override {} void endRenderTo() override {}
+  void getPresentTransform(float& s,int& ox,int& oy) override { s=1.0f; ox=0; oy=0; }
+  void clear() override {}
+  void drawLine(float,float,float,float,float,float,float,float) override {}
+  void drawPolygon(const float*,int,float,float,float,bool) override {}
+  void drawRect(float,float,float,float,float,float,float,bool) override {}
+  void drawTriangles(const float*,int,TextureId) override {}
+  void drawStringOpaque(const char*,float,float,int,float,float,float,float,float,float) override {}
+  void drawStringTransparent(const char*,float,float,int,float,float,float) override {}
+  float measureText(const char*,int) override { return 0.0f; }
+  void getFontMetrics(int,FontMetrics&) override {}
+  TextureId createTextureFromBitmap(const uint8_t*,int,int,int) override { return 0; }
+  void drawTexture(TextureId,float,float,float,float,float) override {}
+  void drawTextureMasked(TextureId,TextureId,float,float,float,float) override {}
+  void deleteTexture(TextureId) override {}
+  TextureId createTextureFromRGBA32(const uint8_t*,int,int) override { return 0; }
+  void setTransform(float,float,float) override {} void resetTransform() override {}
+};
+}
+static AnglesEngine anglesEngine;
+
+static void buildShapes() {
+  const RotColor color={65535,65535,65535};
+  shapeRVD[SHAPE_TRI]  = new RotVectorData(anglesEngine,color,triVecs,3);
+  shapeRVD[SHAPE_SQ]   = new RotVectorData(anglesEngine,color,sqVecs,4);
+  shapeRVD[SHAPE_PENT] = new RotVectorData(anglesEngine,color,pentVecs,5);
 }
 
 // ---------------------------------------------------------------------------
@@ -249,14 +279,12 @@ int main() {
   Display* dpy=XOpenDisplay(getenv("DISPLAY"));
   if (!dpy) { fprintf(stderr,"angles: cannot open DISPLAY (run under Xvfb)\n"); return 2; }
   Window win=XCreateSimpleWindow(dpy,DefaultRootWindow(dpy),0,0,64,64,0,0,0);
+  anglesEngine.h={ (void*)dpy, (unsigned long)win };
 #else
   // Guards-closed (GL-leg domain config): RotVectorData is a pure data
-  // capturer — display/window arguments are ignored (unnamed parameters in
-  // the #else branch), null/0 are safe.
-  Display* dpy=nullptr;
-  Window win=0;
+  // capturer — the engine handle is ignored by that path.
 #endif
-  buildShapes(dpy,win);
+  buildShapes();
 
   const char* seedEnv=getenv("XAST_SEED");
   uint32_t seed=seedEnv?(uint32_t)strtoul(seedEnv,0,10):DEFAULT_SEED;

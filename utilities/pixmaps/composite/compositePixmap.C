@@ -3,13 +3,16 @@
 
 #ifdef X11_BACKEND
 
-CompositePixmap::CompositePixmap(Display* const disp,
-                               Drawable& drawable,
+CompositePixmap::CompositePixmap(RenderingEngine& eng,
                                const int maxW,
-                               const int maxH): display(disp),
+                               const int maxH): display((Display*)eng.nativeHandle().display),
                                                 width(maxW),
                                                 height(maxH)
- {int screen=DefaultScreen(display),
+ {// Task 47: the server handles come through the injected engine's native
+  // handle seam (construction always runs after backend init) — the
+  // shim-typed parameters are gone. The display member feeds AddBitmapData.
+  Drawable drawable=(Drawable)eng.nativeHandle().window;
+  int screen=DefaultScreen(display),
       background=BlackPixel(display,screen);
   GC gc=XCreateGC(display,drawable,0,NULL);
   XSetForeground(display,gc,background);
@@ -25,10 +28,14 @@ CompositePixmap::~CompositePixmap()
 CompositePixmap& CompositePixmap::AddBitmapData(const unsigned char* bitmap,
                                                 const int w,
                                                 const int h,
-                                                XColor& color)
- {int screen=DefaultScreen(display),
-      foreground=XAllocColor(display,DefaultColormap(display,screen),&color)
-                 ? color.pixel
+                                                const RotColor& color)
+ {// the display member (sourced from the injected engine at construction)
+  // feeds the allocation; the request assembles from the RotColor components
+  // exactly as the referenced-XColor form did.
+  XColor requested={0,color.red,color.green,color.blue,DoRed|DoGreen|DoBlue,0};
+  int screen=DefaultScreen(display),
+      foreground=XAllocColor(display,DefaultColormap(display,screen),&requested)
+                 ? requested.pixel
                  : WhitePixel(display,screen);
   GC gc=XCreateGC(display,pixmap,0,NULL);
   XSetForeground(display,gc,foreground);
@@ -52,34 +59,12 @@ CompositePixmap& CompositePixmap::AddBitmapData(const unsigned char* bitmap,
 
 using namespace std;
 
-// The guarded class above manages a server-side drawable resource; with the
-// guarded configuration off there is no such resource and no buffer member
-// to composite into. Construction/drawing are therefore hard errors, while
-// the destructor is deliberately EMPTY: an unguarded owner's cleanup loop
-// invokes this destructor on raw storage that was never constructed in this
-// configuration, so it must touch nothing.
-CompositePixmap::CompositePixmap(Display* const disp,
-                               Drawable& drawable,
-                               const int maxW,
-                               const int maxH): display(disp),
-                                                pixmap(0),
-                                                width(maxW),
-                                                height(maxH)
- {cout<<endl<<"CompositePixmap has no engine-side resource.  Execution terminated."<<endl;
-  abort();
- }
-
+// The guards-closed twin is never constructed (the placement news live in
+// the guarded configuration); its destructor is deliberately EMPTY because
+// an unguarded owner's cleanup loop invokes it on raw storage that was never
+// constructed in this configuration, so it must touch nothing.
 CompositePixmap::~CompositePixmap()
  {
- }
-
-CompositePixmap& CompositePixmap::AddBitmapData(const unsigned char* bitmap,
-                                                const int w,
-                                                const int h,
-                                                XColor& color)
- {cout<<endl<<"CompositePixmap::AddBitmapData has no engine-side resource.  Execution terminated."<<endl;
-  abort();
-  return *this;
  }
 
 namespace

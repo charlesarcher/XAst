@@ -32,7 +32,6 @@
 #include<unistd.h>
 #include"../utilities/rendering/vkBackend.H"
 #endif
-#include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
 #include"../utilities/vector2d.H"
 #include"../utilities/box.H"
@@ -71,9 +70,6 @@ class PlayingField
     PlayingField& RemoveShip();
     void AlterExtraShipScore(const int newExtraShipScore);
     void AlterUSecondsPerFrame(const int newUSecondsPerFrame);
-
-    GC gc;
-    Pixmap pixmap;
 
     Boolean lastHitFromAlly;
     int lastHitScore,
@@ -340,7 +336,7 @@ class PlayingField
       // present copies into this client's output buffer; flushing them
       // guarantees any grab issued after the counter is read executes
       // after those copies in server request order.
-      XFlush(stage->display);
+      XFlush((Display*)stage->engine.nativeHandle().display);
       #endif
       if (cp)
        {char buf[32];
@@ -431,11 +427,6 @@ class PlayingField
 
     double speedAdjust;
 
-#ifdef X11_BACKEND
-    Atom WM_PROTOCOLS,
-         WM_DELETE_WINDOW;
-#endif
-
     Intersector intersector;
 
     Boolean leftRotPending,
@@ -445,6 +436,13 @@ class PlayingField
     FrameDrawRecord frameDraws[maxFrameDraws];
     int numFrameDraws;
 
+    // Task 47: the canvas alias member died with the D-C C3 aliases; the id
+    // comes from the backend each time (GPU twin returns 0, where
+    // beginRenderTo is a documented no-op — identical to the old zeroed
+    // alias on those legs).
+    TextureId canvasId() const
+     {return static_cast<X11Backend&>(engine).canvas();
+     }
     void PresentFrame();
     void RenderFrameDraws();
 #ifndef X11_BACKEND
@@ -510,16 +508,11 @@ inline PlayingField::Boolean PlayingField::enemiesExist=PlayingField::on,
 inline const Box PlayingField::playArea(640,512,Vector2d(320+2*ROCK::scale,256+2*ROCK::scale));
 
 inline PlayingField::PlayingField(RenderingEngine& eng): engine(eng),
-#ifdef X11_BACKEND
-                                     gc(static_cast<X11Backend&>(eng).gxorGC()),
-                                     pixmap(static_cast<X11Backend&>(eng).canvas()),
-#else
-                                     pixmap(0),
-#endif
                                      lastHitFromAlly(off),
                                      lastHitScore(0),
 #ifdef X11_BACKEND
-                                     fontHeight(stage->hiScoreInfo->ascent+stage->hiScoreInfo->descent+4),
+                                     fontHeight(static_cast<X11Backend&>(eng).hiScoreFont()->ascent
+                                               +static_cast<X11Backend&>(eng).hiScoreFont()->descent+4),
 #else
                                      fontHeight(0),
 #endif
@@ -529,10 +522,6 @@ inline PlayingField::PlayingField(RenderingEngine& eng): engine(eng),
                                      framesSinceEnemy(0),
                                      speedAdjust(uSecondsPerFrame/125E3),
                                      level(0),
-#ifdef X11_BACKEND
-                                     WM_PROTOCOLS(static_cast<X11Backend&>(eng).wmProtocolsAtom()),
-                                     WM_DELETE_WINDOW(static_cast<X11Backend&>(eng).wmDeleteWindowAtom()),
-#endif
                                      nonPermeableList(28),
                                      selfPermeableList(128),
                                      permeableList(28),
@@ -645,7 +634,7 @@ inline void PlayingField::PresentFrame()
   engine.beginFrame();
   // World pass targets the canvas (the standing target is the window; the
   // HUD below needs that standing target restored, hence the bracket).
-  engine.beginRenderTo((TextureId)pixmap);
+  engine.beginRenderTo(canvasId());
   // (3) canvas play-area sub-rect only (the border ring survives);
   engine.clear();
   #ifndef X11_BACKEND
@@ -698,8 +687,18 @@ inline void PlayingField::PresentFrame()
 // D8's redraw-everything contract needs all of it every frame. Regions are
 // disjoint, so ordering against the world pass is pixel-irrelevant.
 inline void PlayingField::DrawHudChrome()
- {// window background (stage.H windowBg 46260 gray);
-  engine.drawRect(0.0f,0.0f,(float)stage->windowWidth,(float)stage->windowHeight,
+ {// window backdrop (the 46260 gray); the extent is recomputed from the
+  // shared formula with the Stage ctor's exact inputs — identical values.
+  FontMetrics titleFm,hiScoreFm,scoreFm;
+  engine.getFontMetrics(EngineFont_Title,titleFm);
+  engine.getFontMetrics(EngineFont_HiScore,hiScoreFm);
+  engine.getFontMetrics(EngineFont_Score,scoreFm);
+  int windowWidth=0,windowHeight=0;
+  WindowSizeFormula::Compute(titleFm,hiScoreFm,scoreFm,
+                             (int)engine.measureText("Asteroids",EngineFont_Title),
+                             playArea.Width(),playArea.Height(),
+                             shipGroup->maxIconHeight,windowWidth,windowHeight);
+  engine.drawRect(0.0f,0.0f,(float)windowWidth,(float)windowHeight,
                   46260.0f/65535.0f,46260.0f/65535.0f,46260.0f/65535.0f,true);
   // play-area base (the canvas clear's visible equivalent);
   engine.drawRect((float)stage->playAreaX,(float)stage->playAreaY,
@@ -1021,12 +1020,13 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
   enemyGroup->Reset();
   enemyBulletGroup->Reset();
   score->UpdateTopTen();
-  int xPos=playArea.NorthWestCorner().x+(playArea.Width()-stage->hiScoreInfo->max_bounds.width*22)/2
-           -stage->hiScoreInfo->max_bounds.lbearing,
-      yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+stage->hiScoreInfo->ascent,
+  XFontStruct* const hiScoreInfo=static_cast<X11Backend&>(engine).hiScoreFont();
+  int xPos=playArea.NorthWestCorner().x+(playArea.Width()-hiScoreInfo->max_bounds.width*22)/2
+           -hiScoreInfo->max_bounds.lbearing,
+      yPosSave=playArea.NorthWestCorner().y+(playArea.Height()-15*fontHeight+4)/2+hiScoreInfo->ascent,
       yPos=yPosSave;
   char str[23];
-  engine.beginRenderTo((TextureId)pixmap);
+  engine.beginRenderTo(canvasId());
   // The old flow cleared the canvas right after every present, so this
   // screen always drew over fresh black; the clear now heads each frame,
   // so restore that black base explicitly before the score table.
@@ -1050,8 +1050,8 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
                                (float)(yPos+=fontHeight),
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
   xastQaTextBlock("table",(float)xPos,
-                  (float)(yPosSave-stage->hiScoreInfo->ascent),
-                  (float)(stage->hiScoreInfo->max_bounds.width*22),
+                  (float)(yPosSave-hiScoreInfo->ascent),
+                  (float)(hiScoreInfo->max_bounds.width*22),
                   (float)(15*fontHeight));
   engine.endRenderTo();
   stage->DrawPlayingField();
@@ -1277,7 +1277,7 @@ inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
   // needs no preceding begin, but VK's endFrame submits nothing unless
   // beginFrame acquired (the table would never reach the window).
   engine.beginFrame();
-  engine.beginRenderTo((TextureId)pixmap);
+  engine.beginRenderTo(canvasId());
   engine.clear();
    // Task-36: base+chrome BEFORE the table (clear() wiped the whole window
    // on this leg).
@@ -1513,15 +1513,16 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv,
 void PlayingField::GenHelpScreen()
  {
   #ifdef X11_BACKEND
-  engine.beginRenderTo((TextureId)pixmap);
+  engine.beginRenderTo(canvasId());
   engine.clear();
   engine.endRenderTo();
+  XFontStruct* const hiScoreInfo=static_cast<X11Backend&>(engine).hiScoreFont();
   int xPos=playArea.NorthWestCorner().x+(playArea.Width()
                                          -(int)engine.measureText("        H -- help (this screen)",
                                                                   EngineFont_HiScore))/2
-           -stage->hiScoreInfo->max_bounds.lbearing,
-      yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+stage->hiScoreInfo->ascent;
-  engine.beginRenderTo((TextureId)pixmap);
+           -hiScoreInfo->max_bounds.lbearing,
+      yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+hiScoreInfo->ascent;
+  engine.beginRenderTo(canvasId());
   engine.drawStringTransparent("        S -- start",(float)xPos,(float)yPos,
                                EngineFont_HiScore,1.0f,1.0f,1.0f);
   engine.drawStringTransparent("        Q -- quit",(float)xPos,
@@ -1560,7 +1561,7 @@ void PlayingField::GenHelpScreen()
   // GL leg: the canvas indirection collapses (pixmap=0 → beginRenderTo is a
   // no-op), so the text draws straight onto the window; metrics come from
   // the engine instead of stage's guarded font structs.
-  engine.beginRenderTo((TextureId)pixmap);
+  engine.beginRenderTo(canvasId());
   engine.clear();
   engine.endRenderTo();
   FontMetrics hiScoreFm;
@@ -1569,7 +1570,7 @@ void PlayingField::GenHelpScreen()
                                          -(int)engine.measureText("        H -- help (this screen)",
                                                                   EngineFont_HiScore))/2,
       yPos=playArea.NorthWestCorner().y+(playArea.Height()-12*fontHeight+4)/2+hiScoreFm.max_bounds.ascent;
-  engine.beginRenderTo((TextureId)pixmap);
+  engine.beginRenderTo(canvasId());
   // Task-36: base+chrome BEFORE the text — clear() wiped the whole window
   // and the strings must land on the restored surface.
   DrawHudChrome();

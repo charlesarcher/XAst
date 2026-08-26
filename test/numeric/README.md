@@ -161,9 +161,10 @@ storage block that is never constructed.
   preprocessor configurations, including the D14 `#else` engine-rotation math
   mirror.
 
-`angles.C` cannot reuse `probe.C`'s TU: probe pre-includes real `<X11/Xlib.h>`,
-which conflicts with `x11types.H`'s guards-closed anonymous-tag `XColor`
-mirror. `angles.C` instead includes `playingField.H` FIRST and touches real
+`angles.C` cannot reuse `probe.C`'s TU: probe pre-includes real `<X11/Xlib.h>`
+before the game web (pre-task-47 that collided with the transitional shim's
+guards-closed anonymous-tag `XColor` mirror, deleted with the shim at task 47).
+`angles.C` instead includes `playingField.H` FIRST and touches real
 Xlib only under `#ifdef X11_BACKEND`. `probe.C` stays byte-pristine (it is the
 45a capture artifact).
 

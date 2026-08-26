@@ -1,7 +1,6 @@
 // test/vk/vkinput.C — XTest injection helpers for vkmethods' D16 live proof.
-// Deliberately a separate TU with C linkage: it includes the REAL X11 headers,
-// which must never meet x11types.H's guards-closed anonymous-tag mirror in one
-// TU (the task-45b probe.C lesson).
+// Deliberately a separate TU with C linkage: real X11 headers in their own TU,
+// never inside the game web (the task-45b probe.C lesson, pre-shim-deletion).
 #include<X11/Xlib.h>
 #include<X11/Xutil.h>
 #include<X11/extensions/XTest.h>

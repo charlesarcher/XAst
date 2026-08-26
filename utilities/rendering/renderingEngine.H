@@ -23,7 +23,7 @@ struct FontMetrics {
 
 struct GameEvent {           // typed, per-event (D16). NO repeat member — repeats are
     enum Type {              // dropped at the pollEvents boundary on both backends.
-        KeyDown,             // character = printable char (X11: XLookupString;
+        KeyDown,             // character = printable char (X11: keysym decode;
         KeyUp,               //   GL/VK: US-layout table); key = backend key id,
         MouseDown,           //   used by the D16 table for non-printables
         MouseUp,             //   ('q'/'n'/'h'/space/title-hover paths)
@@ -54,7 +54,7 @@ public:
 
     // (2) Frame lifecycle
     virtual void beginFrame() = 0;   // NO scissor ownership (D8); X11: noop; GL/VK: frame-start bookkeeping
-    virtual void endFrame() = 0;     // X11: pixmap->window blit (stage.H:258/:269) + XSync (:296/:329 bound);
+    virtual void endFrame() = 0;     // X11: pixmap->window blit (stage.H:258/:269) + server sync (:296/:329 bound);
                                      // GL/VK: swap/present
 
     // (3) Seams
@@ -96,7 +96,7 @@ public:
     // (5) Text
     virtual void drawStringOpaque(const char* text, float x, float y, int fontId,
                                   float r, float g, float b,
-                                  float bgR, float bgG, float bgB) = 0; // X11: XDrawImageString
+                                  float bgR, float bgG, float bgB) = 0; // X11: opaque text draw
     virtual void drawStringTransparent(const char* text, float x, float y, int fontId,
                                        float r, float g, float b) = 0;  // X11: transparent text draw (per-method mapping table)
     virtual float measureText(const char* text, int fontId) = 0;
@@ -104,6 +104,35 @@ public:
 
     // (6) Textures
     virtual TextureId createTextureFromBitmap(const uint8_t* data, int w, int h, int channels) = 0;
+    // Colored stamp (task 47 closure of the last raw bitmap-creation sites):
+    // decode a 1-bit XBM plane to an opaque tile — set bits carry the
+    // foreground color, clear bits the background. Components are 0..1 floats
+    // (16-bit value / 65535). Default impl: CPU-decode to RGBA8 +
+    // createTextureFromBitmap(channels=4) — byte-identical to the GL/VK legs'
+    // former free-function path. The X11 backend overrides with the native
+    // pixel path: allocate-or-fallback for both colors (the exact arithmetic
+    // the retired raw sites used) + one colored-stamp server request parented
+    // to the window at DefaultDepth (a pixmap's drawable argument contributes
+    // only its depth; the yard-parented originals had the same DefaultDepth,
+    // so the created resource is identical).
+    virtual TextureId createColoredStamp(const unsigned char* bits, int w, int h,
+                                         float fgR, float fgG, float fgB,
+                                         float bgR, float bgG, float bgB)
+     {const int stride=(w+7)/8;
+      uint8_t* rgba=new uint8_t[(size_t)w*h*4];
+      for(int j=0;j<h;++j)
+        for(int i=0;i<w;++i)
+         {const bool set=(bits[j*stride+i/8]>>(i%8))&1;
+          uint8_t* px=&rgba[((size_t)j*w+i)*4];
+          px[0]=uint8_t((set?fgR:bgR)*255.0f+0.5f);
+          px[1]=uint8_t((set?fgG:bgG)*255.0f+0.5f);
+          px[2]=uint8_t((set?fgB:bgB)*255.0f+0.5f);
+          px[3]=255;
+         }
+      TextureId id=createTextureFromBitmap(rgba,w,h,4);
+      delete[] rgba;
+      return id;
+     }
     virtual void drawTexture(TextureId tex, float x, float y, float w, float h, float alpha) = 0;
     virtual void drawTextureMasked(TextureId content, TextureId mask,
                                    float x, float y, float w, float h) = 0;  // R8 discard / native clip GC

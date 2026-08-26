@@ -1,22 +1,30 @@
 #ifndef _COMPOSITEPIXMAP_H
 #define _COMPOSITEPIXMAP_H
 
+// Task 47: domain-owned 16-bit color triple. The D14 pipeline constructors
+// and the composite layer API take the components directly on every leg —
+// the guarded impls assemble their own XColor and allocate exactly as before
+// (same request, same pixel), so no group header needs an X11-typed static.
+struct RotColor
+ {unsigned short red,green,blue;
+ };
+
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #endif
-#include"../../rendering/x11types.H"
+#include"../../rendering/renderingEngine.H"
+#ifdef X11_BACKEND
 
 class CompositePixmap
  {public:
-   CompositePixmap(Display* const,
-                   Drawable&,
+   CompositePixmap(RenderingEngine&,
                    const int maxWidth,
                    const int maxHeight);
    ~CompositePixmap();
    CompositePixmap& AddBitmapData(const unsigned char* bitmap,
                                   const int width,
                                   const int height,
-                                  XColor&);
+                                  const RotColor&);
    const Pixmap& GetPixmap() const;
    const int GetPixWidth() const;
    const int GetPixHeight() const;
@@ -42,6 +50,30 @@ inline const int CompositePixmap::GetPixHeight() const
  {return height;
  }
 
+#else
+// Guards-closed twin (task 47): the GPU pipeline composites via the CPU
+// stack below; this handle exists only so ExplosionGraphic's frame storage
+// and its dtor stay well-formed without any X11 surface (never constructed
+// there — the placement news live in the guarded configuration).
+class CompositePixmap
+ {public:
+   ~CompositePixmap();
+   const int GetPixWidth() const;
+   const int GetPixHeight() const;
+
+ private:
+   int width,
+       height;
+ };
+
+inline const int CompositePixmap::GetPixWidth() const
+ {return width;
+ }
+
+inline const int CompositePixmap::GetPixHeight() const
+ {return height;
+ }
+#endif
 #ifndef X11_BACKEND
 // ---------------------------------------------------------------------------
 // CPU-side software compositing — the D14 `#else` engine branch of this TU

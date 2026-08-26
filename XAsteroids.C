@@ -249,8 +249,6 @@ int main (int argc, char *argv[])
   // ---- the real game on GL (task 35) ----
   glfwSetKeyCallback(engine.window,glKeyTrampoline);
   stage = new Stage(engine);
-  stage->display=nullptr;                    // deterministic shim values: the
-  stage->window=0;                           // GL rotator-data path ignores them
   button = new Button(engine,
                       "Options",
                       stage->buttonX,stage->buttonY);
@@ -328,8 +326,6 @@ int main (int argc, char *argv[])
     return 1;
    }
   stage = new Stage(engine);
-  stage->display=nullptr;                    // deterministic shim values: the
-  stage->window=0;                           // VK rotator-data path ignores them
   button = new Button(engine,
                       "Options",
                       stage->buttonX,stage->buttonY);

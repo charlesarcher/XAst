@@ -5,7 +5,6 @@
 #ifdef X11_BACKEND
 #include<X11/Xlib.h>
 #endif
-#include"../../rendering/x11types.H"
 #include"rotatorDisplayData.H"
 
 class AngVel
@@ -34,12 +33,15 @@ class Rotator
       GetVecsAtTime(const double time) const;
     const int
       GetNumVecs() const;
+#ifdef X11_BACKEND
+    // Task 47: the pixmap/mask accessors are consumed only by the guarded
+    // draw branches; GetMaskGCAtTime died unconsumed with the transition
+    // bridges. The engine-side texture ids are captured at DeferDraw time.
     const Pixmap&
       GetPixAtTime(const double time) const;
-    GC&
-      GetMaskGCAtTime(const double time);
     const Pixmap&
       GetMaskAtTime(const double time) const;
+#endif
     const Box&
       GetPixBox() const;
     const int
@@ -126,20 +128,17 @@ Rotator::GetNumVecs() const
  {return rotData->GetNumVecs();
  }
 
+#ifdef X11_BACKEND
 inline const Pixmap&
 Rotator::GetPixAtTime(const double time) const
  {return rotData->GetPixmap(angle+angularVelocity.angularVelocity*time);
- }
-
-inline GC&
-Rotator::GetMaskGCAtTime(const double time)
- {return rotData->GetGC(angle+angularVelocity.angularVelocity*time);
  }
 
 inline const Pixmap&
 Rotator::GetMaskAtTime(const double time) const
  {return rotData->GetMaskAtTime(angle+angularVelocity.angularVelocity*time);
  }
+#endif
 
 inline const Box&
 Rotator::GetPixBox() const

@@ -70,7 +70,7 @@
 #include"../../bitmaps/yinyang.xbm"
 
 // XTest injection helpers (test/vk/vkinput.C, C linkage): real X11 headers
-// must never meet x11types.H in this TU.
+// stay out of the game web TU.
 extern "C" {
 int xastInputOpen(void);
 void xastInputClose(void);

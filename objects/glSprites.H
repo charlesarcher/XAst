@@ -15,8 +15,9 @@
 // Semantics mirrored from the guarded pipeline:
 //   - outline point mapping:  (v.x + radius + .5, v.y + radius + .5)
 //     truncated to integer pixels (BuildPixmap's XPoint assignment);
-//   - closed loop: segments p0→p1 … p(n-1)→p0 (XDrawLines with n+1 points);
-//   - decor stamp offset: ((side−w)/2, (side−h)/2) (XCopyPlane dest);
+//   - closed loop: segments p0→p1 … p(n-1)→p0 (n+1 points, the guarded
+//     polyline's extra closing segment);
+//   - decor stamp offset: ((side−w)/2, (side−h)/2) (the guarded blit dest);
 //   - outline AND decor share the object's foreground color (one GC);
 //   - color components shrink 16→8 bit with the compositePixmap.C rounding
 //     so every GL sprite tints identically to the CPU-composited frames.
@@ -47,7 +48,7 @@ namespace glsprites_detail
    }
 
   // Integer Bresenham; 1px stroke approximates the guarded path's thin
-  // XDrawLines segment set (exact rasterization parity is the task-36 gate).
+  // polyline segment set (exact rasterization parity is the task-36 gate).
   inline void strokeLine(std::vector<uint8_t>& buf,const int side,
                          int x0,int y0,const int x1,const int y1,
                          const uint8_t r,const uint8_t g,const uint8_t b)
@@ -82,7 +83,7 @@ inline std::vector<uint8_t> glBakeStaticSprite(
                 b=glsprites_detail::channel16to8(b16);
   if (vecs&&numVecs>0&&side>0)
    {// Closed polyline through the BuildPixmap point mapping; start at p(n-1)
-    // so the closing segment p(n-1)→p0 is drawn like XDrawLines' extra point.
+    // so the closing segment p(n-1)→p0 is drawn like the guarded extra point.
     int prevX=(int)(vecs[numVecs-1].x+radius+.5),
         prevY=(int)(vecs[numVecs-1].y+radius+.5);
     for (int j=0;j<numVecs;++j)
@@ -112,7 +113,7 @@ inline std::vector<uint8_t> glBakeStaticSprite(
 // a=k*incAngle, numPix=int(2pi*radius+.5), radius=(max(w,h)-1)/2. The X11
 // leg scatters every composite pixel that is not background; here the alpha
 // byte carries painted-ness (the CPU composite contract). Out-of-range
-// points clip, like XDrawPoint on the sideSize pixmap.
+// points clip, like the guarded per-point plot on the sideSize pixmap.
 // ---------------------------------------------------------------------------
 struct GlRotatedFrames
  {std::vector<std::vector<uint8_t>> rgba;

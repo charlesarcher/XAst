@@ -1,47 +1,13 @@
 #ifndef _SHIPYARD_H
 #define _SHIPYARD_H
 
-#ifdef X11_BACKEND
-#include<X11/Xlib.h>
-#endif
-#include"../utilities/rendering/x11types.H"
 #include"../utilities/rendering/renderingEngine.H"
-#ifndef X11_BACKEND
-#include<vector>
-#endif
 
 // Yard background: the exact Stage::shipYardBg value (16-bit component 28527,
 // i.e. 111/255 scaled). The engine fill path allocates the color or falls back
-// to white — the same semantics as the colormap allocations this file retains
-// solely to feed pixel arguments to its raw colored stamps.
+// to white — the same semantics as the colormap allocations the raw stamps
+// used before task 47 closed them.
 static const float yardGray=28527.0f/65535.0f;
-
-#ifndef X11_BACKEND
-// Task-36 (GL yard leg): XBM -> opaque RGBA8 tile with the raw colored-stamp
-// fg/bg semantics — set bits carry the foreground color, clear bits the
-// background. Rows are ceil(w/8)-byte strided, LSB-first (bit 0 = leftmost
-// pixel). All ship/yard colors are byte-exact (n*257), so the float
-// round-trip is lossless (T17 exhaustive-sweep precedent).
-inline TextureId glUploadColoredStamp(RenderingEngine& engine,
-                                      const unsigned char* bits,const int w,
-                                      const int h,const float fr,
-                                      const float fgn,const float fb,
-                                      const float br,const float bg,
-                                      const float bb)
- {const int stride=(w+7)/8;
-  std::vector<uint8_t> rgba(static_cast<size_t>(w)*h*4);
-  for(int j=0;j<h;++j)
-   for(int i=0;i<w;++i)
-    {const bool set=(bits[j*stride+i/8]>>(i%8))&1;
-     uint8_t* px=&rgba[(static_cast<size_t>(j)*w+i)*4];
-     px[0]=uint8_t((set?fr:br)*255.0f+0.5f);
-     px[1]=uint8_t((set?fgn:bg)*255.0f+0.5f);
-     px[2]=uint8_t((set?fb:bb)*255.0f+0.5f);
-     px[3]=255;
-    }
-  return engine.createTextureFromBitmap(rgba.data(),w,h,4);
- }
-#endif
 
 class ShipYard
  {public:
@@ -55,11 +21,16 @@ class ShipYard
     const int NumShips() const;
     const TextureId& GetYard() const;
     ShipYard& ClearYard();
-#ifdef X11_BACKEND
+    // Task 47: one macro-free body on every leg. The colored stamp rides the
+    // engine's createColoredStamp (X11: allocate-or-fallback pixels + one
+    // colored-stamp request — byte-identical to the retired raw pair; GL/VK:
+    // the RGBA8 decode upload that always served those legs). The icon-swap
+    // entry takes plain color components now; its sole caller (options.H)
+    // re-derives them from RGB anyway.
     ShipYard& AlterIcon(const unsigned char* const shipBitmap,
                         const int shipBitmapWidth, const int shipBitmapHeight,
-                        XColor& shipColor);
-#endif
+                        const unsigned short sr, const unsigned short sg,
+                        const unsigned short sb);
 
   private:
     ShipYard(const ShipYard&);
@@ -87,9 +58,7 @@ class ShipYard
     TextureId yard,
               ship,
               shipErase;
-
-    Display* const display;
- };
+  };
 
 inline ShipYard::ShipYard(RenderingEngine& engine,
                           const unsigned char* const shipBits,
@@ -108,27 +77,11 @@ inline ShipYard::ShipYard(RenderingEngine& engine,
                                                    colStartOffset((yHeight-10)%shipBitsHeight/2+5),
                                                    lastShipInRowOffset(rowEndOffset-shipBitsWidth),
                                                    shipRow(rowStartOffset-shipBitsWidth),
-                                                   shipCol(colStartOffset),
-                                                   display((Display*)engine.nativeHandle().display)
-  {
-   #ifdef X11_BACKEND
-   // The yard background is the exact Stage::shipYardBg value the call site
+                                                   shipCol(colStartOffset)
+  {// The yard background is the exact Stage::shipYardBg value the call site
    // used to pass, and the ship color arrives as the RGB triple of
    // shipGroup->ship->iconColor (allocated by Ship's ctor). The old
-   // `drawable` parameter was always stage->window, now taken from the
-   // engine handle. The two colormap allocations below survive only to feed
-   // pixel arguments to the raw colored stamps (see the retained call).
-   int screen=DefaultScreen(display);
-   XColor yardBackground={0,
-                          28527,//111
-                          28527,//111
-                          28527,//111
-                          DoRed|DoGreen|DoBlue,
-                          0};
-   XColor shipForeground={0,sr,sg,sb,DoRed|DoGreen|DoBlue,0};
-   yardColor=XAllocColor(display,DefaultColormap(display,screen),&yardBackground)
-            ? yardBackground.pixel
-            : WhitePixel(display,screen);
+   // `drawable` parameter was always stage->window.
    yard=engine.createRenderTarget(yWidth,yHeight);
    engine.beginRenderTo(yard);
    engine.drawRect(0,0,yWidth,yHeight,yardGray,yardGray,yardGray,true);
@@ -137,31 +90,11 @@ inline ShipYard::ShipYard(RenderingEngine& engine,
    engine.beginRenderTo(shipErase);
    engine.drawRect(0,0,shipBitsWidth,shipBitsHeight,yardGray,yardGray,yardGray,true);
    engine.endRenderTo();
-   shipColor=XAllocColor(display,DefaultColormap(display,screen),&shipForeground)
-            ? shipForeground.pixel
-            : WhitePixel(display,screen);
-   // Colored stamp retained: set->shipColor, clear->yardColor cannot be
-   // expressed 1:1 through the engine yet — closure = backend fg/bg-capable
-   // bitmap seam or task-26 decoder + fixed RGBA upload.
-   ship=XCreatePixmapFromBitmapData(display,yard,(char*)shipBits,shipBitsWidth,shipBitsHeight,
-                                    shipColor,yardColor,DefaultDepth(display,screen));
-   #else
-   // GL leg (task 36): the yard is a render target filled with the Stage
-   // shipYardBg gray; the ship stamp is the XBM decoded to an opaque RGBA8
-   // tile — set bits carry the ship color, clear bits the yard gray (the
-   // raw stamp's fg/bg mapping).
-   yard=engine.createRenderTarget(yWidth,yHeight);
-   engine.beginRenderTo(yard);
-   engine.drawRect(0,0,yWidth,yHeight,yardGray,yardGray,yardGray,true);
-   engine.endRenderTo();
-   shipErase=engine.createRenderTarget(shipBitsWidth,shipBitsHeight);
-   engine.beginRenderTo(shipErase);
-   engine.drawRect(0,0,shipBitsWidth,shipBitsHeight,yardGray,yardGray,yardGray,true);
-   engine.endRenderTo();
-   ship=glUploadColoredStamp(engine,shipBits,shipBitsWidth,shipBitsHeight,
-                             sr/65535.0f,sg/65535.0f,sb/65535.0f,
-                             yardGray,yardGray,yardGray);
-   #endif
+   // Colored stamp: set bits carry the ship color, clear bits the yard gray
+   // (the raw stamp's fg/bg mapping, closed at 47 through the engine seam).
+   ship=engine.createColoredStamp(shipBits,shipBitsWidth,shipBitsHeight,
+                                  sr/65535.0f,sg/65535.0f,sb/65535.0f,
+                                  yardGray,yardGray,yardGray);
   }
 
 inline ShipYard::~ShipYard()
@@ -218,10 +151,10 @@ inline ShipYard& ShipYard::ClearYard()
   return *this;
  }
 
-#ifdef X11_BACKEND
 inline ShipYard& ShipYard::AlterIcon(const unsigned char* const shipBits,
                                      const int shipBitsWidth, const int shipBitsHeight,
-                                     XColor& shipForeground)
+                                     const unsigned short sr, const unsigned short sg,
+                                     const unsigned short sb)
  {shipWidth=shipBitsWidth;
   shipHeight=shipBitsHeight;
   maxVisibleShips=((yardHeight-10)/shipBitsHeight)*((yardWidth-10)/shipBitsWidth);
@@ -229,28 +162,21 @@ inline ShipYard& ShipYard::AlterIcon(const unsigned char* const shipBits,
   rowEndOffset=rowStartOffset+shipBitsWidth*((yardWidth-10)/shipBitsWidth);
   colStartOffset=(yardHeight-10)%shipBitsHeight/2+5;
   lastShipInRowOffset=rowEndOffset-shipBitsWidth;
-  int screen=DefaultScreen(display);
-  shipColor=XAllocColor(display,DefaultColormap(display,screen),&shipForeground)
-            ? shipForeground.pixel
-            : WhitePixel(display,screen);
   engine.deleteTexture(ship);
   engine.deleteTexture(shipErase);
   shipErase=engine.createRenderTarget(shipBitsWidth,shipBitsHeight);
   engine.beginRenderTo(shipErase);
   engine.drawRect(0,0,shipBitsWidth,shipBitsHeight,yardGray,yardGray,yardGray,true);
   engine.endRenderTo();
-  // Colored stamp retained: set->shipColor, clear->yardColor cannot be
-  // expressed 1:1 through the engine yet — closure = backend fg/bg-capable
-  // bitmap seam or task-26 decoder + fixed RGBA upload.
-  ship=XCreatePixmapFromBitmapData(display,yard,(char*)shipBits,shipBitsWidth,shipBitsHeight,
-                                   shipColor,yardColor,DefaultDepth(display,screen));
+  ship=engine.createColoredStamp(shipBits,shipBitsWidth,shipBitsHeight,
+                                 sr/65535.0f,sg/65535.0f,sb/65535.0f,
+                                 yardGray,yardGray,yardGray);
   int numShipsSave=numShips;
   ClearYard();
   for (int i=0;i<numShipsSave;++i)
     AddShip();
   return *this;
  }
-#endif
 
 
 #endif

@@ -5,7 +5,6 @@
 #include<X11/Xlib.h>
 #include"../../utilities/rendering/x11Backend.H"
 #endif
-#include"../../utilities/rendering/x11types.H"
 #include"../../utilities/rendering/renderingEngine.H"
 #include<new>
 #include"../../gamePlay/stage.H"
@@ -19,12 +18,6 @@ class ExplosionGraphic
     static const int numFrames;
 
     CompositePixmap* const frames;
-    // Vestigial non-owning alias: the per-mask GCs were absorbed into the
-    // backend's masked-draw path (the native clip-mask GCs live inside the
-    // backend implementation). Kept declared+zeroed only for the transitional
-    // raw readers (shipGroup.H / bullet.H, last consumer leaves at task 22);
-    // the member is deleted at task 47.
-    GC gc[5];
     RenderingEngine& engine;
 
     ExplosionGraphic(RenderingEngine&);
@@ -58,9 +51,9 @@ class ExplosionGraphic
 #endif
 
 #ifdef X11_BACKEND
-    static XColor hottest,
-                  hotter,
-                  hot;
+    static RotColor hottest,
+                    hotter,
+                    hot;
 #endif
   };
 
@@ -84,35 +77,30 @@ inline int ExplosionGraphic::FrameHeight() const
 #endif
 
 #ifdef X11_BACKEND
-inline XColor ExplosionGraphic::hottest={0,
-                                  65535,//255
-                                  65535,//255
-                                  65535,//255
-                                  DoRed|DoGreen|DoBlue},
-       ExplosionGraphic::hotter={0,
+inline RotColor ExplosionGraphic::hottest={65535,//255
+                                           65535,//255
+                                           65535//255
+                                           },
+       ExplosionGraphic::hotter={65535,//255
                                  65535,//255
-                                 65535,//255
-                                 0,
-                                 DoRed|DoGreen|DoBlue},
-       ExplosionGraphic::hot={0,
-                              65535,//255
+                                 0
+                                 },
+       ExplosionGraphic::hot={65535,//255
                               42405,//165
-                              0,
-                              DoRed|DoGreen|DoBlue};
+                              0
+                              };
 #endif
 inline ExplosionGraphic::ExplosionGraphic(RenderingEngine& eng):
                                 frames((CompositePixmap*)new char[sizeof(CompositePixmap)*numFrames]),
                                 engine(eng)
  {
   #ifdef X11_BACKEND
-  for(int i=5;i--;)
-    gc[i]=nullptr;
-  (new(&frames[0]) CompositePixmap(stage->display,stage->window,
+  (new(&frames[0]) CompositePixmap(engine,
                                    explosionEdge_width,explosionEdge_height))
       ->AddBitmapData(explosionCenter_bits,
                       explosionCenter_width,explosionCenter_height,
                       hottest);
-  (new(&frames[1]) CompositePixmap(stage->display,stage->window,
+  (new(&frames[1]) CompositePixmap(engine,
                                    explosionEdge_width,explosionEdge_height))
       ->AddBitmapData(explosionMiddle_bits,
                       explosionMiddle_width,explosionMiddle_height,
@@ -120,7 +108,7 @@ inline ExplosionGraphic::ExplosionGraphic(RenderingEngine& eng):
        .AddBitmapData(explosionCenter_bits,
                       explosionCenter_width,explosionCenter_height,
                       hottest);
-  (new(&frames[2]) CompositePixmap(stage->display,stage->window,
+  (new(&frames[2]) CompositePixmap(engine,
                                    explosionEdge_width,explosionEdge_height))
       ->AddBitmapData(explosionEdge_bits,
                       explosionEdge_width,explosionEdge_height,
@@ -131,7 +119,7 @@ inline ExplosionGraphic::ExplosionGraphic(RenderingEngine& eng):
        .AddBitmapData(explosionCenter_bits,
                       explosionCenter_width,explosionCenter_height,
                       hottest);
-  (new(&frames[3]) CompositePixmap(stage->display,stage->window,
+  (new(&frames[3]) CompositePixmap(engine,
                                   explosionEdge_width,explosionEdge_height))
       ->AddBitmapData(explosionEdge_bits,
                       explosionEdge_width,explosionEdge_height,
@@ -142,7 +130,7 @@ inline ExplosionGraphic::ExplosionGraphic(RenderingEngine& eng):
        .AddBitmapData(explosionCenter_bits,
                       explosionCenter_width,explosionCenter_height,
                       hottest);
-  (new(&frames[4]) CompositePixmap(stage->display,stage->window,
+  (new(&frames[4]) CompositePixmap(engine,
                                   explosionEdge_width,explosionEdge_height))
       ->AddBitmapData(explosionMiddle_bits,
                       explosionMiddle_width,explosionMiddle_height,
