@@ -1,0 +1,1 @@
+g++ -I/usr/include/X11 -O3 -Wall -Wextra -Wno-unused-parameter -std=c++17 -DX11_BACKEND obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o -L/usr/lib/X11 -lXm -lXt -lX11 -oXAsteroids

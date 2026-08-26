@@ -132,7 +132,7 @@ $(IMGUI_OBJECTS): $(OBJDIR)/%.o: vendor/dear_imgui/%.cpp vendor/dear_imgui/imgui
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 # Task 44a: ImGuiOptionsMenu implementation (GL + VK legs — see MENU_OBJECTS).
-$(OBJDIR)/optionsMenu.o: gamePlay/optionsMenu.C gamePlay/optionsMenu.H utilities/rendering/menuAdapter.H vendor/dear_imgui/imgui.h | $(OBJDIR)
+$(OBJDIR)/optionsMenu.o: gamePlay/optionsMenu.C gamePlay/optionsMenu.H utilities/rendering/menuAdapter.H utilities/rendering/renderingEngine.H vendor/dear_imgui/imgui.h | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 # Host utility: build + run the XBM decode self-test (pure std-C++, no backend).

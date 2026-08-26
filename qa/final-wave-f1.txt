@@ -1,0 +1,47 @@
+===================================================================
+qa/final-wave-f1.txt — F1 TERMINAL SWEEP RE-RUN (plan row 48)
+Fresh run against HEAD b631c32 (+ final-wave remediations: renderingEngine.H
+std::size_t ×2, makefile optionsMenu.o dep += renderingEngine.H). 2026-08-25.
+Methodology identical to qa/f1-final.txt (row 47); every pinned number REPRODUCED.
+===================================================================
+
+## Gate 1a — the plan's EXACT command (verbatim, plan lines 400-402)
+raw hits: 48 lines — ALL inside test/ (QA infrastructure, outside the census
+denominator per qa/phase1-evidence.md):
+        25 test/harness/harness.C
+         7 test/composite/probeX11.C
+         6 test/vk/vkinput.C
+         5 test/numeric/probe.C
+         4 test/numeric/angles.C
+         1 test/vk/vkmethods.C
+
+## Gate 1b — PRODUCT-TREE domain sweep (test/ excluded; THE domain=0 assertion)
+DOMAIN WHITELIST HITS: 0   <== EXPECT 0 (TERMINAL STATE)
+
+## Gate 2 — D14 preprocess with the macro UNDEFINED (plan lines 405-406)
+rotatorDisplayData.C: 0  (expect 0)
+compositePixmap.C:       0  (expect 0)
+
+## Exception-zone census (whitelist symbol hits; pinned totals — all reproduced)
+  rotatorDisplayData.C      146   (pinned 146)  EXACT
+  compositePixmap.C          11   (pinned 11)   EXACT
+  options.H                  47   (pinned 47)   EXACT
+  AutoRepeatOn.C              3   (pinned 3)    EXACT
+  x11Backend.H total        128   (zone (a): backend implementation; equals the
+                              row-47 measurement exactly; its pollEvents state
+                              machine carries the relocated event island whose
+                              CENSUS contribution is the pinned 22 sites — raw
+                              call-site grep = 13 because task 25 unified the 4
+                              duplicated island loops into one state machine,
+                              netting -9 raw / +0 behavior, per phase2-evidence)
+  EXCEPTION TOTAL (146+11+47+3+22 island) = 229   <== EXPECT 229
+  GRAND CENSUS: 229 exception + 205 engine-migrated = 434 (intact; 0 load-bearing
+  calls deleted — behaviorally re-certified by the fresh Q13 Tier-1 byte-exact
+  session and Q12 event-parity fixtures in this wave)
+
+## Shim deletion receipts (fresh)
+  utilities/rendering/x11types.H present: NO — DELETED
+  'x11types' references outside .git/.omo/obj: 21 (all .omo plan/notepad prose;
+  zero in *.H/*.C product or test sources)
+
+Verdict: F1 TERMINAL STATE GREEN (fresh).

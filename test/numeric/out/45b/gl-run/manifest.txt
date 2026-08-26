@@ -5,27 +5,28 @@ display: :9511
 xvfb_geometry: 1280x1024x24
 script: test/harness/scripts/session.script
 binary: /home/archerc/code/XAst/XAsteroids
-binary_size_mtime: 728680 1787637394
+present_path: -
+binary_size_mtime: 2310448 1787719550
 hiscore_fixture: test/harness/fixtures/hiScore.nul.data
-game_cwd: /tmp/xast-harness.aelWXA
+game_cwd: /tmp/xast-harness.mhwZCV
 client_geometry: 688x702 border=0 depth=24 at +296+161
 sync_params: poll_ms=10 stability=3 tick_gap_ms=30
-frame_counter_file: /tmp/xast-harness.aelWXA/framecount
+frame_counter_file: /tmp/xast-harness.mhwZCV/framecount
 frame_base: 3
-run_ms: 68364
+run_ms: 68409
 game_exit_rc: 0
 checkpoints: 13
-  cp help boundary=1 t=381514133ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/help.png
-  cp start boundary=40 t=381516459ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/start.png
-  cp gp1 boundary=120 t=381521467ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp1.png
-  cp gp2 boundary=200 t=381526464ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp2.png
-  cp gp3 boundary=240 t=381528970ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp3.png
-  cp gp4 boundary=340 t=381535223ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp4.png
-  cp gp5 boundary=400 t=381538979ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp5.png
-  cp gp6 boundary=600 t=381546871ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp6.png
-  cp gp7 boundary=800 t=381553079ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp7.png
-  cp gp8 boundary=1000 t=381559363ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp8.png
-  cp gp9 boundary=1200 t=381565647ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp9.png
-  cp gp10 boundary=1400 t=381571923ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp10.png
-  cp hiscore boundary=1700 t=381581347ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/hiscore.png
+  cp help boundary=1 t=463670308ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/help.png
+  cp start boundary=40 t=463672632ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/start.png
+  cp gp1 boundary=120 t=463677645ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp1.png
+  cp gp2 boundary=200 t=463682653ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp2.png
+  cp gp3 boundary=240 t=463685145ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp3.png
+  cp gp4 boundary=340 t=463691410ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp4.png
+  cp gp5 boundary=400 t=463695163ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp5.png
+  cp gp6 boundary=600 t=463703092ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp6.png
+  cp gp7 boundary=800 t=463709360ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp7.png
+  cp gp8 boundary=1000 t=463715635ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp8.png
+  cp gp9 boundary=1200 t=463721902ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp9.png
+  cp gp10 boundary=1400 t=463728172ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/gp10.png
+  cp hiscore boundary=1700 t=463737567ms 688x702 /home/archerc/code/XAst/test/numeric/out/45b/gl-run/hiscore.png
 result: CAPTURED-ONLY (no --ref)

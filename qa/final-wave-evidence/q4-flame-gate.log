@@ -1,0 +1,42 @@
+[harness] pre-flight OK: Xvfb/xdpyinfo/xlsfonts/xwd/convert/compare + fonts dir /home/archerc/.local/xast-env/fonts
+[harness] Xvfb :99 up (1280x1024x24, fp=/home/archerc/.local/xast-env/fonts)
+[harness] font pre-flight OK: all 5 stage.H:134-138 families resolve
+[harness] work dir: /tmp/xast-harness.rlrCk8 (kept)
+[harness] staged test/harness/fixtures/hiScore.nul.data as /tmp/xast-harness.rlrCk8/hiScore.data (score.H cwd candidate picks it up)
+[harness] game pid 1569588 (DISPLAY=:99 XAST_SEED=12345, cwd=/tmp/xast-harness.rlrCk8)
+[harness] settling 10s for static init
+[harness] window 0x4194312 "Asteroids" client 688x702 border=0 depth=24 at +296+161
+[harness] script loaded: test/harness/scripts/flame-capture.script (10 lines)
+[harness] frame mode: locking boundaries to published sim-frame indices (/tmp/xast-harness.rlrCk8/framecount)
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured help.png (688x702) @boundary 1
+[harness] first published frame 1 -> frame_base=3.000000
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured start.png (688x702) @boundary 40
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[harness] captured flame.png (688x702) @boundary 54
+[ERROR] X error 9 (BadDrawable (invalid Pixmap or Window parameter)) request=73
+[harness] game process exited (rc=0)
+[harness] frame run done: 130 boundaries in 8.532526s, checkpoints 3
+[harness] diff vs reference /tmp/opencode/t48/q4/x11:
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[diff-ok] help AE=0.000000 mask=/tmp/opencode/t48/q4/masks/help.mask.png
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[diff-ok] start AE=0.000000 mask=/tmp/opencode/t48/q4/masks/start.mask.png
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+WARNING: The convert command is deprecated in IMv7, use "magick" instead of "convert" or "magick convert"
+
+[diff-ok] flame AE=0.000000 mask=/tmp/opencode/t48/q4/masks/flame.mask.png
+[harness] manifest: /tmp/opencode/t48/q4/gl-gate/manifest.txt
+[cleanup] killed Xvfb pid 1569551
+RESULT: PASS (all checkpoints AE=0)

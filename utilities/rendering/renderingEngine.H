@@ -119,11 +119,11 @@ public:
                                          float fgR, float fgG, float fgB,
                                          float bgR, float bgG, float bgB)
      {const int stride=(w+7)/8;
-      uint8_t* rgba=new uint8_t[(size_t)w*h*4];
+      uint8_t* rgba=new uint8_t[std::size_t(w)*h*4];
       for(int j=0;j<h;++j)
         for(int i=0;i<w;++i)
          {const bool set=(bits[j*stride+i/8]>>(i%8))&1;
-          uint8_t* px=&rgba[((size_t)j*w+i)*4];
+          uint8_t* px=&rgba[(std::size_t(j)*w+i)*4];
           px[0]=uint8_t((set?fgR:bgR)*255.0f+0.5f);
           px[1]=uint8_t((set?fgG:bgG)*255.0f+0.5f);
           px[2]=uint8_t((set?fgB:bgB)*255.0f+0.5f);

@@ -1,0 +1,10 @@
+== building legs ==
+== running CPU leg ==
+== running X11 leg under Xvfb :100 ==
+== comparing ==
+frame0: PASS (16908 bytes byte-equal)
+frame1: PASS (16908 bytes byte-equal)
+frame2: PASS (16908 bytes byte-equal)
+frame3: PASS (16908 bytes byte-equal)
+frame4: PASS (16908 bytes byte-equal)
+RESULT: PASS — 5/5 explosion composite frames byte-equal (CPU vs Xvfb XGetImage)

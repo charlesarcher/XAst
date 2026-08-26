@@ -1,0 +1,30 @@
+# flame-capture.script — Q4 upgrade (final wave): thrust flame HELD ACROSS a
+# capture boundary. session.script releases thrust >=10 boundaries before every
+# capture, so no compared Q13/Q10/Q11 frame contains a flame pixel; this
+# fixture captures one that does.
+#
+# Timeline: start game -> no-thrust control capture (start) -> keydown 'o' ->
+# capture 'flame' WHILE still held (4 boundaries after the press) -> keyup.
+# The 'flame' capture on X11 is the masked-compare reference for the GL leg
+# (crops 40,179,640,512 / 24,175,640,512, qa/phase5-evidence/masks-q10 regime);
+# the paired flame-control.script (nop at the same boundaries) is the no-thrust
+# control for the localization assertion.
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/flame-capture.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data \
+#       --handshake frame --keep
+
+1    capture help      # title screen == help screen (task-7); q10 help mask applies
+
+3    keydown s
+6    keyup s
+40   capture start
+
+50   keydown o
+54   capture flame             # thrust HELD: flame pixels present
+90   keyup o
+
+130  keydown q
+134  keyup q
+exit

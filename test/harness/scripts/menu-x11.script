@@ -1,0 +1,60 @@
+# menu-x11.script — Q5 X11 leg (F5/SC9): Motif Options dialog end-to-end.
+#
+# Choreography: start game -> 16fps baseline window -> open the Motif dialog
+# (Options button; the MouseUp handler realizes the shell and BLOCKS in the
+# modal Xt pump — the D9 X11 menu seam) -> no-op dead-space click -> FPS
+# scale drag 16->32 (XmNvalueChangedCallback per drag step through
+# AlterFramesPerSecond = the D4 uSecondsPerFrame path) -> Exit (modal pump
+# returns, ResumePlay re-arms) -> park the pointer back INSIDE the game
+# window (original LeaveNotify pause semantics: with the pointer outside
+# after the dialog closes, RunGame stays paused until re-enter) -> 32fps
+# post window.
+#
+# The preferences-file Write/Read round-trip is NOT scripted on this leg:
+# it requires the FileSelectionDialog sub-dialog (Filter/Selection fields),
+# whose XTest-driven choreography deterministically escapes the outer modal
+# (documented in qa/final-wave-evidence.md §F5). The options.H prefs format
+# (29 lines, first = uSecondsPerFrame) is certified on the GL/VK legs; the
+# X11 FPS preference application is asserted here by the measured period.
+#
+# Coordinates (game-client-relative; receipts in qa/final-wave-evidence.md):
+# fixed 1280x1024 Xvfb -> game client origin = root (285,164); the Options
+# dialog maps at root (0,0) 929x490 (asserted live by the driver).
+#   Options button (20,15); Exit opts(7,7)..(227,51) -> (-170,-135)
+#   FPS scale opts trough y169..182 x9..222, handle(v=16) x9..38,
+#     value(x)=16+(x-23.5)/184*56: press (-261,12)=handle, drag (-209,12)=v32
+#     [calibrated: measured 31.2-31.4 ms/frame post-exit]
+#   dead space opts(450,470) -> (165,306)
+
+1    capture title
+
+4    keydown s
+8    keyup s
+39    capture start
+80    capture pre_a
+111    capture pre_b
+115    mousedown 20 15
+119    mouseup 20 15
+140    capture menu_open
+144    mousedown 165 306
+148    mouseup 165 306
+152    move 165 306
+157    capture menu_noop
+161    mousedown -261 12
+165    move -209 12
+169    mouseup -209 12
+173    move 165 306
+177    nop
+181    nop
+185    nop
+189    nop
+193    nop
+197    nop
+201    mousedown -170 -135
+205    mouseup -170 -135
+209    move 360 353
+234    capture menu_closed
+265    capture post_a
+296    capture post_b
+327    capture post_c
+exit

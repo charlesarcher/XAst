@@ -140,14 +140,20 @@ else
     note "(d) seeded harness run, BACKEND=$flavor"
     export XAST_STATE_HASH_FILE="$OUT/$lf.state.hash"
     rm -f "$XAST_STATE_HASH_FILE"
+    # --keep: the harness (frame mode) repoints XAST_STATE_HASH_FILE at its own
+    # work dir, so the stream is harvested from there, not from $OUT.
     if ./obj/harness --seed 12345 --script test/harness/scripts/session.script \
-         --out "$OUT/$lf-run" --handshake frame \
+         --out "$OUT/$lf-run" --handshake frame --keep \
          --hiscore test/harness/fixtures/hiScore.nul.data \
          --display ":$GAME_DISPLAY" > "$WORK/harness-$lf.log" 2>&1; then
       gate 0 "harness session completed ($flavor)"
     else
       gate 1 "harness session failed ($flavor) — see $WORK/harness-$lf.log"
     fi
+  done
+  for lf in x11 gl; do
+    wd=$(sed -n 's/.*work dir: //p' "$WORK/harness-$lf.log" | head -1 | sed 's/ (kept)$//')
+    grep '^h ' "$wd/statehash" > "$OUT/$lf.state.hash"
   done
   grep '^h ' "$OUT/x11.state.hash" > "$WORK/x11.frames"
   grep '^h ' "$OUT/gl.state.hash"  > "$WORK/gl.frames"

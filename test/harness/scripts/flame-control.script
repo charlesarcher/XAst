@@ -1,0 +1,24 @@
+# flame-control.script — no-thrust control for the Q4 flame fixture.
+# Identical timeline to flame-capture.script with the thrust actions replaced
+# by nops at the same boundaries, so the 'flame' capture lands at the same
+# seeded state with no flame. Diffing the two 'flame' captures isolates the
+# flame/ship-displacement cluster (localization assertion).
+#
+# Run:
+#   ./obj/harness --seed 12345 --script test/harness/scripts/flame-control.script \
+#       --out DIR --hiscore test/harness/fixtures/hiScore.nul.data \
+#       --handshake frame --keep
+
+1    capture help      # title screen == help screen (task-7); q10 help mask applies
+
+3    keydown s
+6    keyup s
+40   capture start
+
+50   nop
+54   capture flame             # same boundary, NO thrust
+90   nop
+
+130  keydown q
+134  keyup q
+exit

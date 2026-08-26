@@ -1,0 +1,15 @@
+[lane] GATE GREEN: probe two-run determinism
+[lane] GATE GREEN: goldens 53/53 match (zero drift)
+[lane] GATE GREEN: probe asserts green incl. C1 zero-distance guard (assert-failures=0)
+[lane] GATE GREEN: angles[x11] two-run determinism
+[lane] GATE GREEN: angles[gc] two-run determinism
+[lane] GATE GREEN: 500-angle hash identical across X11 vs guards-closed(GL-leg) configs
+[lane] GATE GREEN: 500-angle golden pin matches golden/angles.golden.txt
+[lane] GATE GREEN: angles gravity guard asserts green (assert-failures=0)
+[lane] GATE GREEN: binary flavor check (X11, ldd glfw count=0)
+[lane] GATE GREEN: harness session completed (X11)
+[lane] GATE GREEN: binary flavor check (GL, ldd glfw count=1)
+[lane] GATE GREEN: harness session completed (GL)
+[lane] GATE GREEN: X11-vs-GL numeric match: 435/435 frame state hashes identical
+[lane] ALL GATES GREEN
+rc=0

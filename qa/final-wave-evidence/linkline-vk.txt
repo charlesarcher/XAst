@@ -1,0 +1,1 @@
+g++ -I/usr/include/X11 -O3 -Wall -Wextra -Wno-unused-parameter -std=c++17 obj/VK/XAsteroids.o obj/VK/rotatorDisplayData.o obj/VK/compositePixmap.o obj/VK/stbTruetypeImpl.o obj/VK/imgui.o obj/VK/imgui_draw.o obj/VK/imgui_tables.o obj/VK/imgui_widgets.o obj/VK/imgui_demo.o obj/VK/optionsMenu.o -L/usr/lib/X11 -lglfw -lvulkan -o XAsteroids
