@@ -763,24 +763,30 @@ class GLBackend : public RenderingEngine
       glUseProgram(0);
      }
 
-    const float* presentMVP()
-     {// Affine compose: model (translate tx,ty + rotate angle) THEN present
-      // (uniform scale s + offset ox,oy + y-flip to GL's bottom-up NDC).
-      // Logical client space is y-DOWN like X11; ndc_y = 1 - 2*(y*s+oy)/fbH.
-      if (rtActive_)
-       {// Rendering INTO a render target: logical (0,0)-top-left maps 1:1
-        // onto the target surface (Button face geometry is target-local).
-        float a=2.0f/(float)rtWidth_;
-        float b=-2.0f/(float)rtHeight_;
-        float cs=cosf(angle_),sn=sinf(angle_);
-        float ma=cs,mb=-sn,mc=tx_;
-        float md=sn,me=cs,mf=ty_;
-        mvp_[0]=a*ma; mvp_[1]=b*md; mvp_[2]=0.0f; mvp_[3]=0.0f;
-        mvp_[4]=a*mb; mvp_[5]=b*me; mvp_[6]=0.0f; mvp_[7]=0.0f;
-        mvp_[8]=0.0f; mvp_[9]=0.0f; mvp_[10]=1.0f;mvp_[11]=0.0f;
-        mvp_[12]=a*mc-1.0f;mvp_[13]=b*mf+1.0f;mvp_[14]=0.0f;mvp_[15]=1.0f;
-        return mvp_;
-       }
+     const float* presentMVP()
+      {// Affine compose: model (translate tx,ty + rotate angle) THEN present
+       // (uniform scale s + offset ox,oy + y-flip to GL's bottom-up NDC).
+       // Logical client space is y-DOWN like X11; ndc_y = 1 - 2*(y*s+oy)/fbH.
+       if (rtActive_)
+        {// Rendering INTO a render target: logical (0,0)-top-left maps 1:1
+         // onto the target surface (Button face geometry is target-local).
+         // FIX 2026-08-26 lives-bar inversion: GL NDC Y is bottom-up, but the
+         // off-screen image's sampler expects top-left origin (0,0)=top like
+         // Vulkan/X11 pixmaps. Using b=+2 and offset -1 (VK parity) stores the
+         // content inverted in texel memory so the later drawTexture sampling
+         // (v=0 top) retrieves the correct orientation. Matches vkBackend
+         // rtActive branch (b=+2, d=-1) and fixes shipYard lives icons DOWN→UP.
+         float a=2.0f/(float)rtWidth_;
+         float b=2.0f/(float)rtHeight_;
+         float cs=cosf(angle_),sn=sinf(angle_);
+         float ma=cs,mb=-sn,mc=tx_;
+         float md=sn,me=cs,mf=ty_;
+         mvp_[0]=a*ma; mvp_[1]=b*md; mvp_[2]=0.0f; mvp_[3]=0.0f;
+         mvp_[4]=a*mb; mvp_[5]=b*me; mvp_[6]=0.0f; mvp_[7]=0.0f;
+         mvp_[8]=0.0f; mvp_[9]=0.0f; mvp_[10]=1.0f;mvp_[11]=0.0f;
+         mvp_[12]=a*mc-1.0f;mvp_[13]=b*mf-1.0f;mvp_[14]=0.0f;mvp_[15]=1.0f;
+         return mvp_;
+        }
       float scale=presentScale_;
       int ox=presentOffX_,oy=presentOffY_;
       float a=2.0f*scale/(float)fbWidth_;    // P: x-scale
