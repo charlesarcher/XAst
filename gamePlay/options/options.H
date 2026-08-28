@@ -551,9 +551,10 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
                                                   valueChanged(off),
                                                   lastScoreFactor(1),
                                                   IOState(noIOInProgress)
- {// Task 47: the Stage alias members are gone — the D9 island reads the
-  // backend accessors / the nativeHandle seam directly. Same values, same
-  // requests (windowBg.pixel was never allocated: 0 since task 12).
+  {// Task 47: the Stage alias members are gone — the D9 island reads the
+   // backend accessors / the nativeHandle seam directly. The panel background
+   // is the original windowBg gray-180 (46260/65535), allocated here through
+   // the backend seam (it was 0, which blacked the panels and hid the text).
   X11Backend& backend=static_cast<X11Backend&>(stage->engine);
   Display* const display=(Display*)stage->engine.nativeHandle().display;
   XtToolkitInitialize();
@@ -561,7 +562,7 @@ inline Options::Options(int argc, char** argv): exitFlag(on),
   XtDisplayInitialize(appContext,display,
                       "XAsteroids",argv[0],NULL,0,&argc,argv);
 
-  Pixel background=0,
+  Pixel background=backend.allocateColor(46260.0f/65535.0f,46260.0f/65535.0f,46260.0f/65535.0f),
         foreground=BlackPixel(display,DefaultScreen(display));
   XmString string;
 
@@ -2579,6 +2580,11 @@ inline void Options::RealizeWindow()
   X11Backend& backend=static_cast<X11Backend&>(stage->engine);
   Display* const display=(Display*)stage->engine.nativeHandle().display;
   Window const window=(Window)stage->engine.nativeHandle().window;
+  // Map + clear + flush the shell before the modal pump so the first frame
+  // is a mapped, background-cleared window (no first-paint garbage / race).
+  XMapWindow(display,XtWindow(shell));
+  XClearWindow(display,XtWindow(shell));
+  XSync(display,False);
   do
    {XtAppNextEvent(appContext,&event);
     if (event.xany.window==window)

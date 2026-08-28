@@ -1,0 +1,39 @@
+# menu-x11-2x.script — second-open probe: open the Motif Options dialog,
+# drag FPS 16->32, Exit, then RE-OPEN the dialog (2nd modal realize) and Exit.
+# Same choreography as menu-x11.script plus a second open/close cycle, to
+# exercise the RealizeWindow expose/paint path a second time (fix B stability).
+1    capture title
+4    keydown s
+8    keyup s
+39    capture start
+80    capture pre_a
+111    capture pre_b
+115    mousedown 20 15
+119    mouseup 20 15
+140    capture menu_open
+144    mousedown 165 306
+148    mouseup 165 306
+152    move 165 306
+157    capture menu_noop
+161    mousedown -261 12
+165    move -209 12
+169    mouseup -209 12
+173    move 165 306
+177    nop
+181    nop
+185    nop
+189    nop
+193    nop
+197    nop
+201    mousedown -170 -135
+205    mouseup -170 -135
+209    move 360 353
+234    capture menu_closed
+240    mousedown 20 15
+244    mouseup 20 15
+265    capture menu2_open
+270    mousedown -170 -135
+274    mouseup -170 -135
+278    move 360 353
+300    capture menu2_closed
+320    exit
