@@ -443,7 +443,7 @@ class PlayingField
     TextureId canvasId() const
      {return static_cast<X11Backend&>(engine).canvas();
      }
-    void PresentFrame();
+    void PresentFrame(Boolean presentLeg=on);
     void RenderFrameDraws();
 #ifndef X11_BACKEND
     // Task-36: per-frame repaint of the persistent window chrome (title,
@@ -628,7 +628,7 @@ inline void PlayingField::RenderFrameDraws()
    numFrameDraws=0;
   }
 
-inline void PlayingField::PresentFrame()
+inline void PlayingField::PresentFrame(Boolean presentLeg)
  {// ---- D8 canonical frame structure (task 24) ----
   // (2) frame start — owns NO scissor anywhere (m14);
   engine.beginFrame();
@@ -676,7 +676,11 @@ inline void PlayingField::PresentFrame()
   DrawGame();
    // (8) present — requests the field leg and replays both request-gated
    // legs (yard first, then field), no internal sync (Q13-proven).
-   stage->DrawPlayingField();
+   // presentLeg=off (D9 pause branch): leave the frame open so the caller
+   // renders the menu overlay on top; its trailing endFrame is the single
+   // swap the branch intends.
+   if (presentLeg)
+     stage->DrawPlayingField();
   }
 
 #ifndef X11_BACKEND
@@ -1130,7 +1134,7 @@ inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
         // counter freezes — the QA pause gate reads that freeze). The last
         // simulated frame's draw records replay verbatim, then the overlay
         // renders on top in WINDOW space, then one swap.
-        PresentFrame();
+        PresentFrame(off);
         menu.tick();
         if (menu.isOpen())
           menu.renderOverlay(engine);
