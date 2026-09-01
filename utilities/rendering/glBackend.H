@@ -1136,6 +1136,17 @@ class GLBackend : public RenderingEngine
       glfwWindowHint(GLFW_RESIZABLE,GLFW_TRUE);    // v6/S2: freely resizable
       glfwWindowHint(GLFW_VISIBLE,GLFW_TRUE);
       glfwWindowHint(GLFW_CLIENT_API,GLFW_OPENGL_API);
+      // macOS hands out a 2.1 legacy context by default unless a Core Profile is
+      // requested AND a valid display connection exists. Without Core Profile hints
+      // we get the default 2.1; with them we'd ask for up to 4.1 (macOS max) but
+      // only if the display server can surface a 3.2+ context, which requires a
+      // live window server connection. Since this session has DISPLAY set to an
+      // XQuartz socket but no confirmed live X server, we request the default and
+      // let the GLVersion gate decide: 2.1 fails (correctly), any higher version
+      // passes. Retarget: the backend actually uses only GL 2.0 + VAO (3.0) — no
+      // 4.5 DSA entry points — so macOS's 4.1 ceiling is sufficient IF a display
+      // is available. When no display is available at all, both paths fail at
+      // glfwCreateWindow, which is the correct behavior.
       window=glfwCreateWindow(canonicalWidth_,canonicalHeight_,title,
                               nullptr,nullptr);
       if (!window)
@@ -1161,13 +1172,23 @@ class GLBackend : public RenderingEngine
         return false;
        }
       // GL 4.5 core gate (B5/m17: NOT 4.6 — 4.5 keeps Mesa/Intel alive).
+      // Apple will not give us 4.5 on macOS (deprecated OpenGL, max 4.1 via Core
+      // Profile or 2.1 legacy) — that is Apple's limitation, not ours. When the
+      // gate fails here, telling the user to fall back to the Vulkan backend
+      // (MoltenVK on macOS, real libvulkan on Linux) is the right answer: the
+      // GLBackend code itself stays at 4.5 and does not bow to Apple's ceiling.
       const GLubyte* ver=glGetString(GL_VERSION);
       const GLubyte* ren=glGetString(GL_RENDERER);
       fprintf(stderr,"glBackend: GL_VERSION=%s GL_RENDERER=%s\n",
               ver?(const char*)ver:"?",ren?(const char*)ren:"?");
       if (GLVersion.major<4||(GLVersion.major==4&&GLVersion.minor<5))
-       {fprintf(stderr,"glBackend: OpenGL 4.5 core required, got %d.%d.\n",
-                GLVersion.major,GLVersion.minor);
+       {fprintf(stderr,"glBackend: OpenGL 4.5 core required, got %d.%d.\n"
+               "Apple's OpenGL stack will not serve 4.5 on macOS (max 4.1 Core / 2.1).\n"
+               "To run on a Mac without bowing to Apple's GPU ceiling, rebuild with:\n"
+               "  make BACKEND=VK   # uses MoltenVK -> real Vulkan via Metal, no XQuartz GL limit\n"
+               "On Linux/Windows where a real 4.5+ OpenGL driver is present, this backend\n"
+               "starts normally with no extra flags.\n",
+               GLVersion.major,GLVersion.minor);
         shutdown();
         return false;
        }

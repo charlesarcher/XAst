@@ -1,7 +1,10 @@
 *.o
 AutoRepeatOn
 XAsteroids
+XAsteroids_vk
+XAsteroids_gl
 core.*
 core
 
 .omo/
+obj/

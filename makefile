@@ -16,6 +16,43 @@ OBJDIR=obj/$(BACKEND)
 # includes alone (flags kept minimal per task 30; nothing added beyond -I).
 VENDOR_INCS=-Ivendor/glad/include -Ivendor/stb -Ivendor/dear_imgui -Ivendor/glfw
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  GLFW_LIBDIR=$(shell brew --prefix glfw 2>/dev/null)/lib
+  GLFW_CFLAGS=$(shell PKG_CONFIG_PATH=$(GLFW_LIBDIR)/pkgconfig pkg-config --cflags glfw3 2>/dev/null)
+  GLFW_LIB=-L$(GLFW_LIBDIR) -lglfw -Wl,-rpath,$(GLFW_LIBDIR)
+  OPENGL_LINK=-framework OpenGL
+  VK_LOADER_GATE=:
+  VK_MVK_LIB=/opt/homebrew/opt/molten-vk/lib/libMoltenVK.dylib
+  VK_MVK_FRAMEWORKS=-framework Metal -framework MetalKit -framework Foundation \
+    -framework CoreGraphics -framework CoreVideo -framework CoreMedia -framework AVFoundation \
+    -framework IOSurface -framework Quartz
+  VK_LINK_EXTRA=$(VK_MVK_LIB) $(VK_MVK_FRAMEWORKS) -Wl,-rpath,$(VK_MVK_LIB:libMoltenVK.dylib=%)
+  # MoltenVK ships its own vulkan headers; the repo's vendored copy still works
+  # but we must not gate on a Linux-style vulkan-loader icd check.
+else
+  GLFW_LIB=-lglfw
+  OPENGL_LINK=-lGL
+  VK_LOADER_GATE=@qa/vk-probe.sh --link-check || exit 1
+  VK_LINK_EXTRA=-lvulkan
+endif
+
+# --- Task 41 (revised): SPIR-V pre-compilation ---
+# GLSL shaders in utilities/rendering/vkShaders/*.{vert,frag} are compiled to
+# SPIR-V at BUILD time (not runtime) into obj/VK/spv/. This removes the
+# runtime glslc dependency + /proc/self/exe shader path resolution entirely;
+# the binary loads pre-built .spv blobs relative to its own directory.
+VK_SHADER_DIR=utilities/rendering/vkShaders
+VK_SPV_DIR=$(OBJDIR)/spv
+# Explicit .spv output names (vert/frag share a base name, so frag gets _fs suffix).
+VK_SPV_TARGETS=$(VK_SPV_DIR)/prim.spv $(VK_SPV_DIR)/prim_fs.spv \
+               $(VK_SPV_DIR)/tex.spv $(VK_SPV_DIR)/tex_fs.spv \
+               $(VK_SPV_DIR)/masked.spv
+# glslc is found on PATH (Linux Vulkan SDK or homebrew shaderc on macOS).
+# Flags: SPIR-V 1.5 for MoltenVK 1.4.2 compatibility + Vulkan 1.1/1.2 ICD.
+VK_GLSLC=glslc
+VK_GLSLC_FLAGS=--target-spv=spv1.5 --target-env=vulkan1.1
+
 ifeq ($(BACKEND),X11)
 BACKEND_CXXFLAGS=$(X11_BACKEND)
 endif
@@ -102,10 +139,37 @@ endif
 # branches compile guards-closed on GL/VK, macro'd on X11) + the
 # backend-agnostic self-test/vendor units on the GPU legs.
 GAME_OBJECTS=$(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o
-objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MENU_OBJECTS)
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MENU_OBJECTS) $(VK_SPV_TARGETS)
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
+
+# SPIR-V pre-compilation — only relevant on the VK leg. The .spv files live
+# in obj/VK/spv/ alongside the .o files; the binary locates them via its own
+# directory at runtime (no /proc/self/exe, no runtime glslc).
+ifeq ($(BACKEND),VK)
+$(VK_SPV_DIR):
+	mkdir -p $(VK_SPV_DIR)
+
+# Explicit per-shader rules — two pattern rules for %.spv can't disambiguate
+# prim.vert.spv from prim.frag.spv when the stem % maps to different source
+# extensions.
+$(VK_SPV_DIR)/prim.spv: utilities/rendering/vkShaders/prim.vert | $(VK_SPV_DIR)
+	@echo "glslc $< -> $@"
+	$(VK_GLSLC) $(VK_GLSLC_FLAGS) -o $@ $<
+$(VK_SPV_DIR)/prim_fs.spv: utilities/rendering/vkShaders/prim.frag | $(VK_SPV_DIR)
+	@echo "glslc $< -> $@"
+	$(VK_GLSLC) $(VK_GLSLC_FLAGS) -o $@ $<
+$(VK_SPV_DIR)/tex.spv: utilities/rendering/vkShaders/tex.vert | $(VK_SPV_DIR)
+	@echo "glslc $< -> $@"
+	$(VK_GLSLC) $(VK_GLSLC_FLAGS) -o $@ $<
+$(VK_SPV_DIR)/tex_fs.spv: utilities/rendering/vkShaders/tex.frag | $(VK_SPV_DIR)
+	@echo "glslc $< -> $@"
+	$(VK_GLSLC) $(VK_GLSLC_FLAGS) -o $@ $<
+$(VK_SPV_DIR)/masked.spv: utilities/rendering/vkShaders/masked.frag | $(VK_SPV_DIR)
+	@echo "glslc $< -> $@"
+	$(VK_GLSLC) $(VK_GLSLC_FLAGS) -o $@ $<
+endif
 
 $(OBJDIR)/rotatorDisplayData.o: utilities/pixmaps/rotated/rotatorDisplayData.C utilities/pixmaps/rotated/rotatorDisplayData.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
@@ -200,17 +264,16 @@ $(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/
 # link rules — a machine without libvulkan.so.1 aborts BEFORE any link. The
 # check is loader-presence ONLY (no vulkaninfo/probe-exe dependency: the
 # probe's own build must not be gated on itself).
-VK_LOADER_GATE=@qa/vk-probe.sh --link-check || exit 1
 
 ifeq ($(BACKEND),GL)
 XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS)
-	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} -lglfw -lGL -o XAsteroids
+	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) $(OPENGL_LINK) -o XAsteroids
 else ifeq ($(BACKEND),VK)
 # Task 43/44b: the real game links the menu units too (ImGuiOptionsMenu +
 # dear_imgui core — the adapter consumes only RenderingEngine types, D9).
-XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS)
+XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(VK_SPV_TARGETS)
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} -lglfw -lvulkan -o XAsteroids
+	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) -o XAsteroids $(VK_LINK_EXTRA)
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
@@ -223,9 +286,9 @@ endif
 .PHONY: vkprobe
 vkprobe: obj/VK/vkprobe
 
-obj/VK/vkprobe: test/vk/vkprobe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+obj/VK/vkprobe: test/vk/vkprobe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o $(VK_SPV_TARGETS) | obj/VK
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) -o $@ $(VK_LINK_EXTRA)
 
 # Task 38: surface+swapchain probe driver (test/vk/vksurface.C ->
 # VKBackend::initWindow end-to-end). Run under Xvfb with DISPLAY set; copy
@@ -233,9 +296,9 @@ obj/VK/vkprobe: test/vk/vkprobe.C utilities/rendering/vkBackend.H utilities/rend
 .PHONY: vksurface
 vksurface: obj/VK/vksurface
 
-obj/VK/vksurface: test/vk/vksurface.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+obj/VK/vksurface: test/vk/vksurface.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o $(VK_SPV_TARGETS) | obj/VK
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) -o $@ $(VK_LINK_EXTRA)
 
 # Task 39: frame-sync soak driver (test/vk/vksoak.C -> beginFrame/endFrame
 # acquire/submit/present cycle + forced-resize re-bootstrap exercise). Run
@@ -244,9 +307,9 @@ obj/VK/vksurface: test/vk/vksurface.C utilities/rendering/vkBackend.H utilities/
 .PHONY: vksoak
 vksoak: obj/VK/vksoak
 
-obj/VK/vksoak: test/vk/vksoak.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+obj/VK/vksoak: test/vk/vksoak.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o $(VK_SPV_TARGETS) | obj/VK
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) -o $@ $(VK_LINK_EXTRA)
 
 # Task 40: render-pass/framebuffer + scissor-proof driver (test/vk/vkpass.C
 # -> 600-frame soak + QA-hook readback proof of the dynamic scissor). Same
@@ -254,9 +317,9 @@ obj/VK/vksoak: test/vk/vksoak.C utilities/rendering/vkBackend.H utilities/render
 .PHONY: vkpass
 vkpass: obj/VK/vkpass
 
-obj/VK/vkpass: test/vk/vkpass.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+obj/VK/vkpass: test/vk/vkpass.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o $(VK_SPV_TARGETS) | obj/VK
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) -o $@ $(VK_LINK_EXTRA)
 
 # Task 41: pipeline proof driver (test/vk/vkpipe.C -> line/tri/outline/tex
 # pipelines + thick-line geometry + transform identity + live-draw soak).
@@ -264,9 +327,9 @@ obj/VK/vkpass: test/vk/vkpass.C utilities/rendering/vkBackend.H utilities/render
 .PHONY: vkpipe
 vkpipe: obj/VK/vkpipe
 
-obj/VK/vkpipe: test/vk/vkpipe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o | obj/VK
+obj/VK/vkpipe: test/vk/vkpipe.C utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o $(VK_SPV_TARGETS) | obj/VK
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lvulkan -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering $< obj/VK/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) -o $@ $(VK_LINK_EXTRA)
 
 # Task 42: engine-methods proof (test/vk/vkmethods.C) + its GL reference leg
 # (test/vk/vkmethods-gl.C renders identityScene.H through glBackend and dumps
@@ -278,15 +341,15 @@ obj/VK/vkpipe: test/vk/vkpipe.C utilities/rendering/vkBackend.H utilities/render
 vkmethods: obj/VK/vkmethods
 vkmethods-gl: obj/VK/vkmethods-gl
 
-obj/VK/vkmethods: test/vk/vkmethods.C test/vk/vkinput.C test/vk/identityScene.H utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/pixmaps/xbmDecode.H utilities/pixmaps/composite/compositePixmap.H utilities/pixmaps/composite/compositePixmap.C utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag utilities/rendering/vkShaders/masked.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o | obj/VK
+obj/VK/vkmethods: test/vk/vkmethods.C test/vk/vkinput.C test/vk/identityScene.H utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/pixmaps/xbmDecode.H utilities/pixmaps/composite/compositePixmap.H utilities/pixmaps/composite/compositePixmap.C utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag utilities/rendering/vkShaders/masked.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o $(VK_SPV_TARGETS) | obj/VK
 	$(VK_LOADER_GATE)
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering test/vk/vkmethods.C test/vk/vkinput.C obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o ${LDFLAGS} -lglfw -lvulkan -lX11 -lXtst -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering test/vk/vkmethods.C test/vk/vkinput.C obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o ${LDFLAGS} $(GLFW_LIB) -lX11 -lXtst -o $@ $(VK_LINK_EXTRA)
 
 obj/VK/vkmethods-gl: test/vk/vkmethods-gl.C test/vk/identityScene.H utilities/rendering/glBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/GL/glad.o obj/GL/stbTruetypeImpl.o | obj/VK
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Iutilities/rendering $< obj/GL/glad.o obj/GL/stbTruetypeImpl.o ${LDFLAGS} -lglfw -lGL -ldl -o $@
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Iutilities/rendering $< obj/GL/glad.o obj/GL/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) $(OPENGL_LINK) -ldl -o $@
 
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 
 clean:
-	\rm -rf XAsteroids AutoRepeatOn *.o *.u *.bak *.CKP obj/X11 obj/GL obj/VK obj/xbmDecodeSelfTest obj/harness
+	\rm -rf XAsteroids XAsteroids_vk XAsteroids_gl AutoRepeatOn *.o *.u *.bak *.CKP obj/X11 obj/GL obj/VK obj/xbmDecodeSelfTest obj/harness

@@ -114,13 +114,13 @@
 //                    + uAlpha uniform vs stride-7 triProgram_ + vColor) into
 //                    one pipeline — documented divergence, sampling result
 //                    identical.
-// SHADERS COMPILE AT INIT: committed .vert/.frag sources live in
+// SHADERS PRE-COMPILED: committed .vert/.frag sources live in
 // utilities/rendering/vkShaders/ and are compiled to SPIR-V by glslc AT
-// initWindow (temp dir /tmp/xast-vkspv-<pid>, files unlinked after module
-// creation). glslc's exit status AND captured stderr are checked — any
-// compile error fails initWindow before a frame is ever drawn (no mid-game
-// first-use failure, mirroring glBackend's compile-at-init gate). Sources
-// resolve via /proc/self/exe like the fonts.
+// BUILD TIME (makefile rule -> obj/VK/spv/*.spv). The .spv blobs are loaded
+// at initWindow from the shaderDir_ (resolved next to the binary) — no
+// runtime glslc, no /proc/self/exe, no temp dirs. Any missing .spv fails
+// initWindow before a frame is ever drawn (no mid-game first-use failure),
+// mirroring glBackend's compile-at-init gate.
 // MVP TRANSFORM = push-constant UNIFORM BLOCK (mat4, vertex stage), recorded
 // PER DRAW via vkCmdPushConstants — the exact analog of GL's per-draw
 // glUniformMatrix4fv(uMVP). A UBO+dynamic-offset scheme was rejected:
@@ -279,9 +279,11 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
-#include<unistd.h>        // readlink/ssize_t (pass-1 font path resolution)
-#include<sys/stat.h>      // mkdir (task-41 shader temp dir)
-#include<sys/wait.h>      // WEXITSTATUS (glslc exit status)
+#include<unistd.h>        // readlink/ssize_t, access()
+#ifdef __APPLE__
+#include<mach-o/dyld.h>   // _NSGetExecutablePath (macOS exe-dir resolution)
+#include<dlfcn.h>         // dladdr fallback
+#endif
 #include<errno.h>
 #include<math.h>          // cosf/sinf/sqrtf (MVP composition, SC8 quads)
 #include<vector>
@@ -359,7 +361,6 @@ class VKBackend : public RenderingEngine
         texPipelineLayout(VK_NULL_HANDLE),
         descriptorPool(VK_NULL_HANDLE),
         shaderModulesLoaded_(0),
-        shadersCompiledAtInit_(false),
         frameCount_(0),
         rebootstrapCount_(0),
         stallSkipCount_(0),
@@ -409,7 +410,7 @@ class VKBackend : public RenderingEngine
         swapchainTransferSrcSupported_(false),
         consecutiveStallCount_(0)
        {deviceName_[0]='\0';
-       shaderSpvDir_[0]='\0';
+       shaderDir_[0]='\0';
        for (int i=0;i<4;++i)
         {fontInfo_[i]=NULL;fontData_[i]=NULL;
          fontDataLen_[i]=0;fontScale_[i]=0.0f;maxAsciiAdvance_[i]=0.0f;
@@ -821,9 +822,9 @@ class VKBackend : public RenderingEngine
     //   pass 2b createSwapchain_: swapchain + per-image views
     // ------------------------------------------------------------------
     virtual bool initWindow(const char* title) override
-      {// Task 41: shaders compile FIRST — a glslc error must fail init
-       // before any other resource exists (no mid-game first-use failure).
-       if (!compileShadersAtInit_())
+      {// Task 41: shaders must be present BEFORE any other resource — a
+       // missing .spv fails initWindow here, never mid-game first-use.
+       if (!loadPrecompiledShaders_())
          {shutdown();
           return false;
          }
@@ -1969,7 +1970,6 @@ class VKBackend : public RenderingEngine
     VkPipelineLayout texPipelineLayout;  // push-constant uMVP + sampler set 0
     VkDescriptorPool descriptorPool;     // combined-image-sampler sets
     unsigned shaderModulesLoaded_;       // task-41 init evidence (0..4)
-    bool shadersCompiledAtInit_;         // glslc ran clean at initWindow
     unsigned frameCount_;                // completed submit+present cycles
     unsigned rebootstrapCount_;          // swapchain rebuilds performed
     unsigned stallSkipCount_;            // recovered stalls (skipped frames)
@@ -2008,8 +2008,9 @@ class VKBackend : public RenderingEngine
     // are per in-flight frame slot (device-level like the sync objects).
     VkShaderModule primVs_,primFs_,texVs_,texFs_;
     VkShaderModule maskedFs_;            // task 42 (masked.frag)
-    char shaderSpvDir_[96];              // init-time glslc output (consumed
-                                         // by createShaderModules_)
+    char shaderDir_[256];                 // resolved at init: dir holding pre-built
+                                         // obj/VK/spv/*.spv (portable exe-dir
+                                         // resolution, no /proc/self/exe)
     VkDescriptorSetLayout texSetLayout_;
     VkDescriptorSetLayout maskedSetLayout_;   // task 42: bindings 0+1
     VkPipelineLayout maskedPipelineLayout_;
@@ -2108,22 +2109,15 @@ class VKBackend : public RenderingEngine
 
     // ------------------------------------------------------------------
     // Pass 1 (D15): four stb TTF slots — glBackend::loadFonts verbatim
-    // semantics (same files, same pixel sizes, same /proc/self/exe path
-    // resolution). Metrics only; glyph rasterization is task 42.
+    // semantics (same files, same pixel sizes, same portable exe-dir
+    // resolution via resolveExeDir_). Metrics only; glyph rasterization is task 42.
     // ------------------------------------------------------------------
     bool loadFonts_()
       {static char fontDir[4096];
        static bool fontDirInit=false;
        if (!fontDirInit)
-        {ssize_t n=readlink("/proc/self/exe",fontDir,sizeof fontDir-1);
-         if (n>0)
-          {fontDir[n]='\0';
-           char* slash=strrchr(fontDir,'/');
-           if (slash)
-             *slash='\0';                 // strip binary name -> repo root
-          }
-         else
-           strcpy(fontDir,".");
+        {if (!resolveExeDir_(fontDir,sizeof fontDir))
+          strcpy(fontDir,".");
          fontDirInit=true;
         }
        static const char* const names[4]=
@@ -3143,107 +3137,94 @@ class VKBackend : public RenderingEngine
       }
 
     // ------------------------------------------------------------------
-    // Task 41: init-time GLSL -> SPIR-V compilation. Sources live in
-    // utilities/rendering/vkShaders/ (resolved /proc/self/exe-relative like
-    // the fonts); glslc compiles each into a per-process temp dir and BOTH
-    // its exit status and captured stderr are checked — a compile error
-    // fails initWindow here, never mid-game. The .spv files stay until
-    // createShaderModules_ (module creation needs the device) consume them.
+    // Task 41 (revised): SPIR-V shaders are PRE-COMPILED at build time
+    // (makefile: glslc -> obj/VK/spv/*.spv). No runtime glslc, no
+    // /proc/self/exe, no temp dirs. loadPrecompiledShaders_ resolves
+    // the executable's directory portably (see resolveExeDir_) and
+    // verifies all 5 .spv blobs exist before initWindow proceeds.
+    // createShaderModules_ loads them into VkShaderModule at device-init
+    // time; the .spv files persist on disk (built artifacts, not temp).
     // ------------------------------------------------------------------
-    bool compileShadersAtInit_()
-      {if (shadersCompiledAtInit_)
-          return true;
-       static const char* const names[5]={"prim.vert","prim.frag",
-                                          "tex.vert","tex.frag",
-                                          "masked.frag"};
-       char root[4096];
-       ssize_t n=readlink("/proc/self/exe",root,sizeof root-1);
-       if (n<=0)
-         {fprintf(stderr,"vkBackend: cannot resolve /proc/self/exe for "
-                         "shader sources\n");
-          return false;
-         }
-       root[n]='\0';
-       char* slash=strrchr(root,'/');
-       if (slash)
-         *slash='\0';
-       snprintf(shaderSpvDir_,sizeof shaderSpvDir_,"/tmp/xast-vkspv-%d",
-                (int)getpid());
-       if (mkdir(shaderSpvDir_,0700)!=0&&errno!=EEXIST)
-         {fprintf(stderr,"vkBackend: cannot create shader temp dir %s\n",
-                  shaderSpvDir_);
-          return false;
-         }
-       bool ok=true;
-       for (int i=0;i<5&&ok;++i)
-        {char srcPath[4600],spvPath[200];
-         snprintf(srcPath,sizeof srcPath,
-                  "%s/utilities/rendering/vkShaders/%s",root,names[i]);
-         snprintf(spvPath,sizeof spvPath,"%s/%d.spv",shaderSpvDir_,i);
-         if (!glslcCompile_(srcPath,spvPath))
-           ok=false;
-        }
-       if (!ok)
-        {fprintf(stderr,"vkBackend: shader compilation failed at init — "
-                        "refusing to start (no mid-game first-use "
-                        "failure)\n");
+    static bool resolveExeDir_(char* outBuf,size_t outLen)
+      {if (!outBuf||outLen<2)
          return false;
-        }
-       shadersCompiledAtInit_=true;
-       printf("vkBackend: 5 shaders compiled from source at init (glslc "
-              "clean)\n");
+#ifdef __APPLE__
+       char path[4096];
+       uint32_t sz=sizeof path;
+       if (_NSGetExecutablePath(path,&sz)==0)
+         {char* rp=realpath(path,outBuf);
+          if (rp)
+           {char* slash=strrchr(outBuf,'/');
+            if (slash)
+              *slash='\0';
+            return true;
+           }
+         }
+       // realpath failed or buffer too small: fall through to readlink
+#endif
+       ssize_t n=readlink("/proc/self/exe",outBuf,outLen-1);
+       if (n>0)
+         {outBuf[n]='\0';
+          char* slash=strrchr(outBuf,'/');
+          if (slash)
+            *slash='\0';
+          return true;
+         }
+       return false;
+      }
+
+    bool loadPrecompiledShaders_()
+      {// Verifies all 5 pre-compiled .spv blobs exist relative to the
+      // binary's directory (resolved via resolveExeDir_, with a CWD
+      // fallback so `./XAsteroids` run from the repo root also works).
+      // On macOS the .spv files live at obj/VK/spv/ alongside the binary.
+       static const char* const spvNames[5]={"prim.spv","prim_fs.spv",
+                                            "tex.spv","tex_fs.spv",
+                                            "masked.spv"};
+       char dir[4096];
+       if (!resolveExeDir_(dir,sizeof dir))
+         strcpy(dir,".");
+       // On macOS the .spv files live at obj/VK/spv/ alongside the binary.
+       // On Linux the binary may be symlinked to obj/VK/; either way we
+       // resolve relative to the binary's directory with a CWD fallback.
+       char spvDir[4096];
+       snprintf(spvDir,sizeof spvDir,"%s/obj/VK/spv",dir);
+       // Check all 5 blobs; report the first missing one.
+       for (int i=0;i<5;++i)
+        {char path[4200];
+         snprintf(path,sizeof path,"%s/%s",spvDir,spvNames[i]);
+         if (access(path,R_OK)!=0)
+          {fprintf(stderr,"vkBackend: missing pre-compiled SPIR-V %s\n",
+                   path);
+           fprintf(stderr,"vkBackend: rebuild with `make BACKEND=VK` "
+                   "(glslc must be on PATH)\n");
+           return false;
+          }
+         }
+       snprintf(shaderDir_,sizeof shaderDir_,"%s",spvDir);
+       printf("vkBackend: 5 pre-compiled SPIR-V shaders found in %s\n",
+              shaderDir_);
        return true;
       }
 
     bool createShaderModules_()
-      {// Consumes the init-time .spv files (device now exists); unlinks
-       // them once the modules hold the code.
-       if (primVs_!=VK_NULL_HANDLE)
+      {if (primVs_!=VK_NULL_HANDLE)
          return true;
-       if (!shadersCompiledAtInit_)
-        {fprintf(stderr,"vkBackend: no compiled shaders to load\n");
-         return false;
-        }
        VkShaderModule* slots[5]={&primVs_,&primFs_,&texVs_,&texFs_,
                                  &maskedFs_};
+       static const char* const spvNames[5]={"prim.spv","prim_fs.spv",
+                                            "tex.spv","tex_fs.spv",
+                                            "masked.spv"};
        for (int i=0;i<5;++i)
-        {char spvPath[200];
-         snprintf(spvPath,sizeof spvPath,"%s/%d.spv",shaderSpvDir_,i);
+        {char spvPath[4200];
+         snprintf(spvPath,sizeof spvPath,"%s/%s",shaderDir_,spvNames[i]);
          if (!createShaderModuleFromSpv_(spvPath,slots[i]))
            return false;
          ++shaderModulesLoaded_;
-         unlink(spvPath);
         }
-       rmdir(shaderSpvDir_);
-       shaderSpvDir_[0]='\0';
        printf("vkBackend: %u shader module(s) loaded\n",
               shaderModulesLoaded_);
        return true;
-      }
-
-    static bool glslcCompile_(const char* srcPath,const char* spvPath)
-      {char cmd[9600];
-       snprintf(cmd,sizeof cmd,"glslc -o '%s' '%s' 2>&1",spvPath,srcPath);
-       FILE* p=popen(cmd,"r");
-       if (!p)
-        {fprintf(stderr,"vkBackend: popen(glslc) failed — is glslc on "
-                        "PATH?\n");
-         return false;
-        }
-       char log[2048];
-       size_t got=fread(log,1,sizeof log-1,p);
-       log[got]='\0';
-       int st=pclose(p);
-       bool clean=(st!=-1)&&WIFEXITED(st)&&WEXITSTATUS(st)==0;
-       if (clean)
-        {if (got>0)
-           fprintf(stderr,"vkBackend: glslc %s: %.*s",srcPath,(int)got,log);
-         return true;
-        }
-       fprintf(stderr,"vkBackend: glslc FAILED on %s (exit %d):\n%.*s\n",
-               srcPath,
-               (st!=-1&&WIFEXITED(st))?WEXITSTATUS(st):-1,(int)got,log);
-       return false;
       }
 
     bool createShaderModuleFromSpv_(const char* path,VkShaderModule* out)
