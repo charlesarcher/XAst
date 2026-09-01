@@ -23,11 +23,11 @@ ifeq ($(UNAME_S),Darwin)
   GLFW_LIB=-L$(GLFW_LIBDIR) -lglfw -Wl,-rpath,$(GLFW_LIBDIR)
   OPENGL_LINK=-framework OpenGL
   VK_LOADER_GATE=:
-  VK_MVK_LIB=/opt/homebrew/opt/molten-vk/lib/libMoltenVK.dylib
+  VK_LOADER_LIB=/opt/homebrew/opt/vulkan-loader/lib/libvulkan.dylib
   VK_MVK_FRAMEWORKS=-framework Metal -framework MetalKit -framework Foundation \
     -framework CoreGraphics -framework CoreVideo -framework CoreMedia -framework AVFoundation \
     -framework IOSurface -framework Quartz
-  VK_LINK_EXTRA=$(VK_MVK_LIB) $(VK_MVK_FRAMEWORKS) -Wl,-rpath,$(VK_MVK_LIB:libMoltenVK.dylib=%)
+  VK_LINK_EXTRA=$(VK_LOADER_LIB) $(VK_MVK_FRAMEWORKS) -Wl,-rpath,$(VK_LOADER_LIB:libvulkan.dylib=%)
   # MoltenVK ships its own vulkan headers; the repo's vendored copy still works
   # but we must not gate on a Linux-style vulkan-loader icd check.
 else
@@ -277,6 +277,30 @@ XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
+endif
+
+# Task 45b: macOS Vulkan run helper — GLFW dlopen("libvulkan.1.dylib") by bare
+# name, which dyld does NOT search /opt/homebrew/lib/ for on macOS 26. The
+# DYLD_FALLBACK_LIBRARY_PATH makes the homebrew vulkan-loader discoverable
+# so glfwVulkanSupported() returns true and glfwGetRequiredInstanceExtensions
+# produces its 2 required exts (VK_KHR_surface + VK_EXT_metal_surface).
+# MoltenVK ICD is resolved via VK_ICD_FILENAMES at runtime.
+run: XAsteroids
+ifeq ($(BACKEND),VK)
+ifeq ($(UNAME_S),Darwin)
+	@if [ ! -d /opt/homebrew/opt/vulkan-loader ]; then \
+	 echo "VK run requires: brew install vulkan-loader molten-vk"; exit 1; \
+	fi
+	dyld_env="DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/vulkan-loader/lib"; \
+	icd="/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json"; \
+	if [ -f "$$icd" ]; then export VK_ICD_FILENAMES="$$icd"; fi; \
+	echo "vkBackend: run via $$dyld_env + $$VK_ICD_FILENAMES"; \
+	eval "$$dyld_env ./XAsteroids"
+else
+	./XAsteroids
+endif
+else
+	./XAsteroids
 endif
 
 # Task 37: pass-0 probe driver (test/vk/vkprobe.C -> VKBackend::

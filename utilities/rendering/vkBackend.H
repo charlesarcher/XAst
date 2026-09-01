@@ -530,20 +530,28 @@ class VKBackend : public RenderingEngine
        std::vector<const char*> exts;
        std::vector<const char*> lay;
        if (withGlfwExtensions&&glfwInitialized_)
-        {uint32_t ng=0;
-         const char** req=glfwGetRequiredInstanceExtensions(&ng);
-         if (req)
-          {for (uint32_t i=0;i<ng;++i)
-            {if (extInList(req[i],iext.data(),next))
-               exts.push_back(req[i]);
-             else
-               fprintf(stderr,"vkBackend: GLFW requests %s but loader does "
-                               "not expose it — skipped\n",req[i]);
-            }
-          }
-        }
+         {uint32_t ng=0;
+          const char** req=glfwGetRequiredInstanceExtensions(&ng);
+          if (req)
+           {for (uint32_t i=0;i<ng;++i)
+             {if (extInList(req[i],iext.data(),next))
+                exts.push_back(req[i]);
+              else
+                fprintf(stderr,"vkBackend: GLFW requests %s but loader does "
+                                "not expose it \xe2\x80\x94 skipped\n",req[i]);
+             }
+           }
+         }
        if (debugUtilsAvailable_)
          exts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+       // Portability enumeration: required on macOS (MoltenVK is a
+       // "portability driver" — the loader refuses to enumerate physical
+       // devices unless VK_KHR_portability_enumeration is enabled AND the
+       // VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR flag is set).
+       // Probe-and-enable so Linux (non-portability ICDs) is unaffected.
+       if (extInList(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
+                     iext.data(),next))
+         exts.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 
        // m15 branch: enable the validation layer ONLY when probed-present.
        if (wantValidation&&!instanceLayerPresent_)
@@ -562,6 +570,11 @@ class VKBackend : public RenderingEngine
        app.pEngineName="XAstRendering";
        app.engineVersion=VK_MAKE_VERSION(1,0,0);
        app.apiVersion=VK_API_VERSION_1_4;   // == pinned header/loader version
+#ifdef XAST_DEBUG_VK
+       fprintf(stderr,"vkBackend: enabled extensions (%u):\\n",(uint32_t)exts.size());
+       for (size_t i=0;i<exts.size();++i)
+         fprintf(stderr,"  %s\\n",exts[i]);
+#endif
 
        VkDebugUtilsMessengerCreateInfoEXT cbInfo{};
        if (debugUtilsAvailable_)
@@ -577,6 +590,7 @@ class VKBackend : public RenderingEngine
 
        VkInstanceCreateInfo ici{};
        ici.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+       ici.flags=VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
        if (debugUtilsAvailable_)
          ici.pNext=&cbInfo;   // capture messages emitted DURING creation
        ici.pApplicationInfo=&app;
