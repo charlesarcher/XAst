@@ -1730,10 +1730,15 @@ class VKBackend : public RenderingEngine
          return 0;
         }
        // ---- one-shot copy + layout transitions -------------------------
-       bool uploaded=false;
-       if (!passOpen_)     // never touch the frame command buffers here
-        {uploaded=uploadTexture_(staging,image,(uint32_t)w,(uint32_t)h);
-        }
+       // When passOpen_ (mid-frame), the frame's command buffer may already be
+       // submitted to graphicsQueue. The upload uses its own one-shot buffer
+       // and fence-wait, so it's safe — but we must ensure the device is idle
+       // before touching the shared commandPool's transient allocations.
+       // This is a cold path (ship icon creation mid-game), so the cost is
+       // negligible and correctness trumps throughput here.
+       if (passOpen_)
+         vkDeviceWaitIdle(device);
+       bool uploaded=uploadTexture_(staging,image,(uint32_t)w,(uint32_t)h);
        vkDestroyBuffer(device,staging,NULL);
        vkFreeMemory(device,stagingMem,NULL);
        if (!uploaded)
