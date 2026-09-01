@@ -16,8 +16,8 @@
 #include"../../utilities/intersection2d.H"
 #include"../explosions/explosion.H"
 #include"../../gamePlay/stage.H"
-#include"../../bitmaps/ENEMYDecor.xbm"
-#include"../../bitmaps/enemyDecor.xbm"
+#include"../../bitmaps/ENEMYDecor_13x5.xbm"
+#include"../../bitmaps/enemyDecor_7x3.xbm"
 #ifndef X11_BACKEND
 #include<vector>
 #include"../glSprites.H"

@@ -26,11 +26,11 @@
 #endif
 #include"../../utilities/rendering/x11Backend.H"
 
-#include"../../bitmaps/ROCKScoringIcon.xbm"
-#include"../../bitmaps/ROckScoringIcon.xbm"
-#include"../../bitmaps/rockScoringIcon.xbm"
-#include"../../bitmaps/ENEMYScoringIcon.xbm"
-#include"../../bitmaps/enemyScoringIcon.xbm"
+#include"../../bitmaps/ROCKScoringIcon_40x40.xbm"
+#include"../../bitmaps/ROckScoringIcon_28x28.xbm"
+#include"../../bitmaps/rockScoringIcon_14x14.xbm"
+#include"../../bitmaps/ENEMYScoringIcon_31x11.xbm"
+#include"../../bitmaps/enemyScoringIcon_17x7.xbm"
 #include"../../bitmaps/bulletScoringIcon.xbm"
 
 #ifndef _OPTIONS_H

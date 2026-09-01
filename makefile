@@ -171,18 +171,18 @@ test-numeric:
 # shipGroup.H) + 6 Options-side scoring icons (transitive via options.H, which
 # is in this TU's include chain — listed so icon edits trigger recompiles).
 # Both _CORP_LOGO_ variants are covered because every casing variant is listed.
-GAME_XBMS=bitmaps/ENEMYDecor.xbm bitmaps/ROCKDecor1.xbm bitmaps/ROCKDecor2.xbm \
- bitmaps/ROCKDecor3.xbm bitmaps/eightball.xbm bitmaps/peace.xbm bitmaps/yinyang.xbm \
- bitmaps/enemyBulletDecor.xbm bitmaps/enemyDecor.xbm bitmaps/explosionCenter.xbm \
+GAME_XBMS=bitmaps/ENEMYDecor_13x5.xbm bitmaps/ROCKDecor1.xbm bitmaps/ROCKDecor2.xbm \
+    bitmaps/ROCKDecor3.xbm bitmaps/eightball.xbm bitmaps/peace.xbm bitmaps/yinyang.xbm \
+    bitmaps/enemyBulletDecor.xbm bitmaps/enemyDecor_7x3.xbm bitmaps/explosionCenter.xbm \
  bitmaps/explosionEdge.xbm bitmaps/explosionMiddle.xbm bitmaps/fortytwo.xbm \
  bitmaps/NCC1701ADecor.xbm bitmaps/NCC1701AIcon.xbm bitmaps/NCC1701AThrustDecor.xbm \
  bitmaps/NCC1701DDecorBottom.xbm bitmaps/NCC1701DDecorTop.xbm bitmaps/NCC1701DIcon.xbm \
  bitmaps/NCC1701DThrustDecor.xbm bitmaps/shipBulletDecor.xbm bitmaps/starDestroyerDecor.xbm \
  bitmaps/starDestroyerIcon.xbm bitmaps/starDestroyerThrustCenter.xbm \
  bitmaps/starDestroyerThrustEdge.xbm bitmaps/starDestroyerThrustMiddle.xbm
-OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon.xbm \
- bitmaps/ENEMYScoringIcon.xbm bitmaps/rockScoringIcon.xbm bitmaps/ROckScoringIcon.xbm \
- bitmaps/ROCKScoringIcon.xbm
+OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon_17x7.xbm \
+    bitmaps/ENEMYScoringIcon_31x11.xbm bitmaps/rockScoringIcon_14x14.xbm bitmaps/ROckScoringIcon_28x28.xbm \
+    bitmaps/ROCKScoringIcon_40x40.xbm
 
 $(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H utilities/rendering/vkBackend.H gamePlay/optionsMenu.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@

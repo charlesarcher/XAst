@@ -19,7 +19,7 @@
 //   - Each row is padded to a whole number of bytes: row stride is
 //     ceil(width/8) bytes; there are no inter-row pad bits beyond that.
 //   - A SET bit (1) is a foreground pixel; a CLEAR bit (0) is background/
-//     transparent. Verified against bitmaps/enemyDecor.xbm (7x3,
+//     transparent. Verified against bitmaps/enemyDecor_7x3.xbm (7x3,
 //     {0x3e,0x00,0x55} -> ".#####." / "......." / "#.#.#.#").
 //
 // OUTPUT CONTRACT (binding for consumers — tasks 27 CPU compositing, 34 GL
