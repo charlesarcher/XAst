@@ -6,6 +6,7 @@
 #ifndef _RENDERINGENGINE_H
 #define _RENDERINGENGINE_H
 #include <cstdint>
+#include <cstddef>
 
 using TextureId = uint64_t;          // m20: not void*
 using RenderTargetId = TextureId;

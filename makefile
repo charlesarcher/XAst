@@ -141,7 +141,7 @@ $(OBJDIR)/optionsMenu.o: gamePlay/optionsMenu.C gamePlay/optionsMenu.H utilities
 xbm-selftest: obj/xbmDecodeSelfTest
 
 obj/xbmDecodeSelfTest: utilities/pixmaps/xbmDecodeSelfTest.C utilities/pixmaps/xbmDecode.H $(wildcard bitmaps/*.xbm)
-	${CXX} ${CXXFLAGS} $< -o $@
+	${CXX} ${CXXFLAGS} -o $@ $<
 
 # Deterministic headless QA harness (task 9, D17.3/B7): Xvfb driver + XTest
 # script executor + XGetImage capture + masked diff. Binary is a build artifact
