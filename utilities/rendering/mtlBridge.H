@@ -134,6 +134,19 @@ MTLFrameContext* mtlBeginOffscreenFrame(void* device, void* queue,
 // and release all frame-scoped resources. Safe to call with NULL (no-op).
 void mtlEndOffscreenFrame(MTLFrameContext* ctx);
 
+// ---- GPU synchronization (task 11) ----
+// Submit an empty command buffer on the given queue and wait until it
+// completes. Used by the readback path to ensure the GPU has finished
+// rendering before CPU reads the shared-storage texture.
+void mtlWaitForGPU(void* queue);
+
+// ---- Texture readback (task 11) ----
+// Read the full content of a shared-storage MTLTexture into a CPU buffer.
+// The texture MUST be MTLStorageModeShared (RGBA8 or BGRA8). Buffer must
+// hold at least w*h*4 bytes. Data is returned in the texture's native pixel
+// order (BGRA for BGRA8Unorm render targets, RGBA for RGBA8Unorm textures).
+void mtlGetTextureBytes(void* texture, void* buffer, int w, int h);
+
 // ---- Cleanup ----
 // Release an opaque Metal object (non-ARC release). Safe to call with NULL.
 void mtlRelease(void* obj);

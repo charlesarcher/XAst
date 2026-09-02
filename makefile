@@ -423,16 +423,25 @@ obj/VK/vkpipe: test/vk/vkpipe.C utilities/rendering/vkBackend.H utilities/render
 # composite unit (task-27 explosion frames) and X11/XTest (the D16 live
 # injection proof); the GL leg needs glad + stb and NO ImGui symbols (none are
 # odr-used). Run BOTH from the repo root under their own Xvfb displays.
+#
+# Darwin (task 11): vkmethods builds with -DXAST_NO_XTEST, skipping XTest
+# injection which requires X11/libXtst. Phases A-D+F still run; Phase E is
+# compiled out via the preprocessor guard.
 .PHONY: vkmethods vkmethods-gl
 vkmethods: obj/VK/vkmethods
 vkmethods-gl: obj/VK/vkmethods-gl
 
+obj/VK/vkmethods-gl: test/vk/vkmethods-gl.C test/vk/identityScene.H utilities/rendering/glBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/GL/glad.o obj/GL/stbTruetypeImpl.o | obj/VK
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Iutilities/rendering $< obj/GL/glad.o obj/GL/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) $(OPENGL_LINK) -ldl -o $@
+
+ifneq ($(UNAME_S),Darwin)
 obj/VK/vkmethods: test/vk/vkmethods.C test/vk/vkinput.C test/vk/identityScene.H utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/pixmaps/xbmDecode.H utilities/pixmaps/composite/compositePixmap.H utilities/pixmaps/composite/compositePixmap.C utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag utilities/rendering/vkShaders/masked.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o $(VK_SPV_TARGETS) | obj/VK
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering test/vk/vkmethods.C test/vk/vkinput.C obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o ${LDFLAGS} $(GLFW_LIB) -lX11 -lXtst -o $@ $(VK_LINK_EXTRA)
-
-obj/VK/vkmethods-gl: test/vk/vkmethods-gl.C test/vk/identityScene.H utilities/rendering/glBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/GL/glad.o obj/GL/stbTruetypeImpl.o | obj/VK
-	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Iutilities/rendering $< obj/GL/glad.o obj/GL/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) $(OPENGL_LINK) -ldl -o $@
+else
+obj/VK/vkmethods: test/vk/vkmethods.C test/vk/identityScene.H utilities/rendering/vkBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/pixmaps/xbmDecode.H utilities/pixmaps/composite/compositePixmap.H utilities/pixmaps/composite/compositePixmap.C utilities/rendering/vkShaders/prim.vert utilities/rendering/vkShaders/prim.frag utilities/rendering/vkShaders/tex.vert utilities/rendering/vkShaders/tex.frag utilities/rendering/vkShaders/masked.frag vendor/stb/stb_truetype.h obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o $(VK_SPV_TARGETS) | obj/VK
+	${CXX} ${CXXFLAGS} -DXAST_NO_XTEST ${VENDOR_INCS} -Ivendor/vulkan/include -Iutilities/rendering test/vk/vkmethods.C obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o ${LDFLAGS} $(GLFW_LIB) -o $@ $(VK_LINK_EXTRA)
+endif
 
 # Task 6: MTL self-diagnostic build (test/vk/mtlmethods.C -> MTLBackend).
 # Renders identityScene.H on the window target for one frame, proving every

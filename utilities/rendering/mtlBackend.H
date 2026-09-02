@@ -716,6 +716,15 @@ class MTLBackend final : public RenderingEngine
        io.GetClipboardTextFn=clipboardGetStub_;
       }
 
+    void waitIdle()
+      {if (queue_) mtlWaitForGPU(queue_);
+      }
+
+    void* getTexturePtr(TextureId tex)
+      {auto it=textures_.find(tex);
+       return it!=textures_.end()?it->second:nullptr;
+      }
+
     // ---- Public members (accessed by playingField.H METAL_BACKEND branches) ----
     bool closeRequested_;               // M13: close callback sets flag only
 

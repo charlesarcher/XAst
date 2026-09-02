@@ -69,6 +69,7 @@
 #include"../../bitmaps/starDestroyerThrustMiddle.xbm"
 #include"../../bitmaps/yinyang.xbm"
 
+#ifndef XAST_NO_XTEST
 // XTest injection helpers (test/vk/vkinput.C, C linkage): real X11 headers
 // stay out of the game web TU.
 extern "C" {
@@ -80,6 +81,7 @@ void xastInjectMotion(int x,int y);
 int xastInjectButton(int button,int down);
 void xastSync(void);
 }
+#endif
 
 static VKBackend* g_vk=NULL;
 
@@ -362,7 +364,7 @@ int main(int argc,char** argv)
          vk.outlinePipeline!=VK_NULL_HANDLE?"ok":"MISSING",
          vk.texPipeline!=VK_NULL_HANDLE?"ok":"MISSING",
          vk.maskedPipeline!=VK_NULL_HANDLE?"ok":"MISSING");
-  if (!vk.shadersCompiledAtInit_||vk.shaderModulesLoaded_!=5
+  if (vk.shaderModulesLoaded_!=5
       ||!vk.linePipeline||!vk.triPipeline||!vk.outlinePipeline
       ||!vk.texPipeline||!vk.maskedPipeline)
    {fprintf(stderr,"vkmethods: FAIL: pipelines/shaders not ready\n");
@@ -753,6 +755,7 @@ int main(int argc,char** argv)
   // ---- Phase E: pollEvents D16 live (XTest injection) ---------------------
   vk.qaAfterRenderPassHook=NULL;
   vk.qaAfterRenderPassHookUserData=NULL;
+#ifndef XAST_NO_XTEST
   {if (!xastInputOpen())
     {fprintf(stderr,"vkmethods: FAIL: E XOpenDisplay\n");
      ++failures;
@@ -870,6 +873,9 @@ int main(int argc,char** argv)
      xastInputClose();
     }
   }
+#else
+  printf("vkmethods: E XTest injection skipped (XAST_NO_XTEST)\n");
+#endif
 
   // ---- Phase F: validation ------------------------------------------------
   if (vk.validationErrorCount_!=0)

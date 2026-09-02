@@ -457,6 +457,33 @@ void mtlEndOffscreenFrame(MTLFrameContext* ctx) {
     delete ctx;
 }
 
+// ---- GPU synchronization (task 11) ----
+
+void mtlWaitForGPU(void* queue) {
+    if (!queue)
+        return;
+    @autoreleasepool {
+        id<MTLCommandQueue> q = (id<MTLCommandQueue>)queue;
+        id<MTLCommandBuffer> buf = [q commandBuffer];
+        [buf commit];
+        [buf waitUntilCompleted];
+    }
+}
+
+// ---- Texture readback (task 11) ----
+
+void mtlGetTextureBytes(void* texture, void* buffer, int w, int h) {
+    if (!texture || !buffer || w <= 0 || h <= 0)
+        return;
+    @autoreleasepool {
+        id<MTLTexture> tex = (id<MTLTexture>)texture;
+        [tex getBytes:buffer
+          bytesPerRow:(NSUInteger)(w * 4)
+           fromRegion:MTLRegionMake2D(0, 0, (NSUInteger)w, (NSUInteger)h)
+          mipmapLevel:0];
+    }
+}
+
 // ---- Cleanup ----
 
 void mtlRelease(void* obj) {
