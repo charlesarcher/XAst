@@ -74,7 +74,7 @@ class OptionsMenu
     virtual void renderOverlay(RenderingEngine& engine) = 0;
  };
 
-#if defined(GL_BACKEND) || defined(VK_BACKEND)
+#if defined(GL_BACKEND) || defined(VK_BACKEND) || defined(METAL_BACKEND)
 // The Dear ImGui implementation. Declared here, defined in optionsMenu.C —
 // the ImGui-heavy translation unit stays out of XAsteroids.o so the per-leg
 // warning baselines stay untouched. Task 44b opens this guard to VK: the
