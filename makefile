@@ -167,7 +167,7 @@ GAME_OBJECTS=$(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o
 ifeq ($(BACKEND),VK)
 objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MTL_STB_OBJECT) $(MENU_OBJECTS) $(VK_SPV_TARGETS)
 else ifeq ($(BACKEND),MTL)
-objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MTL_STB_OBJECT) $(MENU_OBJECTS) $(MTL_METALLIB)
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MTL_STB_OBJECT) $(MENU_OBJECTS) $(MTL_METALLIB) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o
 else
 objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MTL_STB_OBJECT) $(MENU_OBJECTS)
 endif
@@ -303,7 +303,7 @@ OPTIONS_XBMS=bitmaps/bulletScoringIcon.xbm bitmaps/enemyScoringIcon_17x7.xbm \
     bitmaps/ENEMYScoringIcon_31x11.xbm bitmaps/rockScoringIcon_14x14.xbm bitmaps/ROckScoringIcon_28x28.xbm \
     bitmaps/ROCKScoringIcon_40x40.xbm
 
-$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H utilities/rendering/vkBackend.H gamePlay/optionsMenu.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
+$(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/rendering/glBackend.H utilities/rendering/vkBackend.H utilities/rendering/mtlBackend.H utilities/rendering/mtlCocoa.H utilities/rendering/mtlBridge.H gamePlay/optionsMenu.H $(GAME_XBMS) $(OPTIONS_XBMS) utilities/box.H objects/bullet.H utilities/pixmaps/composite/compositePixmap.H objects/enemies/enemyBulletGroup.H objects/enemies/enemyGroup.H objects/explosions/explosion.H objects/explosions/explosionGraphic.H utilities/frames/frameList.H utilities/frames/frameTimer.H utilities/intersection2d.H utilities/liner.H utilities/linkedArray.H objects/movableObject.H gamePlay/options/options.H gamePlay/playingField.H objects/rocks/rockGroup.H utilities/pixmaps/rotated/rotator.H utilities/pixmaps/rotated/rotatorDisplayData.H gamePlay/score.H objects/ships/shipBulletGroup.H objects/ships/shipGroup.H gamePlay/options/button.H gamePlay/shipYard.H objects/rocks/spawner.H gamePlay/stage.H utilities/vector2d.H | $(OBJDIR)
 	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -c $< -o $@
 
 # --- Link rules (task 29, F3/D10/U23; three-way since task 37) --------------
@@ -331,10 +331,11 @@ XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS
 	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) -o XAsteroids $(VK_LINK_EXTRA)
 else ifeq ($(BACKEND),MTL)
 # Task 49+: the MTL (Metal) leg links the game + menu units + the pre-compiled
-# .metallib. Mirrors the VK link structure but WITHOUT the Vulkan loader gate:
-# Metal is a system framework on macOS. Links GLFW + the Metal frameworks.
-XAsteroids: obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(MTL_METALLIB)
-	${CXX} ${CXXFLAGS} obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) -framework Metal -framework MetalKit -framework Foundation -o XAsteroids
+# .metallib + the ObjC++ bridges (mtlCocoa.o + mtlBridge.o). Mirrors the VK
+# link structure but WITHOUT the Vulkan loader gate: Metal is a system
+# framework on macOS. Links GLFW + the Metal frameworks.
+XAsteroids: obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(MTL_METALLIB) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o
+	${CXX} ${CXXFLAGS} obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o ${LDFLAGS} $(GLFW_LIB) -framework Metal -framework MetalKit -framework Foundation -framework QuartzCore -framework AppKit -o XAsteroids
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids

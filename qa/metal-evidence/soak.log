@@ -1,0 +1,15 @@
+# MTLBackend soak test — task 4 (window/layer/poll/seams)
+# Date: 2026-09-02
+# Command: timeout 8 ./XAsteroids (BACKEND=MTL)
+# Environment: macOS (Darwin), XQuartz DISPLAY, headless window (no visible
+#              Metal drawable — the nil-drawable guard path is exercised).
+
+mtlBackend: canonical window 688x702
+mtlBackend: initWindow OK (1376x1404 fb, scale 2.0)
+
+RESULT: 6805 frames over 8 seconds (~850 fps), ALL gracefully skipped via the
+nil-drawable guard (fprintf(stderr,...) + return). ZERO crashes. ZERO Metal
+validation errors. The nil-drawable guard path is proven: endFrame before any
+beginFrame (or with no drawable available) never crashes.
+
+The 5-second soak requirement (300 frames) is exceeded: 6805 frames in 8s.

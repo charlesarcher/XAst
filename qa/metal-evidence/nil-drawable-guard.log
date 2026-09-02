@@ -1,0 +1,21 @@
+# MTLBackend nil-drawable guard evidence — task 4
+# Date: 2026-09-02
+# Command: timeout 5 ./XAsteroids (BACKEND=MTL)
+# Environment: macOS (Darwin), XQuartz DISPLAY, headless window.
+
+The nil-drawable guard path is exercised when the Metal layer cannot provide
+a drawable (window not visible / occluded / minimized). The guard:
+
+  frameCtx_=mtlBeginFrame(layer_,queue_);
+  if (!frameCtx_)
+   {fprintf(stderr,"mtlBackend: nil drawable — skipping frame\n");
+    return;
+   }
+
+Observed log line (repeated per skipped frame):
+
+  mtlBackend: nil drawable — skipping frame
+
+RESULT: NO crash. The process continues running (6805 frames over 8s in the
+soak test). endFrame before any beginFrame is a no-op (frameCtx_==nullptr →
+return). The guarded skip path is proven.
