@@ -83,6 +83,9 @@ class MTLBackend final : public RenderingEngine
       :window(nullptr),
        device_(nullptr),layer_(nullptr),queue_(nullptr),
        metallib_(nullptr),
+       linePipeline_(nullptr),triPipeline_(nullptr),
+       outlinePipeline_(nullptr),texPipeline_(nullptr),
+       maskedPipeline_(nullptr),
        canonicalWidth_(0),canonicalHeight_(0),
        fbWidth_(0),fbHeight_(0),
        presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
@@ -185,6 +188,13 @@ class MTLBackend final : public RenderingEngine
          shutdown();
          return false;
         }
+       // Load the pre-compiled .metallib and create the 5 render pipelines
+       // (mirroring VK's line/tri/outline/tex/masked). The metallib lives at
+       // obj/MTL/aestroids.metallib next to the binary (makefile rule).
+       if (!createPipelines_())
+        {shutdown();
+         return false;
+        }
        // VSync on by default (displaySyncEnabled=YES on the layer).
        mtlSetDisplaySyncEnabled(layer_,1);
        // Set the initial drawable size from the backing scale factor.
@@ -216,8 +226,9 @@ class MTLBackend final : public RenderingEngine
         {mtlEndFrame(frameCtx_);
          frameCtx_=nullptr;
         }
-       // D15 release order: metallib -> queue -> (device/layer are app-lifetime
-       // from mtlCocoa, intentionally never released).
+       // D15 release order: pipelines -> metallib -> queue -> (device/layer
+       // are app-lifetime from mtlCocoa, intentionally never released).
+       destroyPipelines_();
        if (metallib_)
         {mtlRelease(metallib_);
          metallib_=nullptr;
@@ -271,6 +282,9 @@ class MTLBackend final : public RenderingEngine
         {fprintf(stderr,"mtlBackend: nil drawable — skipping frame\n");
          return;
         }
+       // Bind the default solid pipeline so the first frame's clear renders
+       // with the correct blend/cull/depth state (mirrors VK's preamble).
+       mtlSetPipeline(frameCtx_,triPipeline_);
       }
 
     virtual void endFrame() override
@@ -470,6 +484,11 @@ class MTLBackend final : public RenderingEngine
     void* layer_;                       // CAMetalLayer (opaque, retained by view)
     void* queue_;                       // MTLCommandQueue (opaque)
     void* metallib_;                    // MTLLibrary (opaque, loaded at init)
+    void* linePipeline_;                // MTLRenderPipelineState (opaque)
+    void* triPipeline_;
+    void* outlinePipeline_;
+    void* texPipeline_;
+    void* maskedPipeline_;
 
     // ---- Window/transform ----
     int canonicalWidth_,canonicalHeight_;
@@ -603,6 +622,46 @@ class MTLBackend final : public RenderingEngine
          maxAsciiAdvance_[i]=maxAdv;
         }
        return true;
+      }
+
+    // ---- Pipeline creation (task 5: mirror VK's 5 pipelines) ----
+    bool createPipelines_()
+      {// Resolve the metallib path next to the binary (obj/MTL/aestroids.metallib),
+       // with a CWD fallback so `./XAsteroids` from the repo root works.
+       char dir[4096];
+       if (!resolveExeDir_(dir,sizeof dir))
+         strcpy(dir,".");
+       char libPath[4200];
+       snprintf(libPath,sizeof libPath,"%s/obj/MTL/aestroids.metallib",dir);
+       metallib_=mtlLoadLibrary(device_,libPath);
+       if (!metallib_)
+        {fprintf(stderr,"mtlBackend: failed to load %s\n",libPath);
+         fprintf(stderr,"mtlBackend: rebuild with `make BACKEND=MTL`\n");
+         return false;
+        }
+       void** pipes[5]={&linePipeline_,&triPipeline_,&outlinePipeline_,
+                        &texPipeline_,&maskedPipeline_};
+       for (int i=0;i<5;++i)
+        {*pipes[i]=mtlCreatePipeline(device_,metallib_,i);
+         if (!*pipes[i])
+          {fprintf(stderr,"mtlBackend: mtlCreatePipeline(%d) failed\n",i);
+           return false;
+          }
+        }
+       fprintf(stderr,"mtlBackend: 5 render pipelines created\n");
+       return true;
+      }
+
+    void destroyPipelines_()
+      {void* pipes[5]={linePipeline_,triPipeline_,outlinePipeline_,
+                       texPipeline_,maskedPipeline_};
+       for (int i=0;i<5;++i)
+        {if (pipes[i])
+           mtlRelease(pipes[i]);
+         pipes[i]=nullptr;
+        }
+       linePipeline_=triPipeline_=outlinePipeline_=texPipeline_
+                   =maskedPipeline_=nullptr;
       }
 
     // ---- D17.4 present transform (GL/VK verbatim formula) ----
