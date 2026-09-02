@@ -97,7 +97,8 @@ class MTLBackend final : public RenderingEngine
        frameCtx_(nullptr),
        nextTextureId_(1),
        atlasTex_(0),
-       rtActive_(false),rtWidth_(0),rtHeight_(0),
+        rtActive_(false),rtWidth_(0),rtHeight_(0),
+        currentRenderTarget_(0),rtOneShot_(false),
        scissorActive_(false),
        eventHead_(0),eventTail_(0),
        lastCursorX_(0.0),lastCursorY_(0.0),cursorValid_(false)
@@ -248,8 +249,12 @@ class MTLBackend final : public RenderingEngine
         }
        // D15 release order: pipelines -> metallib -> queue -> (device/layer
        // are app-lifetime from mtlCocoa, intentionally never released).
-       destroyPipelines_();
-       // Release textures and the dynamic vertex buffer.
+        destroyPipelines_();
+        // Clear render target metadata (textures released in the loop below).
+        renderTargets_.clear();
+        rtActive_=false;
+        currentRenderTarget_=0;
+        // Release textures and the dynamic vertex buffer.
        for (auto& kv:textures_)
         {if (kv.second)
            mtlRelease(kv.second);
@@ -359,18 +364,60 @@ class MTLBackend final : public RenderingEngine
       }
 
     virtual RenderTargetId createRenderTarget(int w,int h) override
-      {// Stub for task 5: offscreen render targets. Return 0 (not implemented).
-       (void)w;(void)h;
-       return 0;
+      {// BGRA8Unorm texture with render-target + shader-read usage (matches
+       // pipeline pixel format). Registered in textures_ so drawTexture works.
+       if (!device_||w<=0||h<=0)
+         return 0;
+       void* tex=mtlCreateRenderTargetTexture(device_,w,h);
+       if (!tex)
+         return 0;
+       TextureId id=nextTextureId_++;
+       textures_[id]=tex;
+       RTEntry e;
+       e.tex=tex;e.w=w;e.h=h;
+       renderTargets_[id]=e;
+       return id;
       }
 
     virtual void beginRenderTo(RenderTargetId target) override
-      {// Stub for task 5.
-       (void)target;
+      {auto it=renderTargets_.find(target);
+       if (it==renderTargets_.end()||rtActive_)
+         return;
+       RTEntry& rt=it->second;
+       if (frameCtx_)
+        {// Mid-frame (AddShip re-faces the yard mid-game): end the current
+         // render encoder, create a new one targeting the offscreen texture.
+         mtlBeginOffscreenPass(frameCtx_,rt.tex,rt.w,rt.h);
+         rtOneShot_=false;
+        }
+       else
+        {// Init-time (Button/ShipYard ctors run before any frame): create a
+         // standalone command buffer + encoder targeting the offscreen texture.
+         frameCtx_=mtlBeginOffscreenFrame(device_,queue_,rt.tex,rt.w,rt.h);
+         rtOneShot_=true;
+        }
+       currentRenderTarget_=target;
+       rtWidth_=rt.w;
+       rtHeight_=rt.h;
+       rtActive_=true;
       }
 
     virtual void endRenderTo() override
-      {// Stub for task 5.
+      {if (!rtActive_)
+         return;
+       if (rtOneShot_)
+        {// Init-time one-shot: end encoder, commit, release.
+         mtlEndOffscreenFrame(frameCtx_);
+         frameCtx_=nullptr;
+        }
+       else if (frameCtx_)
+        {// Mid-frame: end offscreen encoder, resume window render pass.
+         mtlEndOffscreenPass(frameCtx_,fbWidth_,fbHeight_);
+         mtlSetPipeline(frameCtx_,triPipeline_);
+         applyPresentTransformToScissor_();
+        }
+       rtActive_=false;
+       currentRenderTarget_=0;
       }
 
     virtual void getPresentTransform(float& outScale,int& outOffsetX,
@@ -634,12 +681,15 @@ class MTLBackend final : public RenderingEngine
       }
 
     virtual void deleteTexture(TextureId tex) override
-      {auto it=textures_.find(tex);
-       if (it==textures_.end())
-         return;
-       if (it->second)
-         mtlRelease(it->second);
-       textures_.erase(it);
+      {auto rt=renderTargets_.find(tex);
+       if (rt!=renderTargets_.end())
+         renderTargets_.erase(rt);
+       auto it=textures_.find(tex);
+       if (it!=textures_.end())
+        {if (it->second)
+           mtlRelease(it->second);
+         textures_.erase(it);
+        }
       }
 
     virtual TextureId createTextureFromRGBA32(const uint8_t* pixels,int w,
@@ -708,8 +758,15 @@ class MTLBackend final : public RenderingEngine
     std::map<TextureId,void*> textures_;   // TextureId -> MTLTexture* (opaque)
     TextureId atlasTex_;                   // task 7 text atlas (RGBA8, coverage
                                            // in all 4 channels — see initText_)
+    struct RTEntry
+      {void* tex;                          // same pointer as textures_[id]
+       int w,h;
+      };
+    std::map<RenderTargetId,RTEntry> renderTargets_;
     bool rtActive_;
     int rtWidth_,rtHeight_;
+    RenderTargetId currentRenderTarget_;
+    bool rtOneShot_;
 
     // ---- Scissor state (D7/D8: LOGICAL CLIENT {x,y,w,h}) ----
     bool scissorActive_;
@@ -1084,7 +1141,21 @@ class MTLBackend final : public RenderingEngine
 
     // ---- MVP composition (vkBackend presentMVP_/windowMVP_ verbatim) ----
     const float* presentMVP_()
-      {float W=(float)fbWidth_;
+      {if (rtActive_)
+        {// Rendering INTO a render target: logical (0,0)-top-left maps 1:1
+         // onto the target surface (Button face geometry is target-local;
+         // glBackend rtActive_ analog — MTL NDC is y-down like logical space).
+         float a=2.0f/(float)rtWidth_;
+         float b=2.0f/(float)rtHeight_;
+         float cs=cosf(angle_),sn=sinf(angle_);
+         float ma=cs,mb=-sn,mc=tx_;
+         float md=sn,me=cs,mf=ty_;
+         mvp_[0]=a*ma;    mvp_[1]=b*md;    mvp_[2]=0.0f;mvp_[3]=0.0f;
+         mvp_[4]=a*mb;    mvp_[5]=b*me;    mvp_[6]=0.0f;mvp_[7]=0.0f;
+         mvp_[8]=0.0f;    mvp_[9]=0.0f;    mvp_[10]=1.0f;mvp_[11]=0.0f;
+         mvp_[12]=a*mc-1.0f;mvp_[13]=b*mf-1.0f;mvp_[14]=0.0f;mvp_[15]=1.0f;
+         return mvp_;
+        }float W=(float)fbWidth_;
        float H=(float)fbHeight_;
        float a=2.0f*presentScale_/W;
        float c=2.0f*(float)presentOffX_/W-1.0f;

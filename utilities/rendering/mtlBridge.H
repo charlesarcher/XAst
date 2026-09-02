@@ -108,6 +108,32 @@ void mtlSetScissor(MTLFrameContext* ctx, int x, int y, int w, int h);
 // Set the viewport (window/pixel coords) on the encoder.
 void mtlSetViewport(MTLFrameContext* ctx, int w, int h);
 
+// ---- Render targets (task 8) ----
+// Create a BGRA8Unorm texture with render-target + shader-read usage.
+// Used for offscreen render targets. Returns opaque id<MTLTexture> (caller
+// owns; release with mtlRelease). Returns NULL on failure.
+void* mtlCreateRenderTargetTexture(void* device, int w, int h);
+
+// Mid-frame: end the current render encoder and create a new one targeting
+// rtTexture (offscreen). The window pass is resumed by mtlEndOffscreenPass.
+// No-op if ctx or rtTexture is NULL.
+void mtlBeginOffscreenPass(MTLFrameContext* ctx, void* rtTexture, int w, int h);
+
+// Mid-frame: end the offscreen render encoder and resume the window render
+// pass (loadAction=Load to preserve previously-drawn pixels). Re-binds
+// viewport to windowW×windowH. No-op if ctx is NULL.
+void mtlEndOffscreenPass(MTLFrameContext* ctx, int windowW, int windowH);
+
+// Init-time: create a standalone command buffer + render encoder targeting
+// rtTexture (no window drawable). Returns opaque MTLFrameContext* (caller
+// owns; free with mtlEndOffscreenFrame). Returns NULL on failure.
+MTLFrameContext* mtlBeginOffscreenFrame(void* device, void* queue,
+                                        void* rtTexture, int w, int h);
+
+// Init-time: end the offscreen render encoder, commit the command buffer,
+// and release all frame-scoped resources. Safe to call with NULL (no-op).
+void mtlEndOffscreenFrame(MTLFrameContext* ctx);
+
 // ---- Cleanup ----
 // Release an opaque Metal object (non-ARC release). Safe to call with NULL.
 void mtlRelease(void* obj);

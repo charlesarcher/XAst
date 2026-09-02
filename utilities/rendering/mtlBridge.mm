@@ -343,6 +343,120 @@ void mtlSetViewport(MTLFrameContext* ctx, int w, int h) {
     }
 }
 
+// ---- Render targets (task 8) ----
+
+void* mtlCreateRenderTargetTexture(void* device, int w, int h) {
+    @autoreleasepool {
+        id<MTLDevice> d = (id<MTLDevice>)device;
+        MTLTextureDescriptor* desc =
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                                               width:(NSUInteger)w
+                                                              height:(NSUInteger)h
+                                                           mipmapped:NO];
+        desc.storageMode = MTLStorageModeShared;
+        desc.usage = (MTLTextureUsage)(MTLTextureUsageRenderTarget
+                                      | MTLTextureUsageShaderRead);
+        id<MTLTexture> tex = [d newTextureWithDescriptor:desc];
+        return (void*)tex;
+    }
+}
+
+void mtlBeginOffscreenPass(MTLFrameContext* ctx, void* rtTexture, int w, int h) {
+    if (!ctx || !rtTexture)
+        return;
+    @autoreleasepool {
+        [ctx->encoder endEncoding];
+
+        MTLRenderPassDescriptor* desc = [MTLRenderPassDescriptor renderPassDescriptor];
+        desc.colorAttachments[0].texture = (id<MTLTexture>)rtTexture;
+        desc.colorAttachments[0].loadAction = MTLLoadActionClear;
+        desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+        desc.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
+
+        id<MTLRenderCommandEncoder> enc =
+            [ctx->commandBuffer renderCommandEncoderWithDescriptor:desc];
+        [enc retain];
+        [ctx->encoder release];
+        ctx->encoder = enc;
+
+        MTLViewport vp;
+        vp.originX = 0.0; vp.originY = 0.0;
+        vp.width = (double)w; vp.height = (double)h;
+        vp.znear = 0.0; vp.zfar = 1.0;
+        [enc setViewport:vp];
+    }
+}
+
+void mtlEndOffscreenPass(MTLFrameContext* ctx, int windowW, int windowH) {
+    if (!ctx)
+        return;
+    @autoreleasepool {
+        [ctx->encoder endEncoding];
+
+        MTLRenderPassDescriptor* desc = [MTLRenderPassDescriptor renderPassDescriptor];
+        desc.colorAttachments[0].texture = ctx->drawable.texture;
+        desc.colorAttachments[0].loadAction = MTLLoadActionLoad;
+        desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+        id<MTLRenderCommandEncoder> enc =
+            [ctx->commandBuffer renderCommandEncoderWithDescriptor:desc];
+        [enc retain];
+        [ctx->encoder release];
+        ctx->encoder = enc;
+
+        MTLViewport vp;
+        vp.originX = 0.0; vp.originY = 0.0;
+        vp.width = (double)windowW; vp.height = (double)windowH;
+        vp.znear = 0.0; vp.zfar = 1.0;
+        [enc setViewport:vp];
+    }
+}
+
+MTLFrameContext* mtlBeginOffscreenFrame(void* device, void* queue,
+                                        void* rtTexture, int w, int h) {
+    @autoreleasepool {
+        id<MTLCommandQueue> q = (id<MTLCommandQueue>)queue;
+        id<MTLTexture> tex = (id<MTLTexture>)rtTexture;
+
+        id<MTLCommandBuffer> buf = [q commandBuffer];
+        [buf retain];
+
+        MTLRenderPassDescriptor* desc = [MTLRenderPassDescriptor renderPassDescriptor];
+        desc.colorAttachments[0].texture = tex;
+        desc.colorAttachments[0].loadAction = MTLLoadActionClear;
+        desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+        desc.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
+
+        id<MTLRenderCommandEncoder> enc =
+            [buf renderCommandEncoderWithDescriptor:desc];
+        [enc retain];
+
+        MTLViewport vp;
+        vp.originX = 0.0; vp.originY = 0.0;
+        vp.width = (double)w; vp.height = (double)h;
+        vp.znear = 0.0; vp.zfar = 1.0;
+        [enc setViewport:vp];
+
+        MTLFrameContext* ctx = new MTLFrameContext();
+        ctx->drawable = nil;
+        ctx->commandBuffer = buf;
+        ctx->encoder = enc;
+        return ctx;
+    }
+}
+
+void mtlEndOffscreenFrame(MTLFrameContext* ctx) {
+    if (!ctx)
+        return;
+    @autoreleasepool {
+        [ctx->encoder endEncoding];
+        [ctx->commandBuffer commit];
+        [ctx->encoder release];
+        [ctx->commandBuffer release];
+    }
+    delete ctx;
+}
+
 // ---- Cleanup ----
 
 void mtlRelease(void* obj) {
