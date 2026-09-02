@@ -96,6 +96,7 @@ class MTLBackend final : public RenderingEngine
        canvasOffX_(0.0f),canvasOffY_(0.0f),
        frameCtx_(nullptr),
        nextTextureId_(1),
+       atlasTex_(0),
        rtActive_(false),rtWidth_(0),rtHeight_(0),
        scissorActive_(false),
        eventHead_(0),eventTail_(0),
@@ -195,10 +196,17 @@ class MTLBackend final : public RenderingEngine
        // Load the pre-compiled .metallib and create the 5 render pipelines
        // (mirroring VK's line/tri/outline/tex/masked). The metallib lives at
        // obj/MTL/aestroids.metallib next to the binary (makefile rule).
-       if (!createPipelines_())
-        {shutdown();
-         return false;
-        }
+        if (!createPipelines_())
+         {shutdown();
+          return false;
+         }
+        // Build the text glyph atlas (task 7) — rasterizes ASCII 32..126 for
+        // all four font slots into one RGBA8 coverage texture.
+        if (!initText_())
+         {fprintf(stderr,"mtlBackend: initText_ failed\n");
+          shutdown();
+          return false;
+         }
        // Create the dynamic shared-storage vertex buffer (per-frame ring).
        vertexBuf_=mtlCreateVertexBuffer(device_,kVertexBufSize_);
        if (!vertexBuf_)
@@ -483,17 +491,25 @@ class MTLBackend final : public RenderingEngine
     virtual void drawStringOpaque(const char* text,float x,float y,int fontId,
                                   float r,float g,float b,
                                   float bgR,float bgG,float bgB) override
-      {// Stub for task 7: opaque text draw.
-       (void)text;(void)x;(void)y;(void)fontId;
-       (void)r;(void)g;(void)b;(void)bgR;(void)bgG;(void)bgB;
+      {// Opaque-text mapping (D12): cell background quad THEN glyphs
+       // (vkBackend verbatim).
+       if (!frameCtx_||!validFont(fontId)||!text||!*text)
+         return;
+       float w=measureText(text,fontId);
+       FontMetrics fm;
+       getFontMetrics(fontId,fm);
+       drawRect(x,y-fm.max_bounds.ascent,w,
+                fm.max_bounds.ascent+fm.max_bounds.descent,bgR,bgG,bgB,true);
+       drawGlyphs_(text,x,y,fontId,r,g,b);
       }
 
     virtual void drawStringTransparent(const char* text,float x,float y,
                                        int fontId,
                                        float r,float g,float b) override
-      {// Stub for task 7: transparent text draw.
-       (void)text;(void)x;(void)y;(void)fontId;
-       (void)r;(void)g;(void)b;
+      {// Transparent-text mapping (D12): glyphs only, no background cell.
+       if (!frameCtx_||!validFont(fontId)||!text||!*text)
+         return;
+       drawGlyphs_(text,x,y,fontId,r,g,b);
       }
 
     virtual float measureText(const char* text,int fontId) override
@@ -690,6 +706,8 @@ class MTLBackend final : public RenderingEngine
     // ---- Texture state ----
     TextureId nextTextureId_;
     std::map<TextureId,void*> textures_;   // TextureId -> MTLTexture* (opaque)
+    TextureId atlasTex_;                   // task 7 text atlas (RGBA8, coverage
+                                           // in all 4 channels — see initText_)
     bool rtActive_;
     int rtWidth_,rtHeight_;
 
@@ -711,7 +729,10 @@ class MTLBackend final : public RenderingEngine
 
     // ---- Fonts (stb) ----
     struct GlyphInfo
-      {float u0,v0,u1,v1,w,h,xoff,yoff;
+      {float u0,v0,u1,v1;      // atlas UVs
+       float w,h;              // bitmap size in logical px
+       float advance;          // x advance (logical px)
+       float bearingX,bearingY;// pen -> bitmap top-left offset
        bool present;
       };
     stbtt_fontinfo* fontInfo_[4];
@@ -812,6 +833,102 @@ class MTLBackend final : public RenderingEngine
          maxAsciiAdvance_[i]=maxAdv;
         }
        return true;
+      }
+
+    // ---- Task 7 text: shelf-packed coverage atlas + per-glyph quads ----
+    // (vkBackend initText_/drawGlyphs_ port). The atlas uploads as RGBA8 with
+    // the coverage byte in ALL FOUR channels: through aestroidsFragTex
+    // (texture*vColor) and the SRC_ALPHA blend this reproduces glBackend's
+    // vec4(uColor*a,a) math exactly (rgb = tint*a^2 + dst*(1-a)).
+    bool initText_()
+      {const int AW=2048,AH=512;
+       std::vector<uint8_t> atlas((size_t)AW*AH*4,0);
+       int shelfY[4];
+       int curX=0;
+       for (int s=0;s<4;++s)
+        {shelfY[s]=s==0?0:shelfY[s-1]+slotShelfH_[s-1];
+         curX=0;
+         slotShelfH_[s]=0;
+         for (int cp=32;cp<127;++cp)
+          {int w=0,h=0,xoff=0,yoff=0;
+           uint8_t* bmp=stbtt_GetCodepointBitmap(fontInfo_[s],fontScale_[s],
+                                                 fontScale_[s],cp,
+                                                 &w,&h,&xoff,&yoff);
+           if (w>0&&h>0)
+            {if (curX+w+1>=AW)                 // wrap inside the slot band
+              {curX=0;
+               shelfY[s]+=slotShelfH_[s]+1;
+               slotShelfH_[s]=0;
+              }
+             for (int row=0;row<h;++row)
+              {uint8_t* dst=&atlas[((size_t)(shelfY[s]+row)*AW+curX)*4];
+               const uint8_t* src=bmp+row*w;
+               for (int x=0;x<w;++x)
+                {dst[x*4+0]=src[x];
+                 dst[x*4+1]=src[x];
+                 dst[x*4+2]=src[x];
+                 dst[x*4+3]=src[x];
+                }
+              }
+             GlyphInfo& g=glyphs_[s][cp];
+             g.u0=(float)curX/AW;      g.v0=(float)shelfY[s]/AH;
+             g.u1=(float)(curX+w)/AW;  g.v1=(float)(shelfY[s]+h)/AH;
+             g.w=(float)w;g.h=(float)h;
+             g.bearingX=(float)xoff;g.bearingY=(float)yoff;
+             g.present=true;
+             if (h>slotShelfH_[s])
+               slotShelfH_[s]=h;
+             curX+=w+1;
+            }
+           stbtt_FreeBitmap(bmp,nullptr);
+           int adv=0,lsb=0;
+           stbtt_GetCodepointHMetrics(fontInfo_[s],cp,&adv,&lsb);
+           glyphs_[s][cp].advance=adv*fontScale_[s];
+          }
+        }
+       atlasTex_=createTextureFromBitmap(atlas.data(),AW,AH,4);
+       return atlasTex_!=0;
+      }
+
+    void drawGlyphs_(const char* text,float x,float y,int fontId,
+                     float r,float g,float b)
+      {// Pen starts at (x, y) with y = BASELINE (X11 text semantics).
+       // 6 expanded triangle verts x 8 floats per quad, up to 512 quads per
+       // call — the stride discipline of the task-36 Defect-A fix.
+       auto it=textures_.find(atlasTex_);
+       if (!frameCtx_||it==textures_.end())
+         return;
+       float penX=x;
+       float verts[6*8*512];
+       int quads=0;
+       for (const char* p=text;*p&&quads<512;++p)
+        {GlyphInfo& gl=glyphs_[fontId][(unsigned char)*p];
+         if (gl.present)
+          {float x0=penX+gl.bearingX,y0=y+gl.bearingY;   // bearingY <= 0
+           const float fx[4]={x0,x0+gl.w,x0+gl.w,x0};
+           const float fy[4]={y0,y0,y0+gl.h,y0+gl.h};
+           const float fu[4]={gl.u0,gl.u1,gl.u1,gl.u0};
+           const float fv[4]={gl.v0,gl.v0,gl.v1,gl.v1};
+           static const int idx[6]={0,1,2,0,2,3};
+           for (int i=0;i<6;++i)
+            {float* v=verts+48*quads+8*i;
+             v[0]=fx[idx[i]];v[1]=fy[idx[i]];
+             v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+             v[4]=r;v[5]=g;v[6]=b;v[7]=1.0f;
+            }
+           ++quads;
+          }
+         penX+=gl.advance;
+        }
+       if (!quads)
+         return;
+       drawTexPrims_(texPipeline_,MTL_PRIMITIVE_TRIANGLE,it->second,nullptr,
+                     verts,quads*6,presentMVP_());
+      }
+
+    bool validFont(int fontId) const
+      {return fontId>=0&&fontId<=3&&fontInfo_[fontId]!=nullptr
+              &&fontData_[fontId]!=nullptr;
       }
 
     // ---- Pipeline creation (task 5: mirror VK's 5 pipelines) ----
