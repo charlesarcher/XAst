@@ -1462,6 +1462,21 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv,
           .closeRequested_)
       return localHighScore;
 #endif
+    // Test-only auto-start (task 12 macOS lane): macOS has no XTest/Xvfb and
+    // no Accessibility keystroke injection, so the numeric lane cannot press
+    // 's' to start. When XAST_AUTOSTART is set, start the game exactly as the
+    // 's' key handler does (playingField.H:1486-1493). Gated behind an env var
+    // normal play never sets, so it cannot perturb the state-hash stream or
+    // startup behavior for interactive runs.
+    if (xastQaPath("XAST_AUTOSTART"))
+     {level=l;
+      Boolean earlyExit;
+      earlyExit=RunGame(menu);
+      if (localHighScore<score->CurrentScore())
+        localHighScore=score->CurrentScore();
+      if (earlyExit)
+        return localHighScore;
+     }
     for (int i=0;i<numEvents;++i)
       menu.handleGameEvent(events[i]);
     if (menu.isOpen())
