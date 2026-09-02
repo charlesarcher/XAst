@@ -1,4 +1,4 @@
-# BACKEND selects the compile configuration and object directory: X11 | GL | VK.
+# BACKEND selects the compile configuration and object directory: X11 | GL | VK | MTL.
 # Phase 0: only X11 links; GL/VK are compile-only (`make BACKEND=<B> objects`).
 BACKEND?=X11
 
@@ -53,6 +53,15 @@ VK_SPV_TARGETS=$(VK_SPV_DIR)/prim.spv $(VK_SPV_DIR)/prim_fs.spv \
 VK_GLSLC=glslc
 VK_GLSLC_FLAGS=--target-spv=spv1.5 --target-env=vulkan1.1
 
+# --- Task 49+: MSL pre-compilation (Metal backend, Darwin-only) ---
+# MSL shaders in utilities/rendering/mtlShaders/*.metal are compiled into a
+# single .metallib at BUILD time via xcrun -sdk macosx metal. The binary
+# loads the .metallib relative to its own directory.
+MTL_SHADER_DIR=utilities/rendering/mtlShaders
+MTL_METALLIB=$(OBJDIR)/aestroids.metallib
+MTL_METAL=metal
+MTL_METAL_FLAGS=-O
+
 ifeq ($(BACKEND),X11)
 BACKEND_CXXFLAGS=$(X11_BACKEND)
 endif
@@ -65,7 +74,7 @@ endif
 # on GL/VK (engine-rotation data path + CPU compositing), macro'd on X11.
 # Since task 29 they are ALSO in every link list ($(GAME_OBJECTS)): their
 # engine-branch symbols are referenced by the domain.
-ifneq ($(filter $(BACKEND),GL VK),)
+ifneq ($(filter $(BACKEND),GL VK MTL),)
 BACKEND_CXXFLAGS=$(VENDOR_INCS)
 endif
 # Task 31: the GL leg compiles main()'s GL backend branch (GLBackend engine +
@@ -81,6 +90,15 @@ endif
 # compile lines stay byte-identical.
 ifeq ($(BACKEND),VK)
 BACKEND_CXXFLAGS+=-Ivendor/vulkan/include -DVK_BACKEND
+endif
+# Tasks 49+: the MTL (Metal) leg is Darwin-only — carries the backend macro
+# that opens XAsteroids.C/playingField.H Metal branches. No Vulkan loader
+# gate; Metal is a system framework on macOS.
+ifeq ($(BACKEND),MTL)
+  ifneq ($(UNAME_S),Darwin)
+    $(error BACKEND=MTL requires macOS (Darwin))
+  endif
+  BACKEND_CXXFLAGS+=-DMETAL_BACKEND
 endif
 
 # Objects feeding the X11 link always carry the X11 macro, whatever BACKEND says.
@@ -102,7 +120,7 @@ endif
 # decode unit is backend-agnostic, so building it there proves it compiles
 # WITHOUT -DX11_BACKEND. X11 keeps its native XCreateBitmapFromData paths.
 GLVK_OBJECTS=
-ifneq ($(filter $(BACKEND),GL VK),)
+ifneq ($(filter $(BACKEND),GL VK MTL),)
 GLVK_OBJECTS=$(OBJDIR)/xbmDecodeSelfTest.o
 endif
 
@@ -115,7 +133,7 @@ endif
 DEAR_IMGUI_UNITS=imgui imgui_draw imgui_tables imgui_widgets imgui_demo
 IMGUI_OBJECTS=
 GL_OBJECTS=
-ifneq ($(filter $(BACKEND),GL VK),)
+ifneq ($(filter $(BACKEND),GL VK MTL),)
 IMGUI_OBJECTS=$(addprefix $(OBJDIR)/,$(addsuffix .o,$(DEAR_IMGUI_UNITS)))
 endif
 ifeq ($(BACKEND),GL)
@@ -125,7 +143,7 @@ endif
 # 44b = VK). The seam header itself is include-guarded and only reaches TUs
 # that ask for it.
 MENU_OBJECTS=
-ifneq ($(filter $(BACKEND),GL VK),)
+ifneq ($(filter $(BACKEND),GL VK MTL),)
 MENU_OBJECTS=$(OBJDIR)/optionsMenu.o
 endif
 # Task 38: the VK leg consumes stb font METRICS (pass-1 window sizing via the
@@ -133,13 +151,26 @@ endif
 ifeq ($(BACKEND),VK)
 VK_STB_OBJECT=$(OBJDIR)/stbTruetypeImpl.o
 endif
+# Task 49+: the MTL leg consumes stb font METRICS the same way as VK (pass-1
+# window sizing via the shared D15 formula); glad stays GL-only.
+ifeq ($(BACKEND),MTL)
+MTL_STB_OBJECT=$(OBJDIR)/stbTruetypeImpl.o
+endif
 
 .PHONY: objects
 # All three game objects on EVERY leg (task 27: the D14 units' #else engine
 # branches compile guards-closed on GL/VK, macro'd on X11) + the
-# backend-agnostic self-test/vendor units on the GPU legs.
+# backend-agnostic self-test/vendor units on the GPU legs. The SPIR-V targets
+# ride the VK leg only and the MSL metallib rides the MTL leg only, so the
+# convenience target stays buildable on every leg.
 GAME_OBJECTS=$(OBJDIR)/rotatorDisplayData.o $(OBJDIR)/compositePixmap.o
-objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MENU_OBJECTS) $(VK_SPV_TARGETS)
+ifeq ($(BACKEND),VK)
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MTL_STB_OBJECT) $(MENU_OBJECTS) $(VK_SPV_TARGETS)
+else ifeq ($(BACKEND),MTL)
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MTL_STB_OBJECT) $(MENU_OBJECTS) $(MTL_METALLIB)
+else
+objects: $(OBJDIR)/XAsteroids.o $(GAME_OBJECTS) $(GLVK_OBJECTS) $(IMGUI_OBJECTS) $(GL_OBJECTS) $(VK_STB_OBJECT) $(MTL_STB_OBJECT) $(MENU_OBJECTS)
+endif
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
@@ -169,6 +200,30 @@ $(VK_SPV_DIR)/tex_fs.spv: utilities/rendering/vkShaders/tex.frag | $(VK_SPV_DIR)
 $(VK_SPV_DIR)/masked.spv: utilities/rendering/vkShaders/masked.frag | $(VK_SPV_DIR)
 	@echo "glslc $< -> $@"
 	$(VK_GLSLC) $(VK_GLSLC_FLAGS) -o $@ $<
+endif
+
+# MSL pre-compilation — only relevant on the MTL leg (Darwin-only). The
+# .metallib lives in obj/MTL/ alongside the .o files; the binary locates it
+# via its own directory at runtime. Mirrors the SPIR-V precedent (147-172)
+# but uses xcrun -sdk macosx metal instead of glslc.
+ifeq ($(BACKEND),MTL)
+# Pre-flight gate: abort with a clear message if the Metal toolchain is
+# missing (e.g. Xcode not yet installed) BEFORE attempting the MSL compile.
+$(MTL_METALLIB): $(wildcard $(MTL_SHADER_DIR)/*.metal) | $(OBJDIR)
+	@if ! xcrun --find $(MTL_METAL) >/dev/null 2>&1; then \
+		echo "ERROR: 'xcrun --find metal' failed — the Metal toolchain is not installed."; \
+		echo "Install Xcode (or run 'xcode-select --install') and accept the license."; \
+		exit 1; \
+	fi
+	@echo "metal $< -> $@"
+	xcrun -sdk macosx $(MTL_METAL) $(MTL_METAL_FLAGS) -c $< -o $(OBJDIR)/aestroids.air
+	xcrun -sdk macosx metallib $(OBJDIR)/aestroids.air -o $@
+
+# ObjC++ TU rule for .mm files. Isolated from CXXFLAGS: the ObjC++ front end
+# is selected per-TU via -x objective-c++, so no ObjC++ flags leak into the
+# global CXXFLAGS (which would poison the C++ TUs on every leg).
+$(OBJDIR)/%.o: utilities/rendering/%.mm | $(OBJDIR)
+	${CXX} ${CXXFLAGS} ${BACKEND_CXXFLAGS} -x objective-c++ -c $< -o $@
 endif
 
 $(OBJDIR)/rotatorDisplayData.o: utilities/pixmaps/rotated/rotatorDisplayData.C utilities/pixmaps/rotated/rotatorDisplayData.H | $(OBJDIR)
@@ -274,6 +329,12 @@ else ifeq ($(BACKEND),VK)
 XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(VK_SPV_TARGETS)
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) -o XAsteroids $(VK_LINK_EXTRA)
+else ifeq ($(BACKEND),MTL)
+# Task 49+: the MTL (Metal) leg links the game + menu units + the pre-compiled
+# .metallib. Mirrors the VK link structure but WITHOUT the Vulkan loader gate:
+# Metal is a system framework on macOS. Links GLFW + the Metal frameworks.
+XAsteroids: obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(MTL_METALLIB)
+	${CXX} ${CXXFLAGS} obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) -framework Metal -framework MetalKit -framework Foundation -o XAsteroids
 else
 XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
@@ -376,4 +437,4 @@ AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 
 clean:
-	\rm -rf XAsteroids XAsteroids_vk XAsteroids_gl AutoRepeatOn *.o *.u *.bak *.CKP obj/X11 obj/GL obj/VK obj/xbmDecodeSelfTest obj/harness
+	\rm -rf XAsteroids XAsteroids_vk XAsteroids_gl AutoRepeatOn *.o *.u *.bak *.CKP obj/X11 obj/GL obj/VK obj/MTL obj/xbmDecodeSelfTest obj/harness
