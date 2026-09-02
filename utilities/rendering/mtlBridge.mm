@@ -9,6 +9,7 @@
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#include <string.h>
 
 #include "mtlBridge.H"
 
@@ -66,6 +67,17 @@ MTLFrameContext* mtlBeginFrame(void* layer, void* queue) {
 
         id<MTLRenderCommandEncoder> enc = [buf renderCommandEncoderWithDescriptor:desc];
         [enc retain];
+
+        // Viewport = full drawable (window target). Scissor is set per-frame
+        // by the backend (mtlSetScissor) from its stored logical rect.
+        MTLViewport vp;
+        vp.originX = 0.0;
+        vp.originY = 0.0;
+        vp.width = (double)d.texture.width;
+        vp.height = (double)d.texture.height;
+        vp.znear = 0.0;
+        vp.zfar = 1.0;
+        [enc setViewport:vp];
 
         MTLFrameContext* ctx = new MTLFrameContext();
         ctx->drawable = d;
@@ -203,6 +215,131 @@ void mtlSetPipeline(MTLFrameContext* ctx, void* pipeline) {
     @autoreleasepool {
         id<MTLRenderPipelineState> ps = (id<MTLRenderPipelineState>)pipeline;
         [ctx->encoder setRenderPipelineState:ps];
+    }
+}
+
+// ---- Vertex buffers ----
+
+void* mtlCreateVertexBuffer(void* device, size_t size) {
+    @autoreleasepool {
+        id<MTLDevice> d = (id<MTLDevice>)device;
+        id<MTLBuffer> buf = [d newBufferWithLength:size
+                                           options:MTLResourceStorageModeShared];
+        // newBufferWithLength returns +1 retained (caller owns).
+        return (void*)buf;
+    }
+}
+
+void mtlUpdateVertexBuffer(void* buffer, size_t offset, const void* data,
+                           size_t size) {
+    if (!buffer || !data)
+        return;
+    @autoreleasepool {
+        id<MTLBuffer> buf = (id<MTLBuffer>)buffer;
+        // Shared-storage: CPU writes directly into the GPU-visible memory.
+        void* dst = (uint8_t*)[buf contents] + offset;
+        memcpy(dst, data, size);
+    }
+}
+
+void mtlSetVertexBuffer(MTLFrameContext* ctx, void* buffer, size_t offset) {
+    if (!ctx || !buffer)
+        return;
+    @autoreleasepool {
+        id<MTLBuffer> buf = (id<MTLBuffer>)buffer;
+        [ctx->encoder setVertexBuffer:buf offset:offset atIndex:0];
+    }
+}
+
+// ---- MVP uniform ----
+
+void mtlSetMvp(MTLFrameContext* ctx, const float* mvp) {
+    if (!ctx || !mvp)
+        return;
+    @autoreleasepool {
+        [ctx->encoder setVertexBytes:mvp length:sizeof(float)*16 atIndex:1];
+    }
+}
+
+// ---- Textures ----
+
+void* mtlCreateTexture(void* device, int w, int h, int format,
+                       const void* data, size_t bytesPerRow) {
+    @autoreleasepool {
+        id<MTLDevice> d = (id<MTLDevice>)device;
+        MTLPixelFormat pf = (format == MTL_TEX_R8)
+                                ? MTLPixelFormatR8Unorm
+                                : MTLPixelFormatRGBA8Unorm;
+        MTLTextureDescriptor* desc =
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pf
+                                                               width:(NSUInteger)w
+                                                              height:(NSUInteger)h
+                                                           mipmapped:NO];
+        desc.storageMode = MTLStorageModeShared;
+        desc.usage = MTLTextureUsageShaderRead;
+        id<MTLTexture> tex = [d newTextureWithDescriptor:desc];
+        if (!tex)
+            return NULL;
+        [tex replaceRegion:MTLRegionMake2D(0, 0, (NSUInteger)w, (NSUInteger)h)
+               mipmapLevel:0
+                 withBytes:data
+               bytesPerRow:bytesPerRow];
+        // newTextureWithDescriptor returns +1 retained (caller owns).
+        return (void*)tex;
+    }
+}
+
+void mtlSetTexture(MTLFrameContext* ctx, int slot, void* texture) {
+    if (!ctx || !texture)
+        return;
+    @autoreleasepool {
+        id<MTLTexture> tex = (id<MTLTexture>)texture;
+        [ctx->encoder setFragmentTexture:tex atIndex:(NSUInteger)slot];
+    }
+}
+
+// ---- Draw ----
+
+void mtlDraw(MTLFrameContext* ctx, int primitiveType, int vertexCount) {
+    if (!ctx || vertexCount < 1)
+        return;
+    @autoreleasepool {
+        MTLPrimitiveType pt = (primitiveType == MTL_PRIMITIVE_LINE)
+                                  ? MTLPrimitiveTypeLine
+                                  : MTLPrimitiveTypeTriangle;
+        [ctx->encoder drawPrimitives:pt
+                         vertexStart:0
+                         vertexCount:(NSUInteger)vertexCount];
+    }
+}
+
+// ---- Scissor / viewport ----
+
+void mtlSetScissor(MTLFrameContext* ctx, int x, int y, int w, int h) {
+    if (!ctx)
+        return;
+    @autoreleasepool {
+        MTLScissorRect r;
+        r.x = (NSUInteger)(x < 0 ? 0 : x);
+        r.y = (NSUInteger)(y < 0 ? 0 : y);
+        r.width = (NSUInteger)(w < 0 ? 0 : w);
+        r.height = (NSUInteger)(h < 0 ? 0 : h);
+        [ctx->encoder setScissorRect:r];
+    }
+}
+
+void mtlSetViewport(MTLFrameContext* ctx, int w, int h) {
+    if (!ctx)
+        return;
+    @autoreleasepool {
+        MTLViewport vp;
+        vp.originX = 0.0;
+        vp.originY = 0.0;
+        vp.width = (double)w;
+        vp.height = (double)h;
+        vp.znear = 0.0;
+        vp.zfar = 1.0;
+        [ctx->encoder setViewport:vp];
     }
 }
 

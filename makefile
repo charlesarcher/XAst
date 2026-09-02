@@ -434,6 +434,16 @@ obj/VK/vkmethods: test/vk/vkmethods.C test/vk/vkinput.C test/vk/identityScene.H 
 obj/VK/vkmethods-gl: test/vk/vkmethods-gl.C test/vk/identityScene.H utilities/rendering/glBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H vendor/stb/stb_truetype.h obj/GL/glad.o obj/GL/stbTruetypeImpl.o | obj/VK
 	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Iutilities/rendering $< obj/GL/glad.o obj/GL/stbTruetypeImpl.o ${LDFLAGS} $(GLFW_LIB) $(OPENGL_LINK) -ldl -o $@
 
+# Task 6: MTL self-diagnostic build (test/vk/mtlmethods.C -> MTLBackend).
+# Renders identityScene.H on the window target for one frame, proving every
+# draw method family links and runs without Metal validation errors. Links
+# stbTruetypeImpl (font metrics) + the ObjC++ bridges + the metallib.
+.PHONY: mtlmethods
+mtlmethods: obj/MTL/mtlmethods
+
+obj/MTL/mtlmethods: test/vk/mtlmethods.C test/vk/identityScene.H utilities/rendering/mtlBackend.H utilities/rendering/renderingEngine.H utilities/rendering/windowSize.H utilities/rendering/mtlCocoa.H utilities/rendering/mtlBridge.H vendor/stb/stb_truetype.h obj/MTL/stbTruetypeImpl.o obj/MTL/mtlCocoa.o obj/MTL/mtlBridge.o $(MTL_METALLIB) | obj/MTL
+	${CXX} ${CXXFLAGS} ${VENDOR_INCS} -Iutilities/rendering $< obj/MTL/stbTruetypeImpl.o obj/MTL/mtlCocoa.o obj/MTL/mtlBridge.o ${LDFLAGS} $(GLFW_LIB) -framework Metal -framework MetalKit -framework Foundation -framework QuartzCore -framework AppKit -o $@
+
 AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 

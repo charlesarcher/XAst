@@ -62,6 +62,7 @@
 #endif
 #include<math.h>
 #include<map>
+#include<vector>
 #include<utility>
 #include<initializer_list>
 
@@ -86,6 +87,7 @@ class MTLBackend final : public RenderingEngine
        linePipeline_(nullptr),triPipeline_(nullptr),
        outlinePipeline_(nullptr),texPipeline_(nullptr),
        maskedPipeline_(nullptr),
+       vertexBuf_(nullptr),vertWriteOffset_(0),
        canonicalWidth_(0),canonicalHeight_(0),
        fbWidth_(0),fbHeight_(0),
        presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
@@ -95,6 +97,7 @@ class MTLBackend final : public RenderingEngine
        frameCtx_(nullptr),
        nextTextureId_(1),
        rtActive_(false),rtWidth_(0),rtHeight_(0),
+       scissorActive_(false),
        eventHead_(0),eventTail_(0),
        lastCursorX_(0.0),lastCursorY_(0.0),cursorValid_(false)
       {for (int i=0;i<4;++i)
@@ -105,6 +108,7 @@ class MTLBackend final : public RenderingEngine
          for (int c=0;c<128;++c)
            glyphs_[i][c].present=false;
         }
+       scissorRect_[0]=scissorRect_[1]=scissorRect_[2]=scissorRect_[3]=0;
        s_instance=this;
       }
 
@@ -195,6 +199,14 @@ class MTLBackend final : public RenderingEngine
         {shutdown();
          return false;
         }
+       // Create the dynamic shared-storage vertex buffer (per-frame ring).
+       vertexBuf_=mtlCreateVertexBuffer(device_,kVertexBufSize_);
+       if (!vertexBuf_)
+        {fprintf(stderr,"mtlBackend: mtlCreateVertexBuffer failed.\n");
+         shutdown();
+         return false;
+        }
+       vertWriteOffset_=0;
        // VSync on by default (displaySyncEnabled=YES on the layer).
        mtlSetDisplaySyncEnabled(layer_,1);
        // Set the initial drawable size from the backing scale factor.
@@ -229,6 +241,16 @@ class MTLBackend final : public RenderingEngine
        // D15 release order: pipelines -> metallib -> queue -> (device/layer
        // are app-lifetime from mtlCocoa, intentionally never released).
        destroyPipelines_();
+       // Release textures and the dynamic vertex buffer.
+       for (auto& kv:textures_)
+        {if (kv.second)
+           mtlRelease(kv.second);
+        }
+       textures_.clear();
+       if (vertexBuf_)
+        {mtlRelease(vertexBuf_);
+         vertexBuf_=nullptr;
+        }
        if (metallib_)
         {mtlRelease(metallib_);
          metallib_=nullptr;
@@ -285,6 +307,10 @@ class MTLBackend final : public RenderingEngine
        // Bind the default solid pipeline so the first frame's clear renders
        // with the correct blend/cull/depth state (mirrors VK's preamble).
        mtlSetPipeline(frameCtx_,triPipeline_);
+       // Reset the dynamic vertex-buffer write cursor for this frame.
+       vertWriteOffset_=0;
+       // Apply the latched scissor (present-transform-mapped to window space).
+       applyPresentTransformToScissor_();
       }
 
     virtual void endFrame() override
@@ -310,8 +336,18 @@ class MTLBackend final : public RenderingEngine
       }
 
     virtual void setScissorRect(const int* xywh) override
-      {// D7/D8 (v6.1): LOGICAL CLIENT {x,y,w,h} in. Stub for task 5.
-       (void)xywh;
+      {// D7/D8 (v6.1): LOGICAL CLIENT {x,y,w,h} in; the present transform is
+       // applied at frame begin (applyPresentTransformToScissor_, identity
+       // today). nullptr = full extent — the HUD pass is un-scissored.
+       if (!xywh)
+        {scissorActive_=false;
+         return;
+        }
+       scissorRect_[0]=xywh[0];
+       scissorRect_[1]=xywh[1];
+       scissorRect_[2]=xywh[2];
+       scissorRect_[3]=xywh[3];
+       scissorActive_=true;
       }
 
     virtual RenderTargetId createRenderTarget(int w,int h) override
@@ -346,28 +382,101 @@ class MTLBackend final : public RenderingEngine
 
     virtual void drawLine(float x1,float y1,float x2,float y2,
                           float r,float g,float b,float width) override
-      {// Stub for task 6: thin/thick lines via quad expansion.
-       (void)x1;(void)y1;(void)x2;(void)y2;
-       (void)r;(void)g;(void)b;(void)width;
+      {// SC8, vkBackend verbatim: width<2 = 2-vert LINE_LIST; width>1 =
+       // filled quad expanded perpendicular in LOGICAL space (thickLineQuad
+       // port) drawn through triPipeline. Color verts repacked to the
+       // shader's 32-byte stride (pos, uv=0, color).
+       if (!frameCtx_)
+         return;
+       float verts[48];
+       int count;
+       void* pipe;
+       int prim;
+       if (width<2.0f)
+        {makeColorVert(verts,0,x1,y1,r,g,b);
+         makeColorVert(verts,1,x2,y2,r,g,b);
+         count=2;
+         pipe=linePipeline_;
+         prim=MTL_PRIMITIVE_LINE;
+        }
+       else
+        {thickLineQuad(verts,x1,y1,x2,y2,width*0.5f,r,g,b);
+         count=6;
+         pipe=triPipeline_;
+         prim=MTL_PRIMITIVE_TRIANGLE;
+        }
+       drawColorPrims_(pipe,prim,verts,count);
       }
 
     virtual void drawPolygon(const float* verts,int count,
                              float r,float g,float b,bool fill) override
-      {// Stub for task 6: ear-clip triangulation + LINE_LOOP outline.
-       (void)verts;(void)count;(void)r;(void)g;(void)b;(void)fill;
+      {if (!frameCtx_||!verts||count<2)
+         return;
+       if (!fill)
+        {// GL_LINE_LOOP emulation: Metal has no loop topology — emit the
+         // closing segment explicitly (n+1 verts).
+         float line[8*261];
+         int n=count<260?count:260;
+         for (int i=0;i<n;++i)
+           makeColorVert(line,i,verts[2*i],verts[2*i+1],r,g,b);
+         makeColorVert(line,n,verts[0],verts[1],r,g,b);
+         drawColorPrims_(outlinePipeline_,MTL_PRIMITIVE_LINE,line,n+1);
+         return;
+        }
+       // Ear-clipped triangles (glBackend port incl. the fan fallback).
+       float pairs[2*1536];
+       int ntri=earClip(verts,count,pairs);
+       if (ntri<1)
+        {float fan[8*256];
+         int n=0;
+         for (int i=1;i+1<count&&i<255;++i)
+          {makeColorVert(fan,n++,verts[0],verts[1],r,g,b);
+           makeColorVert(fan,n++,verts[2*i],verts[2*i+1],r,g,b);
+           makeColorVert(fan,n++,verts[2*i+2],verts[2*i+3],r,g,b);
+          }
+         drawColorPrims_(triPipeline_,MTL_PRIMITIVE_TRIANGLE,fan,n);
+         return;
+        }
+       float out[8*1536];
+       for (int i=0;i<ntri*3;++i)
+         makeColorVert(out,i,pairs[2*i],pairs[2*i+1],r,g,b);
+       drawColorPrims_(triPipeline_,MTL_PRIMITIVE_TRIANGLE,out,ntri*3);
       }
 
     virtual void drawRect(float x,float y,float w,float h,
                           float r,float g,float b,bool fill) override
-      {// Stub for task 6: filled or outlined rect.
-       (void)x;(void)y;(void)w;(void)h;
-       (void)r;(void)g;(void)b;(void)fill;
+      {if (!frameCtx_)
+         return;
+       float quad[10]={x,y, x+w,y, x+w,y+h, x,y+h};
+       if (fill)
+        {static const int idx[6]={0,1,2,0,2,3};
+         float tris[48];
+         for (int i=0;i<6;++i)
+           makeColorVert(tris,i,quad[2*idx[i]],quad[2*idx[i]+1],r,g,b);
+         drawColorPrims_(triPipeline_,MTL_PRIMITIVE_TRIANGLE,tris,6);
+        }
+       else
+         drawPolygon(quad,4,r,g,b,false);
       }
 
     virtual void drawTriangles(const float* verts,int count,
                                TextureId tex) override
-      {// Stub for task 6: interleaved triangle soup [x y u v r g b] * N.
-       (void)verts;(void)count;(void)tex;
+      {// D9 menu pair: interleaved [x y u v r g b]*count, WINDOW-space
+       // coords — the SOLE window-space method (v6.1 rule), so the MVP here
+       // is windowMVP_ (pixel coords -> NDC). The 7-float engine contract
+       // repacks onto the pipeline's clean 8-float stride with alpha=1.
+       auto it=textures_.find(tex);
+       if (!frameCtx_||!verts||count<3||it==textures_.end())
+         return;
+       std::vector<float> packed((size_t)count*8);
+       for (int i=0;i<count;++i)
+        {const float* s=verts+(size_t)i*7;
+         float* d=&packed[(size_t)i*8];
+         d[0]=s[0];d[1]=s[1];d[2]=s[2];d[3]=s[3];
+         d[4]=s[4];d[5]=s[5];d[6]=s[6];d[7]=1.0f;
+        }
+       drawTexPrims_(texPipeline_,MTL_PRIMITIVE_TRIANGLE,it->second,nullptr,
+                     packed.data(),count,windowMVP_());
       }
 
     // ---- (5) Text ----
@@ -424,33 +533,103 @@ class MTLBackend final : public RenderingEngine
     // ---- (6) Textures ----
     virtual TextureId createTextureFromBitmap(const uint8_t* data,int w,
                                               int h,int channels) override
-      {// Stub for task 6: Metal texture upload.
-       (void)data;(void)w;(void)h;(void)channels;
-       return 0;
+      {// D13: the ONE texture entry point (xbmDecode output; channels
+       // 1/3/4). Metal path: shared-storage MTLTexture upload. channels==3
+       // expands to RGBA8 (documented divergence; content opaque).
+       if (!device_||!data||w<=0||h<=0
+           ||(channels!=1&&channels!=3&&channels!=4))
+         return 0;
+       int fmt=channels==1?MTL_TEX_R8:MTL_TEX_RGBA8;
+       size_t bytesPerRow=(size_t)w*(channels==1?1u:4u);
+       void* tex=nullptr;
+       if (channels==3)
+        {// expand RGB888 -> RGBA888 row by row
+         std::vector<uint8_t> rgba((size_t)w*h*4);
+         for (int y=0;y<h;++y)
+          {const uint8_t* src=data+(size_t)y*w*3;
+           uint8_t* drow=&rgba[(size_t)y*w*4];
+           for (int x=0;x<w;++x)
+            {drow[x*4+0]=src[x*3+0];
+             drow[x*4+1]=src[x*3+1];
+             drow[x*4+2]=src[x*3+2];
+             drow[x*4+3]=255;
+            }
+          }
+         tex=mtlCreateTexture(device_,w,h,fmt,rgba.data(),bytesPerRow);
+        }
+       else
+         tex=mtlCreateTexture(device_,w,h,fmt,data,bytesPerRow);
+       if (!tex)
+        {fprintf(stderr,"mtlBackend: texture upload failed\n");
+         return 0;
+        }
+       TextureId id=nextTextureId_++;
+       textures_[id]=tex;
+       return id;
       }
 
     virtual void drawTexture(TextureId tex,float x,float y,
                              float w,float h,float alpha) override
-      {// Stub for task 6: textured quad draw.
-       (void)tex;(void)x;(void)y;(void)w;(void)h;(void)alpha;
+      {// Textured quad, alpha-blended (D8 canonical order governs call
+       // order). Tint=(1,1,1,alpha): through FragColor = texture*vColor this
+       // reproduces GL's vec4(c.rgb,c.a*uAlpha) exactly.
+       auto it=textures_.find(tex);
+       if (!frameCtx_||it==textures_.end())
+         return;
+       float verts[48];
+       static const int idx[6]={0,1,2,0,2,3};
+       const float fx[4]={x,x+w,x+w,x};
+       const float fy[4]={y,y,y+h,y+h};
+       const float fu[4]={0.0f,1.0f,1.0f,0.0f};
+       const float fv[4]={0.0f,0.0f,1.0f,1.0f};
+       for (int i=0;i<6;++i)
+        {float* v=verts+8*i;
+         v[0]=fx[idx[i]];v[1]=fy[idx[i]];
+         v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+         v[4]=1.0f;v[5]=1.0f;v[6]=1.0f;
+         v[7]=alpha;            // tint = (1,1,1,uAlpha)
+        }
+       drawTexPrims_(texPipeline_,MTL_PRIMITIVE_TRIANGLE,it->second,nullptr,
+                     verts,6,presentMVP_());
       }
 
     virtual void drawTextureMasked(TextureId content,TextureId mask,
                                    float x,float y,float w,float h) override
-      {// Stub for task 6: R8 mask discard path.
-       (void)content;(void)mask;(void)x;(void)y;(void)w;(void)h;
+      {// D6 Metal half: content quad discarded where the R8 mask is off
+       // (<0.5) — glBackend maskedProgram_ semantics on the masked pipeline.
+       auto c=textures_.find(content);
+       auto m=textures_.find(mask);
+       if (!frameCtx_||c==textures_.end()||m==textures_.end())
+         return;
+       float verts[48];
+       static const int idx[6]={0,1,2,0,2,3};
+       const float fx[4]={x,x+w,x+w,x};
+       const float fy[4]={y,y,y+h,y+h};
+       const float fu[4]={0.0f,1.0f,1.0f,0.0f};
+       const float fv[4]={0.0f,0.0f,1.0f,1.0f};
+       for (int i=0;i<6;++i)
+        {float* v=verts+8*i;
+         v[0]=fx[idx[i]];v[1]=fy[idx[i]];
+         v[2]=fu[idx[i]];v[3]=fv[idx[i]];
+         v[4]=1.0f;v[5]=1.0f;v[6]=1.0f;v[7]=1.0f;
+        }
+       drawTexPrims_(maskedPipeline_,MTL_PRIMITIVE_TRIANGLE,c->second,m->second,
+                     verts,6,presentMVP_());
       }
 
     virtual void deleteTexture(TextureId tex) override
-      {// Stub for task 6: release Metal texture.
-       (void)tex;
+      {auto it=textures_.find(tex);
+       if (it==textures_.end())
+         return;
+       if (it->second)
+         mtlRelease(it->second);
+       textures_.erase(it);
       }
 
     virtual TextureId createTextureFromRGBA32(const uint8_t* pixels,int w,
                                               int h) override
-      {// Stub for task 6: Dear ImGui font atlas / UI textures.
-       (void)pixels;(void)w;(void)h;
-       return 0;
+      {// D9 menu pair: Dear ImGui font atlas / UI textures (RGBA8888).
+       return createTextureFromBitmap(pixels,w,h,4);
       }
 
     // ---- (7) Transform ----
@@ -489,6 +668,8 @@ class MTLBackend final : public RenderingEngine
     void* outlinePipeline_;
     void* texPipeline_;
     void* maskedPipeline_;
+    void* vertexBuf_;                   // MTLBuffer (shared-storage, dynamic)
+    size_t vertWriteOffset_;            // per-frame write cursor into vertexBuf_
 
     // ---- Window/transform ----
     int canonicalWidth_,canonicalHeight_;
@@ -502,10 +683,19 @@ class MTLBackend final : public RenderingEngine
     float tx_,ty_,angle_;
     float canvasOffX_,canvasOffY_;
 
-    // ---- Texture state (stub for task 6) ----
+    // ---- MVP matrices (column-major, 16 floats) ----
+    float mvp_[16];
+    float winMvp_[16];
+
+    // ---- Texture state ----
     TextureId nextTextureId_;
+    std::map<TextureId,void*> textures_;   // TextureId -> MTLTexture* (opaque)
     bool rtActive_;
     int rtWidth_,rtHeight_;
+
+    // ---- Scissor state (D7/D8: LOGICAL CLIENT {x,y,w,h}) ----
+    bool scissorActive_;
+    int scissorRect_[4];
 
     // ---- Layout config (set before initWindow) ----
     int canonicalPlayAreaWidth_;
@@ -662,6 +852,195 @@ class MTLBackend final : public RenderingEngine
         }
        linePipeline_=triPipeline_=outlinePipeline_=texPipeline_
                    =maskedPipeline_=nullptr;
+      }
+
+    // ---- Dynamic vertex buffer (per-frame ring, mirrors VK reserveVerts_) ----
+    static const size_t kVertexBufSize_=1<<20;   // 1 MiB shared-storage
+    size_t reserveVerts_(size_t bytes)
+      {if (vertWriteOffset_+bytes>kVertexBufSize_)
+         return (size_t)-1;
+       size_t off=vertWriteOffset_;
+       vertWriteOffset_+=bytes;
+       return off;
+      }
+
+    // ---- Color-vertex repack: pos(2) + uv(2)=0 + color(4) = 32-byte stride ----
+    static void makeColorVert(float* dst,int slot,float x,float y,
+                              float r,float g,float b)
+      {dst[slot*8+0]=x;dst[slot*8+1]=y;
+       dst[slot*8+2]=0.0f;dst[slot*8+3]=0.0f;
+       dst[slot*8+4]=r;dst[slot*8+5]=g;dst[slot*8+6]=b;dst[slot*8+7]=1.0f;
+      }
+
+    static void thickLineQuad(float* dst,float x1,float y1,float x2,
+                              float y2,float halfW,float r,float g,float b)
+      {// SC8 port (glBackend verbatim): perpendicular expansion in LOGICAL
+       // space, butt caps. Writes 8-float color verts.
+       float dx=x2-x1,dy=y2-y1;
+       float len=sqrtf(dx*dx+dy*dy);
+       if (len<1e-6f)
+        {dx=1.0f;dy=0.0f;len=1.0f;
+        }
+       float px=-dy/len*halfW,py=dx/len*halfW;
+       const float cx[4]={x1+px,x2+px,x2-px,x1-px};
+       const float cy[4]={y1+py,y2+py,y2-py,y1-py};
+       static const int idx[6]={0,1,2,0,2,3};
+       for (int i=0;i<6;++i)
+         makeColorVert(dst,i,cx[idx[i]],cy[idx[i]],r,g,b);
+      }
+
+    static bool pointInTri(float px,float py,
+                           float ax,float ay,float bx,float by,
+                           float cx,float cy)
+      {float d1=(px-bx)*(ay-by)-(ax-bx)*(py-by);
+       float d2=(px-cx)*(by-cy)-(bx-cx)*(py-cy);
+       float d3=(px-ax)*(cy-ay)-(cx-ax)*(py-ay);
+       bool neg=(d1<0)||(d2<0)||(d3<0);
+       bool pos=(d1>0)||(d2>0)||(d3>0);
+       return !(neg&&pos);
+      }
+
+    static int earClip(const float* verts,int count,float* outPairs)
+      {// glBackend port verbatim: O(n^2) ear clipping, orientation
+       // normalized; caller fans when it cannot close.
+       if (count<3)
+         return 0;
+       if (count>256)
+         return 0;
+       float px[256],py[256];
+       double area=0.0;
+       for (int i=0;i<count;++i)
+        {int j=(i+1)%count;
+         area+=(double)verts[2*i]*verts[2*j+1]
+              -(double)verts[2*j]*verts[2*i+1];
+         px[i]=verts[2*i];py[i]=verts[2*i+1];
+        }
+       if (area<0)
+        {for (int i=0;i<count/2;++i)
+          {float tx=px[i],ty=py[i];
+           px[i]=px[count-1-i];py[i]=py[count-1-i];
+           px[count-1-i]=tx;py[count-1-i]=ty;
+          }
+        }
+       int out=0;
+       int remaining=count;
+       int guard=0;
+       while (remaining>3&&guard++<4096)
+        {bool clipped=false;
+         for (int i=0;i<remaining;++i)
+          {int prev=(i+remaining-1)%remaining,cur=i,next=(i+1)%remaining;
+           float cross=(px[cur]-px[prev])*(py[next]-py[prev])
+                      -(py[cur]-py[prev])*(px[next]-px[prev]);
+           if (cross<=0)
+             continue;
+           bool ear=true;
+           for (int k=0;k<remaining&&ear;++k)
+            {if (k==prev||k==cur||k==next)
+               continue;
+             if (pointInTri(px[k],py[k],
+                            px[prev],py[prev],px[cur],py[cur],
+                            px[next],py[next]))
+               ear=false;
+            }
+           if (!ear)
+             continue;
+           outPairs[out++]=px[prev];outPairs[out++]=py[prev];
+           outPairs[out++]=px[cur]; outPairs[out++]=py[cur];
+           outPairs[out++]=px[next];outPairs[out++]=py[next];
+           for (int k=cur;k<remaining-1;++k)
+            {px[k]=px[k+1];py[k]=py[k+1];
+            }
+           --remaining;
+           clipped=true;
+           break;
+          }
+         if (!clipped)
+           break;
+        }
+       if (remaining==3)
+        {outPairs[out++]=px[0];outPairs[out++]=py[0];
+         outPairs[out++]=px[1];outPairs[out++]=py[1];
+         outPairs[out++]=px[2];outPairs[out++]=py[2];
+        }
+       return out/6;
+      }
+
+    // ---- MVP composition (vkBackend presentMVP_/windowMVP_ verbatim) ----
+    const float* presentMVP_()
+      {float W=(float)fbWidth_;
+       float H=(float)fbHeight_;
+       float a=2.0f*presentScale_/W;
+       float c=2.0f*(float)presentOffX_/W-1.0f;
+       float b=2.0f*presentScale_/H;
+       float d=2.0f*(float)presentOffY_/H-1.0f;
+       float cs=cosf(angle_),sn=sinf(angle_);
+       float ma=cs,mb=-sn,mc=tx_+canvasOffX_;
+       float md=sn,me=cs,mf=ty_+canvasOffY_;
+       mvp_[0]=a*ma;    mvp_[1]=b*md;    mvp_[2]=0.0f;mvp_[3]=0.0f;
+       mvp_[4]=a*mb;    mvp_[5]=b*me;    mvp_[6]=0.0f;mvp_[7]=0.0f;
+       mvp_[8]=0.0f;    mvp_[9]=0.0f;    mvp_[10]=1.0f;mvp_[11]=0.0f;
+       mvp_[12]=a*mc+c; mvp_[13]=b*mf+d; mvp_[14]=0.0f;mvp_[15]=1.0f;
+       return mvp_;
+      }
+
+    const float* windowMVP_()
+      {float W=(float)fbWidth_;
+       float H=(float)fbHeight_;
+       winMvp_[0]=2.0f/W; winMvp_[1]=0.0f; winMvp_[2]=0.0f; winMvp_[3]=0.0f;
+       winMvp_[4]=0.0f; winMvp_[5]=2.0f/H; winMvp_[6]=0.0f; winMvp_[7]=0.0f;
+       winMvp_[8]=0.0f; winMvp_[9]=0.0f; winMvp_[10]=1.0f;winMvp_[11]=0.0f;
+       winMvp_[12]=-1.0f;winMvp_[13]=-1.0f;winMvp_[14]=0.0f;winMvp_[15]=1.0f;
+       return winMvp_;
+      }
+
+    // ---- Draw helpers (vkBackend drawColorPrims_/drawTexPrims_ analogs) ----
+    void drawColorPrims_(void* pipe,int primType,const float* interleaved,
+                         int vertCount)
+      {if (!frameCtx_||!interleaved||vertCount<1)
+         return;
+       size_t bytes=(size_t)vertCount*8*sizeof(float);
+       size_t off=reserveVerts_(bytes);
+       if (off==(size_t)-1)
+         return;
+       mtlUpdateVertexBuffer(vertexBuf_,off,interleaved,bytes);
+       mtlSetPipeline(frameCtx_,pipe);
+       mtlSetMvp(frameCtx_,presentMVP_());
+       mtlSetVertexBuffer(frameCtx_,vertexBuf_,off);
+       mtlDraw(frameCtx_,primType,vertCount);
+      }
+
+    void drawTexPrims_(void* pipe,int primType,void* tex0,void* tex1,
+                       const float* verts,int count,const float* mvp)
+      {if (!frameCtx_||count<3)
+         return;
+       size_t bytes=(size_t)count*8*sizeof(float);
+       size_t off=reserveVerts_(bytes);
+       if (off==(size_t)-1)
+         return;
+       mtlUpdateVertexBuffer(vertexBuf_,off,verts,bytes);
+       mtlSetPipeline(frameCtx_,pipe);
+       mtlSetMvp(frameCtx_,mvp);
+       if (tex0)
+         mtlSetTexture(frameCtx_,0,tex0);
+       if (tex1)
+         mtlSetTexture(frameCtx_,1,tex1);
+       mtlSetVertexBuffer(frameCtx_,vertexBuf_,off);
+       mtlDraw(frameCtx_,primType,count);
+      }
+
+    // ---- Scissor (vkBackend applyPresentTransformToScissor_ verbatim) ----
+    void applyPresentTransformToScissor_()
+      {if (!frameCtx_)
+         return;
+       if (!scissorActive_)
+        {mtlSetScissor(frameCtx_,0,0,fbWidth_,fbHeight_);
+         return;
+        }
+       int x=presentOffX_+(int)(scissorRect_[0]*presentScale_);
+       int y=presentOffY_+(int)(scissorRect_[1]*presentScale_);
+       int w=(int)(scissorRect_[2]*presentScale_);
+       int h=(int)(scissorRect_[3]*presentScale_);
+       mtlSetScissor(frameCtx_,x,y,w,h);
       }
 
     // ---- D17.4 present transform (GL/VK verbatim formula) ----

@@ -56,6 +56,58 @@ void* mtlCreatePipeline(void* device, void* library, int pipelineIndex);
 // pipeline is NULL.
 void mtlSetPipeline(MTLFrameContext* ctx, void* pipeline);
 
+// ---- Vertex buffers (task 6) ----
+// Create a shared-storage MTLBuffer of the given size (bytes). Returns opaque
+// id<MTLBuffer> (caller owns; release with mtlRelease). Returns NULL on failure.
+void* mtlCreateVertexBuffer(void* device, size_t size);
+
+// Copy CPU data into a vertex buffer at the given byte offset (replaceBytes).
+// No-op if buffer or data is NULL.
+void mtlUpdateVertexBuffer(void* buffer, size_t offset, const void* data,
+                           size_t size);
+
+// Bind a vertex buffer at the given byte offset on the encoder (slot 0).
+void mtlSetVertexBuffer(MTLFrameContext* ctx, void* buffer, size_t offset);
+
+// ---- MVP uniform (task 6) ----
+// Set the MVP matrix (16 floats, column-major) as vertex bytes at buffer
+// slot 1 (matches the shader's constant float4x4& uMVP [[buffer(1)]]).
+void mtlSetMvp(MTLFrameContext* ctx, const float* mvp);
+
+// ---- Textures (task 6) ----
+// Texture pixel formats (mirror VK's R8 / RGBA8).
+enum {
+    MTL_TEX_R8 = 0,     // single-channel (mask)
+    MTL_TEX_RGBA8       // 4-channel
+};
+
+// Create an MTLTexture from CPU data and upload it. Returns opaque
+// id<MTLTexture> (caller owns; release with mtlRelease). Returns NULL on
+// failure. Storage is shared (CPU-writable, GPU-samplable).
+void* mtlCreateTexture(void* device, int w, int h, int format,
+                       const void* data, size_t bytesPerRow);
+
+// Bind a texture to a fragment texture slot on the encoder. No-op if ctx or
+// texture is NULL.
+void mtlSetTexture(MTLFrameContext* ctx, int slot, void* texture);
+
+// ---- Draw (task 6) ----
+// Primitive types (Metal draw-time topology).
+enum {
+    MTL_PRIMITIVE_LINE = 0,     // MTLPrimitiveTypeLine
+    MTL_PRIMITIVE_TRIANGLE      // MTLPrimitiveTypeTriangle
+};
+
+// Issue a drawPrimitives call on the encoder.
+void mtlDraw(MTLFrameContext* ctx, int primitiveType, int vertexCount);
+
+// ---- Scissor / viewport (task 6) ----
+// Set the scissor rect (window/pixel coords) on the encoder.
+void mtlSetScissor(MTLFrameContext* ctx, int x, int y, int w, int h);
+
+// Set the viewport (window/pixel coords) on the encoder.
+void mtlSetViewport(MTLFrameContext* ctx, int w, int h);
+
 // ---- Cleanup ----
 // Release an opaque Metal object (non-ARC release). Safe to call with NULL.
 void mtlRelease(void* obj);
