@@ -728,6 +728,12 @@ class MTLBackend final : public RenderingEngine
     // ---- Public members (accessed by playingField.H METAL_BACKEND branches) ----
     bool closeRequested_;               // M13: close callback sets flag only
 
+    // Task-13 resize probe accessor: exposes the GLFW window handle so the
+    // mtlmethods self-diagnostic can call glfwSetWindowSize on its own window
+    // and re-check getPresentTransform() after the framebuffer-size callback
+    // recomputes the letterbox transform. Test-only; the game never uses it.
+    GLFWwindow* glfwWindow() const {return window;}
+
  private:
     // ---- Frame context (from bridge) ----
     MTLFrameContext* frameCtx_;

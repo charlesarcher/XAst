@@ -114,6 +114,70 @@ int main(int argc,char** argv)
          argv[1],fw,fh,masks.numTextRects,
          (int)(sizeof hdr+fw*fh*4));
 
+  // ---- Task-13 resize probe (TCC-free): letterbox transform recompute ----
+  // The backend's canonical window size is computed by WindowSizeFormula
+  // (688x702 here: play area 640x512 + header), NOT the raw 640x512 play
+  // area. The letterbox transform uses canonicalWidth_/canonicalHeight_, so
+  // the expected ox/oy below are derived from the ACTUAL canonical size via
+  // the same scale=min formula the backend implements. We verify the backend
+  // returns exactly those values after each glfwSetWindowSize + poll.
+  {
+   GLFWwindow* win=mtl.glfwWindow();
+   if (!win)
+    {fprintf(stderr,"mtlmethods: FAIL: no glfw window for resize probe\n");
+     return 1;
+    }
+   // At the initial (canonical) window size the framebuffer equals the
+   // canonical size, so read it directly from GLFW before any resize. The
+   // backend's recomputePresentTransform_ divides the FRAMEBUFFER size by the
+   // LOGICAL canonical size (canonicalWidth_/canonicalHeight_), so read the
+   // logical window size for the canonical dims and the framebuffer size for
+   // the current dims — this reproduces the backend's scale exactly even on
+   // Retina (backing scale 2x).
+   int canW=0,canH=0;
+   glfwGetWindowSize(win,&canW,&canH);
+   float s0;int ox0,oy0;
+   mtl.getPresentTransform(s0,ox0,oy0);
+   printf("resize: canonical window %dx%d, initial transform scale=%.6f ox=%d oy=%d\n",
+          canW,canH,(double)s0,ox0,oy0);
+
+   // Probe 1: 1024x768 (logical). The framebuffer is the backing-scale
+   // multiple (Retina 2x here), and recomputePresentTransform_ uses the
+   // FRAMEBUFFER size, so read the actual framebuffer after the resize and
+   // derive expected values from it.
+   glfwSetWindowSize(win,1024,768);
+   glfwPollEvents();
+   int fbw1=0,fbh1=0;
+   glfwGetFramebufferSize(win,&fbw1,&fbh1);
+   float s1;int ox1,oy1;
+   mtl.getPresentTransform(s1,ox1,oy1);
+   float eScale1=((float)fbw1/canW<(float)fbh1/canH)?(float)fbw1/canW:(float)fbh1/canH;
+   int eOx1=((int)fbw1-(int)(canW*eScale1))/2;
+   int eOy1=((int)fbh1-(int)(canH*eScale1))/2;
+   printf("resize: 1024x768 (fb %dx%d) -> scale=%.6f ox=%d oy=%d (expected scale=%.6f ox=%d oy=%d) %s\n",
+          fbw1,fbh1,(double)s1,ox1,oy1,(double)eScale1,eOx1,eOy1,
+          (ox1==eOx1&&oy1==eOy1)?"MATCH":"MISMATCH");
+
+   // Probe 2: 300x200 (logical)
+   glfwSetWindowSize(win,300,200);
+   glfwPollEvents();
+   int fbw2=0,fbh2=0;
+   glfwGetFramebufferSize(win,&fbw2,&fbh2);
+   float s2;int ox2,oy2;
+   mtl.getPresentTransform(s2,ox2,oy2);
+   float eScale2=((float)fbw2/canW<(float)fbh2/canH)?(float)fbw2/canW:(float)fbh2/canH;
+   int eOx2=((int)fbw2-(int)(canW*eScale2))/2;
+   int eOy2=((int)fbh2-(int)(canH*eScale2))/2;
+   printf("resize: 300x200 (fb %dx%d) -> scale=%.6f ox=%d oy=%d (expected scale=%.6f ox=%d oy=%d) %s\n",
+          fbw2,fbh2,(double)s2,ox2,oy2,(double)eScale2,eOx2,eOy2,
+          (ox2==eOx2&&oy2==eOy2)?"MATCH":"MISMATCH");
+
+   // Restore canonical size so the readback dump above is unaffected (it
+   // already ran; this is just tidy).
+   glfwSetWindowSize(win,canW,canH);
+   glfwPollEvents();
+  }
+
   mtl.deleteTexture(tChecker);
   mtl.deleteTexture(tContent);
   mtl.deleteTexture(tMask);
