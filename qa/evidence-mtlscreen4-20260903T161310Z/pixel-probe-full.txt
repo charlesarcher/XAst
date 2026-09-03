@@ -1,0 +1,3 @@
+png_pixel_probe qa/evidence-mtlscreen4-20260903T161310Z/mtl-game-full.png: 3600x2338 colortype=6 thresh>16
+  total_pixels=8416800 non_black=6758619 (80.299%)
+  VERDICT=NON-BLACK

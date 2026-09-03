@@ -1,0 +1,39 @@
+=== probe6 env: DYLD_FLP=/opt/homebrew/opt/vulkan-loader/lib VK_ICD=(null) dur=14s doSwap=1 ===
+VIEW: frame=(0,0,688,702) bounds=(0,0,688,702) wantsLayer=1
+LAYER: class=CAMetalLayer frame=(0,0,688,702) superlayer=nil contentsScale=2.00 drawableSize=(0,0) opaque=1 maxDrawables=3
+[swap] device exposes 130 exts; swapchain_enabled=1
+[swap] vkCreateSwapchain rc=0 fmt=44 caps.curExtent=(1376,1404) minImg=2
+[swap] acquired+presented img 0 via MoltenVK
+after swapchain: drawableSize=(1376,1404)
+[t=0.7s] METAL presented=20
+[t=1.1s] METAL presented=40
+[t=1.4s] METAL presented=60
+[t=1.7s] METAL presented=80
+[t=2.1s] METAL presented=100
+[t=2.4s] METAL presented=120
+[t=2.8s] METAL presented=140
+[t=3.1s] METAL presented=160
+[t=3.5s] METAL presented=180
+[t=3.8s] METAL presented=200
+[t=4.1s] METAL presented=220
+[t=4.5s] METAL presented=240
+[t=4.8s] METAL presented=260
+[t=5.2s] METAL presented=280
+[t=5.5s] METAL presented=300
+[t=5.8s] METAL presented=320
+[t=6.2s] METAL presented=340
+[t=6.5s] METAL presented=360
+[t=6.9s] METAL presented=380
+[t=7.2s] METAL presented=400
+[t=7.5s] METAL presented=420
+[t=7.9s] METAL presented=440
+[t=8.2s] METAL presented=460
+[t=8.6s] METAL presented=480
+[t=8.9s] METAL presented=500
+[t=9.2s] METAL presented=520
+[t=9.6s] METAL presented=540
+[t=9.9s] METAL presented=560
+[t=10.3s] METAL presented=580
+[t=10.6s] METAL presented=600
+[t=10.9s] METAL presented=620
+[t=11.3s] METAL presented=640

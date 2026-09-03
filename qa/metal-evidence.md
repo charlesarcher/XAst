@@ -138,3 +138,39 @@ qa/metal-evidence/smoke/resize.log
 qa/metal-evidence/smoke/menu-open.HUMAN-VERIFIED.md
 qa/metal-evidence/smoke/smoke-summary.md
 ```
+
+---
+
+## Addendum (2026-09-03): on-screen MTL rendering FIXED on macOS 26.6.2 / CLI
+
+This supersedes the "environment-blocked / nil-drawable for CLI processes"
+conclusion that the headless-only probes (evidence-mtlscreen-20260903T121631Z,
+H5/H6) reached. That verdict was wrong: the control that the VK (MoltenVK)
+backend renders on this machine (36.1% non-black) already refuted it — the
+window IS composited and drawables DO flow, for the right layer.
+
+Root cause (refined, evidence-mtlscreen4-20260903T161310Z): on this macOS build
+the window server gives a CAMetalLayer a drawable pool only when (1) the layer
+is the one GLFW installs via `glfwCreateWindowSurface` (a self-attached app
+layer never gets a pool) AND (2) a MoltenVK `VkSwapchainKHR` is bound to it.
+The MTL backend was creating + self-attaching its own layer (condition 1 false)
+and had no swapchain (condition 2 false) — hence nil drawables forever.
+
+Fix: `mtlBackend` now drives the GLFW-layer handshake in `mtlCocoa`
+(`mtlGlfwMetalHandshake`) — a runtime-dlopen'd vulkan loader (no `-lvulkan`
+link), a minimal `VkInstance`, `glfwCreateWindowSurface` (GLFW installs its
+CAMetalLayer), then a MoltenVK `VkDevice`+`VkSwapchainKHR` on that layer to
+allocate the pool. The unchanged Metal frame path (`nextDrawable`/
+`presentDrawable`) then renders through the shared pool. A self-attached layer
+is kept only as a headless fallback when the loader/ICD is absent. The run
+recipe sets `DYLD_FALLBACK_LIBRARY_PATH` at launch (dyld fixes the search path
+at process start; a runtime `setenv` is inert), so GLFW's own loader dlopen
+succeeds. The MTL link line is unchanged (no `-lvulkan`); the offscreen
+`mtlmethods` golden is byte-identical (1,310,856 B).
+
+Proof (evidence-mtlscreen4-20260903T161310Z): bounded `gtimeout 25` run exits
+124 (alive), nil-drawable count 0, `GLFW-layer handshake OK`; vision-free pixel
+oracle on the captured window/region prints VERDICT=NON-BLACK (window 26.7%,
+region 35.9% non-black) — the user sees the title screen. `make BACKEND=MTL
+run` now renders on-screen. See that directory's SUMMARY.md for the full probe
+trail.

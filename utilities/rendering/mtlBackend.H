@@ -82,7 +82,7 @@ class MTLBackend final : public RenderingEngine
  {public:
     MTLBackend()
       :window(nullptr),
-       device_(nullptr),layer_(nullptr),queue_(nullptr),
+       device_(nullptr),layer_(nullptr),vulkanState_(nullptr),queue_(nullptr),
        metallib_(nullptr),
        linePipeline_(nullptr),triPipeline_(nullptr),
        outlinePipeline_(nullptr),texPipeline_(nullptr),
@@ -173,14 +173,38 @@ class MTLBackend final : public RenderingEngine
            glfwSetWindowPos(window,
                             (mode->width-canonicalWidth_)/2,
                             (mode->height-canonicalHeight_)/2);
-        }
-       // Attach CAMetalLayer to the GLFW window's NSView via the C-ABI bridge.
-       layer_=mtlCreateLayer();
-       if (!layer_||mtlAttachToView(layer_,window)!=0)
-        {fprintf(stderr,"mtlBackend: mtlAttachToView failed.\n");
-         shutdown();
-         return false;
-        }
+}
+        // On-screen (2026-09-03): render through the CAMetalLayer that GLFW
+        // itself installs via the Vulkan window-surface handshake (mtlCocoa
+        // mtlGlfwMetalHandshake). On this macOS build the window server gives
+        // a drawable pool ONLY to that GLFW-installed layer once a MoltenVK
+        // VkSwapchainKHR is bound to it; a layer the app creates and attaches
+        // itself NEVER gets a pool (nextDrawable nil forever). If the handshake
+        // is unavailable (no vulkan loader / no ICD on this machine), fall back
+        // to a self-attached layer: on-screen it stays black, but the
+        // nil-drawable guard keeps the game running headless.
+        double scale0=mtlBackingScaleFactor(window);
+        if (scale0<=0.0) scale0=1.0;
+        void* glLayer=nullptr;
+        void* glState=nullptr;
+        if (mtlGlfwMetalHandshake(window,scale0,canonicalWidth_,
+                                  canonicalHeight_,&glLayer,&glState)==0)
+         {layer_=glLayer;
+          vulkanState_=glState;
+         }
+        else
+         {// Headless fallback: app-created + self-attached layer.
+          layer_=mtlCreateLayer();
+          vulkanState_=nullptr;
+          if (!layer_||mtlAttachToView(layer_,window)!=0)
+           {fprintf(stderr,"mtlBackend: mtlAttachToView failed.\n");
+            shutdown();
+            return false;
+           }
+          fprintf(stderr,"mtlBackend: self-attached layer (headless "
+                             "fallback; on-screen pool needs the GLFW layer "
+                             "+ MoltenVK swapchain)\n");
+         }
        // Create MTLDevice and command queue.
        device_=mtlCreateDevice();
        if (!device_)
@@ -259,20 +283,26 @@ class MTLBackend final : public RenderingEngine
         {if (kv.second)
            mtlRelease(kv.second);
         }
-       textures_.clear();
-       if (vertexBuf_)
-        {mtlRelease(vertexBuf_);
-         vertexBuf_=nullptr;
-        }
-       if (metallib_)
-        {mtlRelease(metallib_);
-         metallib_=nullptr;
-        }
-       if (queue_)
-        {mtlRelease(queue_);
-         queue_=nullptr;
-        }
-       // Free stb font data.
+        textures_.clear();
+        if (vertexBuf_)
+         {mtlRelease(vertexBuf_);
+          vertexBuf_=nullptr;
+         }
+        if (metallib_)
+         {mtlRelease(metallib_);
+          metallib_=nullptr;
+         }
+        if (queue_)
+         {mtlRelease(queue_);
+          queue_=nullptr;
+         }
+        // Tear down the GLFW-layer swapchain handshake state (swapchain/device/
+        // instance + loader) BEFORE the window is destroyed — the swapchain is
+        // bound to the view's CAMetalLayer, which dies with the window. No-op
+        // in the headless fallback (vulkanState_==nullptr).
+        mtlGlfwShutdown(vulkanState_);
+        vulkanState_=nullptr;
+        // Free stb font data.
        for (int i=0;i<4;++i)
         {if (fontData_[i])
           {delete[] fontData_[i];
@@ -741,7 +771,14 @@ class MTLBackend final : public RenderingEngine
     // ---- Metal resources ----
     GLFWwindow* window;
     void* device_;                      // MTLDevice (opaque, app lifetime)
-    void* layer_;                       // CAMetalLayer (opaque, retained by view)
+    void* layer_;                       // CAMetalLayer (opaque; GLFW-installed
+                                         // on-screen via the swapchain handshake,
+                                         // or self-attached in the headless
+                                         // fallback — retained by the view)
+    void* vulkanState_;                 // mtlCocoa handshake state (loader/
+                                         // instance/device/swapchain kept alive
+                                         // so the layer's drawable pool survives;
+                                         // NULL in the headless fallback)
     void* queue_;                       // MTLCommandQueue (opaque)
     void* metallib_;                    // MTLLibrary (opaque, loaded at init)
     void* linePipeline_;                // MTLRenderPipelineState (opaque)

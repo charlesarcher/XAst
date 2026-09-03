@@ -93,12 +93,20 @@ BACKEND_CXXFLAGS+=-Ivendor/vulkan/include -DVK_BACKEND
 endif
 # Tasks 49+: the MTL (Metal) leg is Darwin-only — carries the backend macro
 # that opens XAsteroids.C/playingField.H Metal branches. No Vulkan loader
-# gate; Metal is a system framework on macOS.
+# gate at LINK time; Metal is a system framework on macOS.
+#
+# On-screen (2026-09-03): the MTL backend renders through GLFW's own
+# CAMetalLayer, whose drawable pool on this macOS build is allocated only when
+# a MoltenVK VkSwapchainKHR is bound to that layer (see mtlCocoa.mm
+# mtlGlfwMetalHandshake). That handshake #includes the vendored Vulkan HEADERS
+# (compile-only; the loader itself is dlopen'd at runtime by GLFW and by the
+# backend — the MTL binary still links NO -lvulkan, so the link line and the
+# flavor identity are unchanged). Hence -Ivendor/vulkan/include on this leg.
 ifeq ($(BACKEND),MTL)
   ifneq ($(UNAME_S),Darwin)
     $(error BACKEND=MTL requires macOS (Darwin))
   endif
-  BACKEND_CXXFLAGS+=-DMETAL_BACKEND
+  BACKEND_CXXFLAGS+=-DMETAL_BACKEND -Ivendor/vulkan/include
 endif
 
 # Objects feeding the X11 link always carry the X11 macro, whatever BACKEND says.
@@ -376,7 +384,7 @@ ifeq ($(BACKEND),VK)
 ifeq ($(UNAME_S),Darwin)
 	@if [ ! -d /opt/homebrew/opt/vulkan-loader ]; then \
 	 echo "VK run requires: brew install vulkan-loader molten-vk"; exit 1; \
-	fi
+	fi; \
 	dyld_env="DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/vulkan-loader/lib"; \
 	icd="/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json"; \
 	if [ -f "$$icd" ]; then export VK_ICD_FILENAMES="$$icd"; fi; \
@@ -386,7 +394,26 @@ else
 	./XAsteroids
 endif
 else
+# MTL on-screen (2026-09-03): the backend's GLFW-layer swapchain handshake
+# needs the vulkan LOADERS discoverable at launch (dyld fixes the search path
+# at process start; a runtime setenv is inert). DYLD_FALLBACK_LIBRARY_PATH makes
+# the homebrew vulkan-loader findable by BOTH GLFW's internal dlopen and the
+# backend's own dlopen; the MoltenVK ICD is auto-discovered (VK_ICD_FILENAMES
+# pins it when present). If the loader is absent the handshake fails and the
+# backend falls back to a self-attached layer (headless, nil-drawable guard).
+ifeq ($(BACKEND),MTL)
+ifeq ($(UNAME_S),Darwin)
+	dyld_env="DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/vulkan-loader/lib"; \
+	icd="/opt/homebrew/opt/molten-vk/etc/vulkan/icd.d/MoltenVK_icd.json"; \
+	if [ -f "$$icd" ]; then export VK_ICD_FILENAMES="$$icd"; fi; \
+	echo "mtlBackend: run via $$dyld_env (+ $$VK_ICD_FILENAMES if present)"; \
+	eval "$$dyld_env ./XAsteroids"
+else
 	./XAsteroids
+endif
+else
+	./XAsteroids
+endif
 endif
 
 # Task 37: pass-0 probe driver (test/vk/vkprobe.C -> VKBackend::
