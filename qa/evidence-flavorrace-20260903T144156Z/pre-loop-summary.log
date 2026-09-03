@@ -1,0 +1,5 @@
+iter=1 pair=VK->MTL make1_rc=0 make2_rc=0 binary=MISSING flavorcheck_rc=1 verdict=YES
+iter=2 pair=VK->MTL make1_rc=0 make2_rc=0 binary=MISSING flavorcheck_rc=1 verdict=YES
+iter=3 pair=VK->MTL make1_rc=0 make2_rc=0 binary=MISSING flavorcheck_rc=1 verdict=YES
+iter=4 pair=VK->MTL make1_rc=0 make2_rc=0 binary=MISSING flavorcheck_rc=1 verdict=YES
+iter=5 pair=VK->VK make1_rc=0 make2_rc=0 binary=PRESENT flavorcheck_rc=0 verdict=NO

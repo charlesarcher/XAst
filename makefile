@@ -332,22 +332,25 @@ $(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/
 # binary, forcing a relink; on a same-flavor rerun it is a no-op (file
 # untouched, mtime stable -> no spurious relink). Gated into every link rule
 # below; clean removes it.
+# The per-flavor phony prerequisite below closes the GNU make 3.81 same-second race.
 FLAVOR_STAMP := obj/.backend
 FORCE: ;
 $(FLAVOR_STAMP): FORCE | obj
 	@if [ ! -f $(FLAVOR_STAMP) ] || [ "$$(cat $(FLAVOR_STAMP) 2>/dev/null)" != "$(BACKEND)" ]; then \
 		echo "$(BACKEND)" > $(FLAVOR_STAMP) && rm -f XAsteroids; \
 	fi
+.PHONY: XAsteroids-flavor-$(BACKEND)
+XAsteroids-flavor-$(BACKEND):
 obj:
 	@mkdir -p obj
 
 ifeq ($(BACKEND),GL)
-XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(FLAVOR_STAMP)
+XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(FLAVOR_STAMP) XAsteroids-flavor-$(BACKEND)
 	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) $(OPENGL_LINK) -o XAsteroids
 else ifeq ($(BACKEND),VK)
 # Task 43/44b: the real game links the menu units too (ImGuiOptionsMenu +
 # dear_imgui core — the adapter consumes only RenderingEngine types, D9).
-XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(VK_SPV_TARGETS) $(FLAVOR_STAMP)
+XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(VK_SPV_TARGETS) $(FLAVOR_STAMP) XAsteroids-flavor-$(BACKEND)
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) -o XAsteroids $(VK_LINK_EXTRA)
 else ifeq ($(BACKEND),MTL)
@@ -355,10 +358,10 @@ else ifeq ($(BACKEND),MTL)
 # .metallib + the ObjC++ bridges (mtlCocoa.o + mtlBridge.o). Mirrors the VK
 # link structure but WITHOUT the Vulkan loader gate: Metal is a system
 # framework on macOS. Links GLFW + the Metal frameworks.
-XAsteroids: obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(MTL_METALLIB) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o $(FLAVOR_STAMP)
+XAsteroids: obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(MTL_METALLIB) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o $(FLAVOR_STAMP) XAsteroids-flavor-$(BACKEND)
 	${CXX} ${CXXFLAGS} obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o ${LDFLAGS} $(GLFW_LIB) -framework Metal -framework MetalKit -framework Foundation -framework QuartzCore -framework AppKit -o XAsteroids
 else
-XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o $(FLAVOR_STAMP)
+XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o $(FLAVOR_STAMP) XAsteroids-flavor-$(BACKEND)
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
 endif
 
