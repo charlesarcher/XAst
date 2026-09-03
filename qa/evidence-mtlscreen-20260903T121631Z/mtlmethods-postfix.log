@@ -1,0 +1,8 @@
+mtlBackend: canonical window 688x702
+mtlBackend: 5 render pipelines created
+mtlBackend: initWindow OK (1376x1404 fb, scale 2.0)
+mtlmethods: wrote qa/evidence-mtlscreen-20260903T121631Z/mtlmethods-postfix.raw (640x512, 2 text rects, 1310856 bytes total)
+resize: canonical window 688x702, initial transform scale=2.000000 ox=0 oy=0
+resize: 1024x768 (fb 2048x1536) -> scale=2.188034 ox=271 oy=0 (expected scale=2.188034 ox=271 oy=0) MATCH
+resize: 300x200 (fb 600x400) -> scale=0.569801 ox=104 oy=0 (expected scale=0.569801 ox=104 oy=0) MATCH
+mtlmethods: PASS

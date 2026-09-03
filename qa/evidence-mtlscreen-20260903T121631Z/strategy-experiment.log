@@ -1,0 +1,7 @@
+[probe] mode=A attached=1 scale=2.0 ds=(1376,1404) samples=150 nonNilDrawables=0 firstOKsample=-1
+[probe] mode=B attached=1 scale=2.0 ds=(1376,1404) samples=150 nonNilDrawables=0 firstOKsample=-1
+[probe] mode=C attached=1 scale=2.0 ds=(1376,1404) samples=150 nonNilDrawables=0 firstOKsample=-1
+[probe] mode=D attached=1 scale=2.0 ds=(1376,1404) samples=150 nonNilDrawables=0 firstOKsample=-1
+[probe] mode=E attached=0 scale=2.0 ds=(1376,1404) samples=110 nonNilDrawables=0 firstOKsample=-1
+[probe] mode=F attached=1 scale=2.0 ds=(1376,1404) samples=150 nonNilDrawables=0 firstOKsample=-1
+[probe] mode=G attached=1 scale=2.0 ds=(1376,1404) samples=150 nonNilDrawables=0 firstOKsample=-1

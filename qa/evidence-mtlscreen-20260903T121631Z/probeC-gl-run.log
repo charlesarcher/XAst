@@ -1,0 +1,8 @@
+glBackend: GL_VERSION=2.1 Metal - 90.5 GL_RENDERER=Apple M2 Pro
+glBackend: OpenGL 4.5 core required, got 2.1.
+Apple's OpenGL stack will not serve 4.5 on macOS (max 4.1 Core / 2.1).
+To run on a Mac without bowing to Apple's GPU ceiling, rebuild with:
+  make BACKEND=VK   # uses MoltenVK -> real Vulkan via Metal, no XQuartz GL limit
+On Linux/Windows where a real 4.5+ OpenGL driver is present, this backend
+starts normally with no extra flags.
+XAsteroids: initialization failed.

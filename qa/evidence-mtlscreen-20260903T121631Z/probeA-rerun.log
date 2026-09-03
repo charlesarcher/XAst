@@ -1,0 +1,172 @@
+probeA boot: isRunning=no isFinishedLaunching=n/a policy=Regular
+probeA setup: device=Apple M2 Pro windowBackScale=2.00 ds=(1280,1024) windowFrame=(3160,-32,640,544) mainScreen={{1800, -721}, {3360, 1890}}
+tick  1 t= 0.0s sample=1 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  2 t= 0.0s sample=2 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  3 t= 0.0s sample=3 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  4 t= 0.0s sample=4 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  5 t= 0.0s sample=5 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  6 t= 0.0s sample=6 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  7 t= 0.0s sample=7 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  8 t= 0.0s sample=8 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick  9 t= 0.0s sample=9 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 10 t= 0.0s sample=10 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 11 t= 0.0s sample=11 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 12 t= 0.0s sample=12 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 13 t= 0.0s sample=13 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 14 t= 0.0s sample=14 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 15 t= 0.0s sample=15 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 16 t= 0.0s sample=16 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 17 t= 0.0s sample=17 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 18 t= 0.0s sample=18 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 19 t= 0.0s sample=19 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 20 t= 0.0s sample=20 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 21 t= 0.0s sample=21 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 22 t= 0.0s sample=22 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 23 t= 0.0s sample=23 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 24 t= 0.0s sample=24 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 25 t= 0.0s sample=25 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 26 t= 0.0s sample=26 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 27 t= 0.0s sample=27 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 28 t= 0.0s sample=28 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 29 t= 0.0s sample=29 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 30 t= 0.0s sample=30 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 31 t= 0.0s sample=31 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 32 t= 0.0s sample=32 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 33 t= 0.0s sample=33 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 34 t= 0.0s sample=34 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 35 t= 0.0s sample=35 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 36 t= 0.0s sample=36 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 37 t= 0.0s sample=37 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 38 t= 0.0s sample=38 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 39 t= 0.0s sample=39 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 40 t= 0.0s sample=40 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 41 t= 0.0s sample=41 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 42 t= 0.0s sample=42 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 43 t= 0.0s sample=43 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 44 t= 0.0s sample=44 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 45 t= 0.0s sample=45 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 46 t= 0.0s sample=46 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 47 t= 0.0s sample=47 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 48 t= 0.0s sample=48 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 49 t= 0.0s sample=49 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 50 t= 0.0s sample=50 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 51 t= 0.0s sample=51 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 52 t= 0.0s sample=52 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 53 t= 0.0s sample=53 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 54 t= 0.0s sample=54 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 55 t= 0.0s sample=55 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 56 t= 0.0s sample=56 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 57 t= 0.0s sample=57 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 58 t= 0.0s sample=58 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 59 t= 0.0s sample=59 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 60 t= 0.0s sample=60 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 61 t= 0.0s sample=61 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 62 t= 0.0s sample=62 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 63 t= 0.0s sample=63 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 64 t= 0.0s sample=64 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 65 t= 0.0s sample=65 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 66 t= 0.0s sample=66 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 67 t= 0.0s sample=67 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 68 t= 0.0s sample=68 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 69 t= 0.0s sample=69 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 70 t= 0.0s sample=70 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 71 t= 0.0s sample=71 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 72 t= 0.0s sample=72 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 73 t= 0.0s sample=73 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 74 t= 0.0s sample=74 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 75 t= 0.0s sample=75 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 76 t= 0.0s sample=76 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 77 t= 0.0s sample=77 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 78 t= 0.0s sample=78 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 79 t= 0.0s sample=79 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 80 t= 0.0s sample=80 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 81 t= 0.0s sample=81 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 82 t= 0.0s sample=82 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 83 t= 0.0s sample=83 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 84 t= 0.0s sample=84 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL
+tick 85 t= 0.0s sample=85 [timer] isOnScreen=n/a isKey=no isMainThread=yes bounds=(640,512) drawableSize=(1280,1024) superlayer=set contentsScale=2.00
+  nextDrawable=NIL

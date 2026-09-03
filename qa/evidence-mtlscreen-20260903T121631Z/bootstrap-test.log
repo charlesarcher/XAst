@@ -1,0 +1,14 @@
+app finishedLaunching=0
+[ 1s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 2s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 3s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 4s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 5s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 6s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 7s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 8s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[ 9s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[10s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[11s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+[12s] superlayer=0xbb1134720 isOnScreen=? nextDrawable=nil
+bootstrap probe: nonNil=0 over 12s

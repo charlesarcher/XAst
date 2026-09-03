@@ -1,0 +1,14 @@
+MTLDevice=Apple M2 Pro
+[PLAIN-AppKit][ 1s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 2s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 3s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 4s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 5s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 6s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 7s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 8s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][ 9s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][10s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit][11s] superlayer=0xbc98c4ff0 ds=(1376,1404) nextDrawable=nil
+[PLAIN-AppKit] DONE nonNilDrawables=0 over 12s
+final probe done

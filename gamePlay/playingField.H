@@ -1445,6 +1445,17 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv,
    {// No backend frame clock here: beginFrame owns the glfwPollEvents pump
     // (the typed-event stub contributes nothing), so pump every iteration
     // or keys parked at a static screen are never delivered.
+   #ifdef METAL_BACKEND
+    // D4 pacing (MTL only): Metal has no swap-interval throttle and this
+    // title-screen loop has no frame clock, so stamp the loop head and
+    // enforce uSecondsPerFrame at the tail (same diffTime/usleep mechanism
+    // as the in-game loop). Without it a nil-drawable (headless) MTL run
+    // busy-spins at ~870 Hz on the 1 ms idle sleep below. The GL/VK/X11
+    // legs keep their existing 1 ms idle sleep, unchanged.
+    timeval startTime,
+            endTime;
+    gettimeofday(&startTime,NULL);
+   #endif
     engine.beginFrame();
     int numEvents=engine.pollEvents(events,64);
 #ifdef GL_BACKEND
@@ -1541,12 +1552,23 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv,
         default:                    break;
        }
      }
+#ifdef METAL_BACKEND
+     // D4: pace the whole iteration to uSecondsPerFrame (unconditional,
+     // like the in-game loop tail) — no swap throttling exists on Metal,
+     // so this sleep is the loop's frame clock.
+    gettimeofday(&endTime,NULL);
+    unsigned int diffTime=endTime.tv_usec-startTime.tv_usec
+                         +(endTime.tv_sec-startTime.tv_sec)*1000000;
+    if (diffTime<uSecondsPerFrame)
+      usleep(uSecondsPerFrame-diffTime);
+   #else
     if (!numEvents)
       usleep(1000);
-   }
-  #endif
-  return 0;
- }
+   #endif
+    }
+   #endif
+   return 0;
+  }
 
 void PlayingField::GenHelpScreen()
  {

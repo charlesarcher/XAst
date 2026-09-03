@@ -1,0 +1,15 @@
+MTLDevice=Apple M2 Pro
+[GLFW-primary][ 1s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 2s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 3s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 4s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 5s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 6s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 7s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 8s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][ 9s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][10s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][11s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary][12s] superlayer=0x709229590 ds=(1376,1404) nextDrawable=nil
+[GLFW-primary] DONE nonNilDrawables=0 over 12s
+final probe done

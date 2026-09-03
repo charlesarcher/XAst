@@ -1,0 +1,243 @@
+probeA2 boot: isRunning=no isFinishedLaunching=n/a
+probeA2 setup: device=Apple M2 Pro winBackScale=2.00 ds=(1280,1024) mainScreen={{1800, -721}, {3360, 1890}} owner=probeA2
+tick  1 t= 0.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  2 t= 0.5s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  3 t= 1.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  4 t= 1.0s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  5 t= 1.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  6 t= 1.5s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  7 t= 2.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  8 t= 2.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick  9 t= 2.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 10 t= 2.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 11 t= 3.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 12 t= 3.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 13 t= 3.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 14 t= 3.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 15 t= 4.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 16 t= 4.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 17 t= 4.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 18 t= 4.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 19 t= 5.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 20 t= 5.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 21 t= 5.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 22 t= 5.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 23 t= 6.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 24 t= 6.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 25 t= 6.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 26 t= 6.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 27 t= 7.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 28 t= 7.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 29 t= 7.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 30 t= 7.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 31 t= 8.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 32 t= 8.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 33 t= 8.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 34 t= 8.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 35 t= 9.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 36 t= 9.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 37 t= 9.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 38 t= 9.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 39 t=10.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 40 t=10.1s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 41 t=10.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 42 t=10.6s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 43 t=11.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 44 t=11.2s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 45 t=11.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=81 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 46 t=11.7s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 47 t=12.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 48 t=12.2s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 49 t=12.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 50 t=12.7s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 51 t=13.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 52 t=13.2s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 53 t=13.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 54 t=13.7s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 55 t=14.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 56 t=14.2s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 57 t=14.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 58 t=14.7s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 59 t=15.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 60 t=15.2s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 61 t=15.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 62 t=15.7s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 63 t=16.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 64 t=16.2s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 65 t=16.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 66 t=16.7s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 67 t=17.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 68 t=17.2s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 69 t=17.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 70 t=17.7s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 71 t=18.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=77 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 72 t=18.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 73 t=18.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 74 t=18.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 75 t=19.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 76 t=19.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 77 t=19.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 78 t=19.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 79 t=20.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 80 t=20.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 81 t=20.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 82 t=20.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 83 t=21.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 84 t=21.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 85 t=21.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 86 t=21.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 87 t=22.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 88 t=22.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 89 t=22.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 90 t=22.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 91 t=23.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 92 t=23.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 93 t=23.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 94 t=23.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 95 t=24.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 96 t=24.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 97 t=24.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 98 t=24.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 99 t=25.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 100 t=25.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 101 t=25.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 102 t=25.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 103 t=26.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 104 t=26.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 105 t=26.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 106 t=26.8s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 107 t=27.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 108 t=27.3s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 109 t=27.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 110 t=27.9s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 111 t=28.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 112 t=28.4s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 113 t=28.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 114 t=28.9s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 115 t=29.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 116 t=29.4s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 117 t=29.5s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 118 t=29.9s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 119 t=30.0s [timer] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+tick 120 t=30.4s [pump-fallback] wsOnScreen=yes wsRegistered=yes wsOnScreenTotal=76 occlusion=other isMainThread=yes bounds=(640,512) ds=(1280,1024) superlayer=set cs=2.00
+  nextDrawable=NIL
+probeA2 done: t=30.4s samples=120 firstNonNilTick=-1 nonNilDrawables=0 everWsOnScreen=1
