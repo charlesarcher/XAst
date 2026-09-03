@@ -320,13 +320,34 @@ $(OBJDIR)/XAsteroids.o: XAsteroids.C utilities/rendering/x11Backend.H utilities/
 # check is loader-presence ONLY (no vulkaninfo/probe-exe dependency: the
 # probe's own build must not be gated on itself).
 
+# --- Flavor stamp (stale-binary trap fix): all four legs link to the SAME
+# output name (XAsteroids) and carry no flavor marker make can see, so a
+# BACKEND=X->Y switch left the previous flavor's root binary in place: every
+# obj/Y prerequisite was up-to-date, the link was skipped, and make executed
+# a FOREIGN-flavor binary (observed 2026-09-03: BACKEND=MTL run executed a
+# stale VK build -> glfwCreateWindowSurface -3). Per-obj-dir stamps cannot
+# detect this (the shared root binary is what changed flavor), so the stamp
+# is GLOBAL: obj/.backend records the flavor the root binary was last linked
+# under. On a switch the stamp rewrites itself and rm's the stale root
+# binary, forcing a relink; on a same-flavor rerun it is a no-op (file
+# untouched, mtime stable -> no spurious relink). Gated into every link rule
+# below; clean removes it.
+FLAVOR_STAMP := obj/.backend
+FORCE: ;
+$(FLAVOR_STAMP): FORCE | obj
+	@if [ ! -f $(FLAVOR_STAMP) ] || [ "$$(cat $(FLAVOR_STAMP) 2>/dev/null)" != "$(BACKEND)" ]; then \
+		echo "$(BACKEND)" > $(FLAVOR_STAMP) && rm -f XAsteroids; \
+	fi
+obj:
+	@mkdir -p obj
+
 ifeq ($(BACKEND),GL)
-XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS)
+XAsteroids: obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(FLAVOR_STAMP)
 	${CXX} ${CXXFLAGS} obj/GL/XAsteroids.o $(GAME_OBJECTS) $(GL_OBJECTS) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) $(OPENGL_LINK) -o XAsteroids
 else ifeq ($(BACKEND),VK)
 # Task 43/44b: the real game links the menu units too (ImGuiOptionsMenu +
 # dear_imgui core — the adapter consumes only RenderingEngine types, D9).
-XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(VK_SPV_TARGETS)
+XAsteroids: obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(VK_SPV_TARGETS) $(FLAVOR_STAMP)
 	$(VK_LOADER_GATE)
 	${CXX} ${CXXFLAGS} obj/VK/XAsteroids.o $(GAME_OBJECTS) $(VK_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) ${LDFLAGS} $(GLFW_LIB) -o XAsteroids $(VK_LINK_EXTRA)
 else ifeq ($(BACKEND),MTL)
@@ -334,10 +355,10 @@ else ifeq ($(BACKEND),MTL)
 # .metallib + the ObjC++ bridges (mtlCocoa.o + mtlBridge.o). Mirrors the VK
 # link structure but WITHOUT the Vulkan loader gate: Metal is a system
 # framework on macOS. Links GLFW + the Metal frameworks.
-XAsteroids: obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(MTL_METALLIB) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o
+XAsteroids: obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(MTL_METALLIB) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o $(FLAVOR_STAMP)
 	${CXX} ${CXXFLAGS} obj/MTL/XAsteroids.o $(GAME_OBJECTS) $(MTL_STB_OBJECT) $(IMGUI_OBJECTS) $(MENU_OBJECTS) $(OBJDIR)/mtlCocoa.o $(OBJDIR)/mtlBridge.o ${LDFLAGS} $(GLFW_LIB) -framework Metal -framework MetalKit -framework Foundation -framework QuartzCore -framework AppKit -o XAsteroids
 else
-XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o
+XAsteroids: obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o $(FLAVOR_STAMP)
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} obj/X11/XAsteroids.o obj/X11/rotatorDisplayData.o obj/X11/compositePixmap.o ${LDFLAGS} -lXm -lXt -lX11 -oXAsteroids
 endif
 
@@ -457,4 +478,4 @@ AutoRepeatOn: AutoRepeatOn.C
 	${CXX} ${CXXFLAGS} ${X11_BACKEND} AutoRepeatOn.C ${LDFLAGS} -lX11 -o AutoRepeatOn
 
 clean:
-	\rm -rf XAsteroids XAsteroids_vk XAsteroids_gl AutoRepeatOn *.o *.u *.bak *.CKP obj/X11 obj/GL obj/VK obj/MTL obj/xbmDecodeSelfTest obj/harness
+	\rm -rf XAsteroids XAsteroids_vk XAsteroids_gl AutoRepeatOn *.o *.u *.bak *.CKP obj/X11 obj/GL obj/VK obj/MTL obj/xbmDecodeSelfTest obj/harness $(FLAVOR_STAMP)

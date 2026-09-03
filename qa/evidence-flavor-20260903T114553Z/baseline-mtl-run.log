@@ -1,0 +1,7 @@
+./XAsteroids
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+vkBackend: glfwCreateWindowSurface failed: -3 (VK_ERROR_INITIALIZATION_FAILED)
+XAsteroids: initialization failed.
+vkBackend: 5 pre-compiled SPIR-V shaders found in /Users/charles/code/XAst/obj/VK/spv
+make: *** [run] Error 1
+make exit code: 2
