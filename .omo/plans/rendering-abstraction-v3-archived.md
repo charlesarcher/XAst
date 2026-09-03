@@ -298,7 +298,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
 
 **Additional cleanup (M14):** Static member definitions inside headers (e.g., `Stage::VERSION` at `stage.H:51`) cause ODR violations when headers are included by multiple translation units. Verify no undefined symbols at link time; fix any found during T7 (build verification).
 
-- [ ] 1. Add `#ifdef X11_BACKEND` guards around ALL X11 includes in `stage.H`
+- [~] 1. Add `#ifdef X11_BACKEND` guards around ALL X11 includes in `stage.H`
   - `stage.H:27` includes `<X11/Xlib.h>` unconditionally — wrap in `#ifdef X11_BACKEND`
   - Guard ALL X11 type usage: `Display*`, `Window`, `GC`, `Pixmap`, `XFontStruct*`, `Colormap`, `XImage*`
   - `stage.H:31` includes `<X11/Intrinsic.h>` — guard this too
@@ -307,21 +307,21 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: `grep -rn '#include.*X11' --include='*.H' --include='*.C'` — expect only inside `#ifdef X11_BACKEND` blocks or in backend/native-seam files
   - Commit: `refactor: guard all X11 includes in stage.H`
 
-- [ ] 2. Add `#ifdef X11_BACKEND` guards around Motif/Xt includes in `options/options.H`
+- [~] 2. Add `#ifdef X11_BACKEND` guards around Motif/Xt includes in `options/options.H`
   - Wrap all `#include <Xm/*.h>` and `#include <X11/Intrinsic.h>` in `#ifdef X11_BACKEND`
   - The Options class declaration and all Motif widget members become X11-only
   - Acceptance: GL/VK builds compile without Motif/Xt headers
   - QA: `make BACKEND=GL` compiles without Motif/Xt headers
   - Commit: `refactor: guard Motif/Xt includes behind X11_BACKEND`
 
-- [ ] 3. Add `#ifdef X11_BACKEND` guards around X11 includes in `gamePlay/options/button.H`
+- [~] 3. Add `#ifdef X11_BACKEND` guards around X11 includes in `gamePlay/options/button.H`
   - `button.H` includes `<X11/Intrinsic.h>` — guard this and provide a stub Button class for GL/VK
   - Button is still drawn on GL/VK (it's a visual element), but its X11-specific internals (Pixmap creation, XFillPolygon) become X11Backend responsibilities
   - Acceptance: GL/VK builds compile without `X11/Intrinsic.h` from button.H
   - QA: Grep — 0 unguarded X11 includes from button.H
   - Commit: `refactor: guard X11 includes in button.H`
 
-- [ ] 4. Add `#ifdef X11_BACKEND` guards around X11 includes in `utilities/pixmaps/rotated/rotatorDisplayData.H` and `.C`
+- [~] 4. Add `#ifdef X11_BACKEND` guards around X11 includes in `utilities/pixmaps/rotated/rotatorDisplayData.H` and `.C`
   - `.H:19` includes `<X11/Intrinsic.h>` — guard
   - `.C:14` includes `<X11/Intrinsic.h>` — guard
   - rotatorDisplayData logic is only needed for X11 pre-computed pixmaps; GL/VK use GPU rotation (D2)
@@ -329,7 +329,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Clean GL/VK build — no X11 headers required from this file
   - Commit: `refactor: guard X11 includes in rotatorDisplayData`
 
-- [ ] 5. Add `#ifdef X11_BACKEND` guards around X11 includes in `utilities/pixmaps/composite/compositePixmap.H` and `.C`
+- [~] 5. Add `#ifdef X11_BACKEND` guards around X11 includes in `utilities/pixmaps/composite/compositePixmap.H` and `.C`
   - `.H:10` includes `<X11/Intrinsic.h>` — guard
   - `.C:9` includes `<X11/Intrinsic.h>` — guard
   - compositePixmap logic produces Pixmaps on X11; GL/VK uses the decode path + textures
@@ -337,7 +337,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Clean GL/VK build — no X11 headers required from this file
   - Commit: `refactor: guard X11 includes in compositePixmap`
 
-- [ ] 6. Add `#ifdef X11_BACKEND` guards around X11 includes in remaining headers
+- [~] 6. Add `#ifdef X11_BACKEND` guards around X11 includes in remaining headers
   - `.H` files with unguarded `<X11/Xlib.h>`: `gamePlay/enemyGroup.H:15`, `gamePlay/shipGroup.H:14`, `gamePlay/rockGroup.H:16`, `gamePlay/bullet.H:12`, `gamePlay/shipBulletGroup.H:12`, `gamePlay/explosion.H:12`, `gamePlay/enemyBulletGroup.H:11`, `gamePlay/shipYard.H:11`
   - `.C` files with unguarded X11 includes: `shipGroup.H:653` (XFillRectangle), `rockGroup.H` (XSetClipOrigin)
   - Wrap each in `#ifdef X11_BACKEND`; for GL/VK these files only use engine API calls
@@ -345,7 +345,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: `grep -rn '#include.*X11' --include='*.H' --include='*.C'` — expect ONLY inside `#ifdef X11_BACKEND` blocks or in backend/native-seam files
   - Commit: `refactor: guard X11 includes in all remaining game headers`
 
-- [ ] 7. Replace deprecated `strstream` with `sstream` in `playingField.H`
+- [~] 7. Replace deprecated `strstream` with `sstream` in `playingField.H`
   - `playingField.H:798` `istrstream inputString(...)` → `std::istringstream`
   - `playingField.H:812` `ostrstream buffer` → `std::ostringstream`
   - Add `#include <sstream>`, remove `#include <strstream>` if present
@@ -353,21 +353,21 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Build — 0 strstream warnings
   - Commit: `refactor: replace deprecated strstream with sstream`
 
-- [ ] 8. Move global declarations from static construction to `main()` (D11)
+- [~] 8. Move global declarations from static construction to `main()` (D11)
   - Change 11 globals in `XAsteroids.C:13-30` from stack-allocated to pointer-to-be-initialized
   - In `main()`: create engine first, then construct globals sequentially
   - Acceptance: Game starts without segfault; all globals initialize in correct order
   - QA: Run X11 binary — identical behavior to pre-refactor
   - Commit: `refactor: move global init to main() for engine-first lifecycle`
 
-- [ ] 9. Update makefile: GL/VK targets drop `-lXm -lXt -lX11` after Phase 0
+- [~] 9. Update makefile: GL/VK targets drop `-lXm -lXt -lX11` after Phase 0
   - Remove Motif/Xt/X11 link flags from `XAsteroids-GL` and `XAsteroids-VK` targets
   - X11 target unchanged: `-lXm -lXt -lX11`
   - Acceptance: `make BACKEND=GL` links without Motif/Xt
   - QA: Build all 3 targets — X11 has Motif, GL/VK do not
   - Commit: `build: drop Motif/Xt from GL/VK link flags`
 
-- [ ] 10. Verify ODR compliance across all translation units (M14)
+- [~] 10. Verify ODR compliance across all translation units (M14)
   - Build X11 target — check for multiple-definition linker errors
   - Static members defined in headers (`Stage::VERSION`, `Stage::SAVE_VERSION`) must be `inline` or moved to `.C`
   - Acceptance: All 3 targets link cleanly — 0 ODR violations
@@ -376,14 +376,14 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
 
 ### Phase 1: Abstraction API + X11 Pass-Through Backend
 
-- [ ] 6. Create `RenderingEngine` abstract base class with 20 virtual methods in `utilities/rendering/renderingEngine.H`
+- [~] 6. Create `RenderingEngine` abstract base class with 20 virtual methods in `utilities/rendering/renderingEngine.H`
   - All methods pure virtual; no X11/GL/VK includes; TextureId = `void*`
   - 20 methods per D5 (including drawStringOpaque, drawStringTransparent, lbearing in getFontMetrics)
   - Acceptance: Compiles with no backend includes; 20 methods documented
   - QA: Grep for backend includes in renderingEngine.H — expect 0
   - Commit: `feat: add RenderingEngine abstract interface (20 methods)`
 
-- [ ] 7. Create `X11Backend` implementing RenderingEngine in `utilities/rendering/x11Backend.H`
+- [~] 7. Create `X11Backend` implementing RenderingEngine in `utilities/rendering/x11Backend.H`
   - Pass-through: TextureId = Pixmap; drawTexture → XCopyArea; drawStringOpaque → XDrawImageString; drawStringTransparent → XDrawString; X fonts retained; nativeHandle returns X11NativeHandle{Display*,Window}
   - `initWindow`: current Stage X11 setup (XOpenDisplay, CreateWindow, 5 X fonts via XLoadQueryFont, GC setup WITH GXor retained per D3)
   - `beginFrame`/`endFrame`: noop / XSync + pixmap copy
@@ -392,14 +392,14 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Grep for GXor in x11Backend.H — expect present (retained, not removed)
   - Commit: `feat: add X11Backend pass-through (20 methods)`
 
-- [ ] 8. Create engine instantiation in main() + extern pointer
+- [~] 8. Create engine instantiation in main() + extern pointer
   - `extern RenderingEngine* engine` in `utilities/rendering/engineGlobal.H`
   - `main()`: `engine = new X11Backend(); engine->initWindow(W, H, "XAst");` (before constructing globals)
   - Acceptance: `engine` is available to all globals during construction
   - QA: Game starts without segfault; all globals initialize correctly
   - Commit: `feat: add global engine pointer, instantiate in main()`
 
-- [ ] 9. Refactor Stage: route windowing through engine
+- [~] 9. Refactor Stage: route windowing through engine
   - Stage's `display`/`window`/`gc`/`fontInfo` members → engine-owned resources
   - Layout calculation stays but reads metrics via `engine->measureText()`/`engine->getFontMetrics()`
   - `stage.DrawScore()` uses `engine->drawStringOpaque()` (not direct XDrawImageString)
@@ -407,7 +407,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Screenshot title screen before/after using `xwd -root -silent | convert xwd:- png:-`; compare with `compare -metric AE` — expect 0 pixel difference
   - Commit: `refactor: route Stage windowing through RenderingEngine`
 
-- [ ] 11. Migrate `playingField.H` rendering to engine methods
+- [~] 11. Migrate `playingField.H` rendering to engine methods
   - Replace: `XFillRectangle` (clear) → `engine->clear()`, `XDrawString` → `engine->drawStringTransparent()`, `XDrawImageString` → `engine->drawStringOpaque()`
   - **Retain GXor** (D3) — move GC ownership to X11Backend; playingField no longer owns the GC
   - Actual calls: 3 XFillRectangle (DrawGame:202, RunGame:312, GenHelpScreen:638), 13 XDrawString (RunGame:525-532 = 8, GenHelpScreen:647-663 = 5), 0 XCopyArea (object drawing is in other files)
@@ -415,7 +415,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Play full game — all objects render, no artifacts
   - Commit: `refactor: migrate playingField.H rendering to RenderingEngine`
 
-- [ ] 12. Migrate `button.H` rendering to engine methods
+- [~] 12. Migrate `button.H` rendering to engine methods
   - `XFillPolygon` → `engine->drawPolygon(fill=true)`, `XDrawLines` → `engine->drawLine()` (width 1/3) or `engine->drawPolygon(fill=false)`
   - `XDrawImageString` → `engine->drawStringOpaque()`
   - `XCopyArea` → `engine->drawTexture()`
@@ -426,7 +426,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Click all buttons — visual feedback correct; button faces match X11 output
   - Commit: `refactor: migrate button.H rendering to RenderingEngine (incl. render-to-texture)`
 
-- [ ] 13. Migrate `shipYard.H` rendering to engine methods
+- [~] 13. Migrate `shipYard.H` rendering to engine methods
   - `XFillRectangle` (clear) → `engine->clear()`, `XCopyArea` → `engine->drawTexture()`
   - **Resource lifecycle (M4):** ShipYard creates/destroys Pixmaps in `AddShip`/`RemoveShip`/`AlterIcon`/`ClearYard`. On X11 these are `XCreatePixmap`/`XFreePixmap`. On GL/VK these become `engine->createTextureFromBitmap()`/`engine->deleteTexture()`. The ShipYard must track texture IDs and clean up on destruction. Add `std::vector<TextureId>` member to ShipYard for lifecycle management.
   - Actual calls: 4 XFillRectangle (constructor:76,78, AlterIcon:162, ClearYard:136), 2 XCopyArea (AddShip:103, RemoveShip:113)
@@ -434,7 +434,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Lose ships one by one — shipyard updates correctly; run under ASan on GL/VK — no leaks
   - Commit: `refactor: migrate shipYard.H rendering to RenderingEngine (with texture lifecycle)`
 
-- [ ] 13. Migrate `explosionGraphic.H` rendering to engine methods
+- [~] 13. Migrate `explosionGraphic.H` rendering to engine methods
   - `XCopyArea` with clip masks → `engine->drawTextureMasked()`; mask Pixmaps stay as-is (created by existing XBM data, wrapped as TextureId on X11)
   - GC creation and clip mask setup moves to X11Backend internals
   - **Resource call sites (M10):** `explosionGraphic.H` has ~17 resource/rendering calls: `XCreateGC` × 3 (create GC for each of 3 mask layers), `XSetClipMask` × 3, `XSetClipOrigin` × 3, `XCopyArea` × 8 (drawing 8 explosion sub-images per frame across 5 layers), `XFreePixmap` × 3 (cleanup of mask Pixmaps). On GL/VK: `createTextureFromXBM()` for the 3 mask textures, `drawTextureMasked()` × 8, `deleteTexture()` × 3 on cleanup.
@@ -442,27 +442,27 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Trigger explosion — all frames animate correctly
   - Commit: `refactor: migrate explosionGraphic.H rendering to RenderingEngine`
 
-- [ ] 14. Migrate `rockGroup.H` rendering to engine methods
+- [~] 14. Migrate `rockGroup.H` rendering to engine methods
   - 3 XCopyArea calls (lines 186, 196, 561) → `engine->drawTexture()` / `engine->drawTextureMasked()`
   - 1 XSetClipOrigin (line 185) → absorbed into `drawTextureMasked()` engine call (clip-origin is internal to the engine on X11)
   - Acceptance: All rock types render correctly at all angles
   - QA: Play game — rocks display correctly at 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
   - Commit: `refactor: migrate rockGroup.H rendering to RenderingEngine`
 
-- [ ] 15. Migrate `shipGroup.H` rendering to engine methods
+- [~] 15. Migrate `shipGroup.H` rendering to engine methods
   - 5 XCopyArea calls (lines 237, 459, 563, 610, 632) → `engine->drawTexture()` / `engine->drawTextureMasked()`
   - 2 XSetClipOrigin calls (lines 562, 631) → absorbed into engine calls
   - Acceptance: Ship + thrust flame renders correctly
   - QA: Fly ship, fire thrust — correct at all angles
   - Commit: `refactor: migrate shipGroup.H rendering to RenderingEngine`
 
-- [ ] 16. Migrate `enemyGroup.H` + `enemyBulletGroup.H` rendering to engine methods
+- [~] 16. Migrate `enemyGroup.H` + `enemyBulletGroup.H` rendering to engine methods
   - enemyGroup: 2 XCopyArea calls (lines 230, 288), enemyBulletGroup: 1 XCopyArea call (line 143) — 3 total
   - Acceptance: Enemies and enemy bullets render correctly
   - QA: Play game — enemies display correctly
   - Commit: `refactor: migrate enemy rendering to RenderingEngine`
 
-- [ ] 17. Migrate `bullet.H` + `shipBulletGroup.H` + `explosion.H` rendering to engine methods
+- [~] 17. Migrate `bullet.H` + `shipBulletGroup.H` + `explosion.H` rendering to engine methods
   - bullet.H: 2 XCopyArea (lines 81, 104) + 1 XSetClipOrigin (line 103)
   - shipBulletGroup.H: 2 XCopyArea (lines 132, 175)
   - explosion.H: 1 XCopyArea (line 46) + 1 XSetClipOrigin (line 45)
@@ -471,7 +471,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Shoot, hit rocks — correct rendering
   - Commit: `refactor: migrate bullet/explosion rendering to RenderingEngine`
 
-- [ ] 18. Migrate `stage.H` bitmap creation + remaining call sites
+- [~] 18. Migrate `stage.H` bitmap creation + remaining call sites
   - `stage.H:188` XCreateBitmapFromData → engine-owned bitmap creation
   - `options.H:2450,2474` XCreateBitmapFromData → X11-only, accessed via nativeHandle
   - **M7: Additional XCreateBitmapFromData sites (4 total in stage.H):** `stage.H:188` (mask pixmap for title screen), `stage.H:196` (mask pixmap for hi-score screen), `stage.H:204` (mask pixmap for help screen), `stage.H:212` (mask pixmap for game-over screen). All 4 create mask Pixmaps from XBM data — on GL/VK these become `createTextureFromXBM()` calls. Track all 4 TextureIds in Stage for cleanup.
@@ -480,7 +480,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Full game runs without X11 errors; run under ASan on GL/VK
   - Commit: `refactor: migrate remaining bitmap creation to engine`
 
-- [ ] 19. Verify X11 backend pixel-identical to baseline
+- [~] 19. Verify X11 backend pixel-identical to baseline
   - Run full game on X11 backend; compare screenshots to pre-refactor
   - Tool: `xwd -root -silent | convert xwd:- png:-` for capture; `compare -metric AE baseline.png current.png diff.png` for comparison
   - Deterministic test: freeze game state (set hi-score to known value, start new game, advance to known frame count)
@@ -490,13 +490,13 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
 
 ### Phase 2: Frame-Based Game Loop + Events + Shared Asset Decode
 
-- [ ] 20. Restructure game loop to frame-based rendering
+- [~] 20. Restructure game loop to frame-based rendering
   - Add `beginFrame()`/`endFrame()` calls in DrawGame(); separate position updates from rendering in Intersect(); add `Render()` methods to all game objects
   - Acceptance: Game loop = update → beginFrame → render all → endFrame
   - QA: Game frame period averages 62.5ms ±2ms over 100 frames (measured via timestamp deltas between endFrame calls); all objects render, no visual regressions
   - Commit: `refactor: restructure game loop to frame-based rendering`
 
-- [ ] 21. Implement play-area scissor clip in beginFrame
+- [~] 21. Implement play-area scissor clip in beginFrame
   - Set scissor/viewport rect to play area dimensions in `beginFrame()`
   - Scissor rect accounts for play area offset within the window (not just 0,0-origin)
   - All draws within the scissor are clipped to the play area automatically
@@ -504,7 +504,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Move ship to each edge — wrapped, clipped, no ghost copies at opposite edge
   - Commit: `feat: implement play-area scissor clip for screen-wrap`
 
-- [ ] 22. Event translation for GL/Vulkan backends
+- [~] 22. Event translation for GL/Vulkan backends
   - 4 XNextEvent sites → GLFW callbacks + main-loop state machine
   - LeaveNotify spin → `inWindow` flag via `cursor_enter_callback`
   - Nested ButtonPress loop → `mouseDown`/`mouseX`/`mouseY` flags via `mouse_button_callback` + `cursor_pos_callback`
@@ -515,7 +515,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Focus in/out, button clicks, key presses, window resize — identical behavior
   - Commit: `feat: translate X11 event loops to GLFW callback state machine`
 
-- [ ] 23. XBM decode shared utility (backend-agnostic)
+- [~] 23. XBM decode shared utility (backend-agnostic)
   - `utilities/pixmaps/xbmDecode.H`: decode XBM bits → `{uint8_t* rgba, int w, int h}` + mask
   - No backend includes; pure data transformation
   - Handles both default and `_CORP_LOGO_` variants (21 unique data sets for GL/VK)
@@ -527,28 +527,28 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
 
 ### Phase 3: Build + Dependencies + OpenGL 4.6 Backend
 
-- [ ] 24. Extend makefile with BACKEND variable
+- [~] 24. Extend makefile with BACKEND variable
   - `XAsteroids` (default, X11, unchanged link), `XAsteroids-GL` (+ `-lglfw -lGL`, compile `glad.c`), `XAsteroids-VK` (+ `-lglfw -lvulkan`)
   - `BACKEND=X11|GL|VK` selectable at build time
   - Acceptance: `make BACKEND=GL` produces `XAsteroids-GL` binary
   - QA: Build all 3 targets — each runs correctly
   - Commit: `feat: add BACKEND variable to makefile`
 
-- [ ] 25. Vendor dependencies
+- [~] 25. Vendor dependencies
   - GLFW headers/libs, generate glad.c (4.6 core profile), stb_truetype.h, Vulkan headers + loader
   - Add to vendor/ directory; update makefile include paths
   - Acceptance: All vendor files present; build succeeds for all targets
   - QA: Clean build from scratch — no missing headers
   - Commit: `chore: vendor GLFW, glad, stb_truetype, Vulkan loader`
 
-- [ ] 26. GLBackend::initWindow/shutdown
+- [~] 26. GLBackend::initWindow/shutdown
   - `glfwInit()`, `glfwCreateWindow(640,512)`, `gladLoadGLLoader(glfwGetProcAddress)`
   - `glfwSwapInterval(0)` per D4
   - Acceptance: Window opens; GL context created; swap interval = 0
   - QA: Run GL binary — window appears, `glGetString(GL_VERSION)` reports 4.6 core
   - Commit: `feat: add GLBackend window/context initialization`
 
-- [ ] 32. GL backend primitive rendering
+- [~] 32. GL backend primitive rendering
   - clear: glClearColor + glClear
   - drawLine width 1: GL_LINE_STRIP with VBO; width > 1: filled quads (2 triangles per segment, expanded perpendicular)
   - drawPolygon fill: GL_TRIANGLES (fan or ear-clipping); outline: GL_LINE_LOOP
@@ -558,7 +558,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Test lines (width 1 + 3), polygons (filled + outline), rectangles — correct
   - Commit: `feat: implement GL primitive rendering (incl. thick-line quads)`
 
-- [ ] 33. GL text rendering (stb_truetype)
+- [~] 33. GL text rendering (stb_truetype)
   - 5 TTF fonts (per D12 corrected list) rasterized to texture atlas
   - drawStringOpaque via textured quads + bg-color quad; drawStringTransparent via textured quads only
   - measureText/getFontMetrics via stb metrics (including lbearing)
@@ -566,7 +566,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Score, title, help screen — all text correct; `getFontMetrics()` for each font: ascent, descent, lbearing within 10% of X11 values
   - Commit: `feat: implement GL text rendering via stb_truetype`
 
-- [ ] 34. GL texture rendering + clip masks
+- [~] 34. GL texture rendering + clip masks
   - createTextureFromBitmap: glTexImage2D (R8 for channels=1, RGB for channels=3/4)
   - createTextureFromXBM via xbmDecode + glTexImage2D
   - drawTexture: textured quad with alpha blending
@@ -575,7 +575,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Rocks with decoration, explosions with clipping — correct
   - Commit: `feat: implement GL texture + clip-mask rendering`
 
-- [ ] 35. GL rotation (D2)
+- [~] 35. GL rotation (D2)
   - Wireframe: MVP matrix via setTransform (VBO of outline vertices, `GL_LINE_LOOP`)
   - Bitmap composite: texture-mapped (pre-rotated UV + MVP transform)
   - Pure bitmap: pre-computed textures (no rotation)
@@ -585,7 +585,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
 
 ### Phase 4: Vulkan 1.4 Backend
 
-- [ ] 36. Vulkan instance + physical device + logical device
+- [~] 36. Vulkan instance + physical device + logical device
   - vkCreateInstance (with GLFW surface extension), physical device selection (graphics + present queue), logical device creation
   - Enable `VK_LAYER_KHRONOS_validation` in instance creation
   - Install `vkCreateDebugUtilsMessengerEXT` for error reporting
@@ -593,27 +593,27 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Run — 0 validation ERROR-level messages logged at instance/device level
   - Commit: `feat: add Vulkan instance, physical device, logical device`
 
-- [ ] 37. Vulkan surface + swapchain
+- [~] 37. Vulkan surface + swapchain
   - glfwCreateWindowSurface, swapchain creation (VK_KHR_SWAPCHAIN), image format + extent selection
   - Acceptance: Swapchain available with 2+ images
   - QA: 0 validation errors at surface/swapchain level
   - Commit: `feat: add Vulkan surface and swapchain`
 
-- [ ] 38. Vulkan frame synchronization
+- [~] 38. Vulkan frame synchronization
   - Command pool (transient commands), per-frame fence, image-acquire semaphore, render-finish semaphore, triple-buffered acquire/submit/present pipeline
   - `vkAcquireNextImageKHR` timeout: `UINT64_MAX` (infinite wait)
   - Acceptance: Continuous rendering for 10 minutes (9600+ frames) without fence timeout, semaphore error, or validation error
   - QA: Run 10 minutes — 0 crashes, 0 validation errors logged
   - Commit: `feat: implement Vulkan frame synchronization (fence/semaphore/triple-buffer)`
 
-- [ ] 39. Vulkan render pass + framebuffers
+- [~] 39. Vulkan render pass + framebuffers
   - Single subpass: color attachment (clear), color attachment finalLayout = PRESENT_SRC_KHR
   - Framebuffer per swapchain image
   - Acceptance: Can clear to solid color and present
   - QA: Window clears to black; present succeeds; 0 validation errors
   - Commit: `feat: add Vulkan render pass and framebuffers`
 
-- [ ] 40. Vulkan pipeline
+- [~] 40. Vulkan pipeline
   - Line pipeline (VK_PRIMITIVE_TOPOLOGY_LINE_LIST, lineWidth=1; thick lines via quad triangles)
   - Triangle pipeline (polygon fill/outline via pipeline polygon mode)
   - Textured pipeline (sampler + descriptor set)
@@ -623,7 +623,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Test primitives on each pipeline — correct; 0 shader compilation errors
   - Commit: `feat: add Vulkan rendering pipelines`
 
-- [ ] 41. Vulkan RenderingEngine methods (primitives + transform)
+- [~] 41. Vulkan RenderingEngine methods (primitives + transform)
   - Dynamic vertex buffer for lines/polygons/rects (per-frame mapped buffer)
   - setTransform/update uniform, draw indexed/vertex
   - beginFrame/acquire, endFrame/submit/present
@@ -631,7 +631,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Run Vulkan binary — all visual elements correct
   - Commit: `feat: implement Vulkan RenderingEngine primitives + transforms`
 
-- [ ] 42. Vulkan textures + clip masks
+- [~] 42. Vulkan textures + clip masks
   - Texture creation via stb-decoded XBM data → vkCreateImage + staging buffer + vkCreateImageView + sampler
   - R8 mask textures, fragment shader discard
   - drawTexture + drawTextureMasked via descriptor sets
@@ -639,14 +639,14 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Rocks with decoration, explosions with clipping — correct
   - Commit: `feat: implement Vulkan texture + clip-mask rendering`
 
-- [ ] 43. Vulkan text rendering (stb_truetype)
+- [~] 43. Vulkan text rendering (stb_truetype)
   - Text via stb_truetype → texture atlas + textured quads
   - Same approach as GL backend (Task 28), adapted for Vulkan descriptor sets
   - Acceptance: All text renders correctly; metrics within 10% of X11
   - QA: Score, title, help screen — all text correct
   - Commit: `feat: implement Vulkan text rendering via stb_truetype`
 
-- [ ] 44. Vulkan rotation (D2)
+- [~] 44. Vulkan rotation (D2)
   - Wireframe: MVP matrix via setTransform (same approach as GL)
   - Bitmap composite: texture-mapped (pre-rotated UV + MVP transform)
   - Pure bitmap: pre-computed textures (no rotation)
@@ -656,7 +656,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
 
 ### Phase 5: Integration + Verification
 
-- [ ] 45. GL/VK edge cases + long-run stability
+- [~] 45. GL/VK edge cases + long-run stability
   - Window resize, focus loss/gain, Expose handling
   - High score screen, help screen, end-of-game flow
   - Long-run: 10+ minutes on each backend — no leaks, no drift
@@ -665,7 +665,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Full game session on GL and VK — complete
   - Commit: `fix: handle GL/VK edge cases and long-run stability`
 
-- [ ] 46. Dead X11 code cleanup
+- [~] 46. Dead X11 code cleanup
   - Remove raw X11 includes from non-backend files (except X11NativeHandle seam)
   - Remove GXor remnants from non-backend files (GXor stays in X11Backend per D3)
   - Verify: `grep -r '#include.*X11' --include='*.H'` outside backend — expect only X11Backend.H and X11-native seam
@@ -673,7 +673,7 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
   - QA: Grep — 0 unexpected X11 includes
   - Commit: `refactor: clean up dead X11 code paths`
 
-- [ ] 47. Final cross-backend verification
+- [~] 47. Final cross-backend verification
   - Play full game on all 3 backends
   - Verify all QA scenarios pass (above)
   - Acceptance: All 3 backends work correctly
@@ -686,11 +686,11 @@ The entire project is header-only with monolithic includes. The Motif/Xt headers
 
 After all tasks complete:
 
-- [ ] F1. **Architecture Audit** — Verify all ~100 rendering + resource X11 calls migrated; no raw X11 outside backend + native seam. Tool: `grep -rn 'XDraw\|XCopy\|XFill\|XSetClip\|XSetFunction' --include='*.H' --include='*.C'` — expect matches only in x11Backend.H, x11Backend.C, rotatorDisplayData.C (unchanged per D14), compositePixmap.C (unchanged per D14), and X11-native seam.
-- [ ] F2. **Visual Regression** — X11: 0 pixel difference vs baseline (tool: `compare -metric AE`). GL/VK: non-text pixels identical to X11; text metrics (ascent, descent, lbearing) within 10% for all 5 fonts; glyphs visually equivalent.
-- [ ] F3. **Performance Baseline** — Frame period on all 3 backends: target 62.5ms ±2ms over 100 frames, measured via `glfwGetTime()` / `gettimeofday()` deltas between consecutive `endFrame()` calls.
-- [ ] F4. **Edge Case Matrix** — Screen-wrap (single draw + clip, all 4 edges), rotation (all 5 subclasses at 8 discrete angles), clip masks (explosion + rock), thick lines (width 3), button bevels, text layout (all 5 fonts), window resize.
-- [ ] F5. **Options Dialog** — Verify Motif dialog still works on X11 backend (via nativeHandle); documented as unavailable on GL/VK.
+- [~] F1. **Architecture Audit** — Verify all ~100 rendering + resource X11 calls migrated; no raw X11 outside backend + native seam. Tool: `grep -rn 'XDraw\|XCopy\|XFill\|XSetClip\|XSetFunction' --include='*.H' --include='*.C'` — expect matches only in x11Backend.H, x11Backend.C, rotatorDisplayData.C (unchanged per D14), compositePixmap.C (unchanged per D14), and X11-native seam.
+- [~] F2. **Visual Regression** — X11: 0 pixel difference vs baseline (tool: `compare -metric AE`). GL/VK: non-text pixels identical to X11; text metrics (ascent, descent, lbearing) within 10% for all 5 fonts; glyphs visually equivalent.
+- [~] F3. **Performance Baseline** — Frame period on all 3 backends: target 62.5ms ±2ms over 100 frames, measured via `glfwGetTime()` / `gettimeofday()` deltas between consecutive `endFrame()` calls.
+- [~] F4. **Edge Case Matrix** — Screen-wrap (single draw + clip, all 4 edges), rotation (all 5 subclasses at 8 discrete angles), clip masks (explosion + rock), thick lines (width 3), button bevels, text layout (all 5 fonts), window resize.
+- [~] F5. **Options Dialog** — Verify Motif dialog still works on X11 backend (via nativeHandle); documented as unavailable on GL/VK.
 
 ---
 
