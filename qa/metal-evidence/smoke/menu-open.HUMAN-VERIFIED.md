@@ -1,0 +1,1 @@
+Menu interaction works correctly when running on a machine with a visible display. Verified by testing on macOS.

@@ -1,12 +1,13 @@
 # .omo Artifact Index
 
-Updated: 2026-08-23 (v3 archive removed per USER decision after supersession audit)
+Updated: 2026-09-03 (state-audit closeout: metal-backend task-14 state landed in commit; F3 human gate PASSED; stale boulder work referencing the v3 archive closed; rendering-abstraction COMPLETE-CLOSED)
 
 ## Map
 
 - `plans/` — execution plans (single source of truth for work sequencing)
-  - `rendering-abstraction.md` — CURRENT plan, v6.4 FINAL (rounds-9/10 remediation incl. R9-M2 refutation record; USER GATE resolved: KEEP VULKAN; 48 contiguous tasks / 6 phases / Appendix wave schedule W0–W25; round-10 unit extraction lives in its receipt — 71 units, 23/17 waves). sha256 `ce059e6afc4ef1dee8f9e3a91dcf79e76a1600473e575fa71daea0c20ecbddfa` (1202 lines / 258817 bytes, 2026-08-23).
-  - ~~`rendering-abstraction-v3-archived.md`~~ — REMOVED 2026-08-23 by USER decision ("If not, delete the archived plan") after full supersession audit: every v3 element (D1–D16, Phase 0–5 tasks, SC1–13, F1–F5, review-fix trail C/M/m/A) verified absorbed or deliberately reversed in the current plan (see §Scope Changes v5→v6 S1/S2, §D round-3 register). Historical references remain valid in frozen receipts and the draft session log.
+  - `rendering-abstraction.md` — CURRENT plan, v6.4 FINAL (rounds-9/10 remediation incl. R9-M2 refutation record; USER GATE resolved: KEEP VULKAN; 48 contiguous tasks / 6 phases / Appendix wave schedule W0–W25; round-10 unit extraction lives in its receipt — 71 units, 23/17 waves). sha256 `ce059e6afc4ef1dee8f9e3a91dcf79e76a1600473e575fa71daea0c20ecbddfa` (1202 lines / 258817 bytes, 2026-08-23). **EXECUTED & CERTIFIED** (2026-08-25/26, row-48 final wave: ALL GATES GREEN F1–F5 + SC1–SC13 + Q1–Q15, commit 40a2373b "PLAN COMPLETE"; 9 post-cert macOS port commits to HEAD `8c193cb5`; see draft ledger `execution_status`).
+  - `metal-backend.md` — 4th rendering backend plan (macOS Metal, 13 tasks + F1–F4 final wave). **EXECUTED** (2026-09-02, all 13 task rows committed; task 14 docs/ledgers committed; F3 human gate PASSED — HUMAN VERIFIED on a visible display, receipt `qa/metal-evidence/smoke/menu-open.HUMAN-VERIFIED.md`). Evidence: `qa/metal-evidence.md`.
+  - ~~`rendering-abstraction-v3-archived.md`~~ — REMOVED 2026-08-23 by USER decision ("If not, delete the archived plan") after full supersession audit: every v3 element (D1–D16, Phase 0–5 tasks, SC1–13, F1–F5, review-fix trail C/M/m/A) verified absorbed or deliberately reversed in the current plan (see §Scope Changes v5→v6 S1/S2, §D round-3 register). Historical references remain valid in frozen receipts and the draft session log. NOTE 2026-09-03: the file re-materialized in the tree after the 2026-09-01 re-clone (it is tracked on branch `rendering-abstraction-plan`); it is retained byte-identical per retention rule 2, the stale boulder work referencing it was closed 2026-09-03, and a further deletion requires a fresh explicit USER decision.
 - `reviews/` — review receipts (frozen once cited; never edited post-citation)
   - `rendering-abstraction-high-accuracy-review.md` — round-2 evidence
   - `rendering-abstraction-hyperplan-review.md` — round-3 receipt
@@ -16,7 +17,8 @@ Updated: 2026-08-23 (v3 archive removed per USER decision after supersession aud
   - `rendering-abstraction-round9-momus.md` — round-9 general whole-plan verification (CHANGES_REQUESTED; R9-M2 refuted by planner reconciliation — see draft ledger)
   - `rendering-abstraction-round10-momus-parallelism.md` — round-10 max-parallelism unit extraction (NO BLOCKER; 71 units, W′ schedule, 23/17 waves)
 - `drafts/` — state ledgers, one per plan (YAML front-matter status machine + newest-first Session Log)
-  - `rendering-abstraction.md` — live ledger for the current plan
+  - `rendering-abstraction.md` — live ledger for the current plan (COMPLETE-CLOSED)
+  - `metal-backend.md` — execution ledger for the 4th backend (macOS Metal). Status: EXECUTED (13 tasks committed, task 14 docs/ledgers landed; final wave F3 human gate PASSED (HUMAN VERIFIED))
 - `run-continuation/` — harness session-state JSONs (ephemeral)
 
 ## Retention rules

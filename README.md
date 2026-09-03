@@ -6,8 +6,8 @@ sudo apt-get install --upgrade libx11-dev libxt-dev libmotif-dev
 make clean all  
 
 ### Options menus on every backend
-The Options dialog is functional on every backend (BACKEND=X11|GL|VK):
-Motif/Xt dialog on X11, Dear ImGui overlay on the GL/VK backends. Open it
+The Options dialog is functional on every backend (BACKEND=X11|GL|VK|MTL):
+Motif/Xt dialog on X11, Dear ImGui overlay on the GL/VK/MTL backends (MTL is macOS-only). Open it
 with the on-screen Options button (title screen or in-game). The FPS slider
 writes the same uSecondsPerFrame value on every backend, and preferences
 save/load use the same file format. Opening the menu pauses the game;
