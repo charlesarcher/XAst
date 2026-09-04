@@ -84,8 +84,18 @@ inline void renderIdentityScene(RenderingEngine& e,TextureId checker,
   e.resetTransform();
   // -- D6 masked draw -------------------------------------------------------
   e.drawTextureMasked(content,mask,500.0f,80.0f,64.0f,64.0f);
-  // -- m13 NonRot degenerate path: static texture, NO transform calls ------
-  e.drawTexture(checker,600.0f,600.0f,40.0f,40.0f,1.0f);
+// -- m13 NonRot degenerate path: static texture, NO transform calls ------
+   e.drawTexture(checker,600.0f,600.0f,40.0f,40.0f,1.0f);
+   // -- Task 15: asymmetric top-vs-bottom orientation markers ---------------
+   // One solid quad exists ONLY at the top edge (cyan, rows 4..16) and one
+   // ONLY at the bottom edge (magenta, rows 496..508) of the 640x512 canvas;
+   // neither overlaps any other scene content. A vertical flip remaining in
+   // exactly one stage of the pipeline (MVP y-scale or readback row order)
+   // swaps the two halves and this breaks both the cross-backend byte-compare
+   // and the MTL probe's self-check. Both gate legs render these through the
+   // shared drawRect, so the markers are backend-neutral.
+   e.drawRect(10.0f,4.0f,48.0f,12.0f,0.0f,1.0f,1.0f,true);     // top: cyan
+   e.drawRect(10.0f,496.0f,48.0f,12.0f,1.0f,0.0f,1.0f,true);   // bottom: magenta
   // -- text (recorded as the text mask class) --------------------------------
   if (masks)
    {const char* t1="VKGL";

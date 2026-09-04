@@ -9,6 +9,15 @@
 // returns native BGRA layout; the readback loop swaps B↔R to produce the
 // standard RGBA dump format used by vkmethods-gl.C and vkmethods.C.
 //
+// Row-order convention (task 15): the backend's MVP maps logical top to
+// NDC +1 (Metal NDC is y-UP), which lands in texture row 0 — Metal texture
+// row 0 IS the top of the image — so the raw readback is ALREADY top-down
+// and matches the VK reference orientation. No row flip here: the old
+// readback-side row flip was a compensation for the backend's missing
+// MVP y-flip and was removed with the task-15 fix (a flip left in exactly
+// one stage of the pipeline is caught by the orientation self-check below
+// and by the cross-backend byte-compare).
+//
 // Built by the makefile's obj/MTL/mtlmethods rule. Run from the repo root
 // (font + metallib resolution is /proc/self/exe-relative — copy the binary
 // to the repo root first, or symlink the vendor/ and obj/MTL/ dirs).
@@ -70,10 +79,8 @@ int main(int argc,char** argv)
    }
   mtlGetTextureBytes(texPtr,bgra,fw,fh);
 
-  // BGRA→RGBA swizzle + vertical flip: RT is BGRA8Unorm (task 8 pipeline
-  // pixel format), and Metal NDC is y-UP (like GL, unlike VK's y-down), so
-  // the raw readback has logical top at framebuffer bottom. Flip rows so the
-  // dump is top-down RGBA matching the GL/VK reference orientation.
+  // BGRA→RGBA swizzle only (row order is already top-down — see the file
+  // header convention note). The loop visits rows in buffer order.
   uint8_t* rgba=(uint8_t*)malloc((size_t)fw*fh*4);
   if (!rgba)
    {fprintf(stderr,"mtlmethods: FAIL: alloc rgba\n");
@@ -81,7 +88,7 @@ int main(int argc,char** argv)
     return 1;
    }
   for (int y=0;y<fh;++y)
-   {const uint8_t* srcRow=bgra+(size_t)(fh-1-y)*fw*4;
+   {const uint8_t* srcRow=bgra+(size_t)y*fw*4;
     uint8_t* dstRow=rgba+(size_t)y*fw*4;
     for (int x=0;x<fw;++x)
      {dstRow[x*4+0]=srcRow[x*4+2];  // R ← B[2]
@@ -109,6 +116,46 @@ int main(int argc,char** argv)
   fwrite(hdr,sizeof hdr,1,f);
   fwrite(rgba,(size_t)fw*fh*4,1,f);
   fclose(f);
+
+  // ---- Task 15: asymmetric top-vs-bottom orientation self-check -----------
+  // identityScene.H places a cyan marker ONLY at the top edge (10,4,48,12)
+  // and a magenta marker ONLY at the bottom edge (10,496,48,12). In a
+  // top-down dump (row 0 = logical top, the VK reference convention) the
+  // cyan marker must sit in the TOP rows and the magenta in the BOTTOM rows.
+  // A vertical flip surviving in exactly one pipeline stage (MVP y-scale OR
+  // readback row order) swaps the halves and fails this check — so a mirror
+  // can no longer pass the gate silently. The old pre-task-15 state (flipped
+  // MVP + flipped readback) canceled out and passed; that double-flip is
+  // exactly what this probe plus the pre/after dump invariance compare pin
+  // against.
+  auto at=[&](int x,int y)->const uint8_t*
+   {return rgba+(size_t)y*fw*4+(size_t)x*4;};
+  int topCyan  = at(34,10)[0]<60 &&at(34,10)[1]>200&&at(34,10)[2]>200;
+  int botMagenta=at(34,502)[0]>200&&at(34,502)[1]<60&&at(34,502)[2]>200;
+  int topNotMag=!(at(34,10)[0]>200&&at(34,10)[1]<60&&at(34,10)[2]>200);
+  int botNotCyn=!(at(34,502)[0]<60 &&at(34,502)[1]>200&&at(34,502)[2]>200);
+  // Per-sprite texture orientation: the masked quad (500,80,64,64) samples
+  // the content texture whose quadrants are yellow(TL)/cyan(TR)/magenta(BL)/
+  // blue(BR). Top-left of the quad (510,100) must read the texture's TOP
+  // (yellow) and bottom-left (510,130) its BOTTOM (magenta) — a per-sprite
+  // vertical flip swaps exactly these two.
+  const uint8_t* tTop=at(510,100);
+  const uint8_t* tBot=at(510,130);
+  int texTopYellow = tTop[0]>200&&tTop[1]>200&&tTop[2]<60;
+  int texBotMagenta= tBot[0]>200&&tBot[1]<60 &&tBot[2]>200;
+  printf("mtlmethods: orientation topCyan=%d botMagenta=%d topNotMagenta=%d "
+         "botNotCyan=%d texTopYellow=%d texBotMagenta=%d\n",
+         topCyan,botMagenta,topNotMag,botNotCyn,texTopYellow,texBotMagenta);
+  if (!topCyan||!botMagenta||!topNotMag||!botNotCyn
+      ||!texTopYellow||!texBotMagenta)
+   {fprintf(stderr,"mtlmethods: FAIL: orientation probe — the dump is not "
+                   "top-down (top-of-canvas content must be in the TOP rows); "
+                   "a vertical flip remains in the MVP or the readback\n");
+    free(rgba);
+    mtl.shutdown();
+    return 1;
+   }
+
   free(rgba);
   printf("mtlmethods: wrote %s (%dx%d, %d text rects, %d bytes total)\n",
          argv[1],fw,fh,masks.numTextRects,

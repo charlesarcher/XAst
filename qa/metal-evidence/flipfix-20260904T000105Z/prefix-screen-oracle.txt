@@ -1,0 +1,3 @@
+oracle: qa/metal-evidence/flipfix-20260904T000105Z/pre-screen.png 1376x1412px, half=706px
+oracle: darkFraction topHalf=0.8710 bottomHalf=0.4792 (delta bottom-top=-0.3918)
+oracle: VERDICT INVERTED (render upside down)

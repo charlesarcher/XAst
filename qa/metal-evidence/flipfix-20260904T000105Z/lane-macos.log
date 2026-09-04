@@ -1,0 +1,1163 @@
+[lane-macos] building BACKEND=VK
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:15:
+./gamePlay/options/button.H:28:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   28 |     const int ButtonWidth() const;
+      |     ^~~~~
+./gamePlay/options/button.H:29:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   29 |     const int ButtonHeight() const;
+      |     ^~~~~
+./gamePlay/options/button.H:247:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  247 | inline const int Button::ButtonWidth() const
+      |        ^~~~~
+./gamePlay/options/button.H:251:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  251 | inline const int Button::ButtonHeight() const
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:16:
+./gamePlay/score.H:24:17: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   24 |     const char* const CurrentName() const;
+      |                 ^~~~~
+./gamePlay/score.H:25:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   25 |     const int TopTenScore(const int i) const;
+      |     ^~~~~
+./gamePlay/score.H:26:17: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   26 |     const char* const TopTenName(const int i) const;
+      |                 ^~~~~
+./gamePlay/score.H:27:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   27 |     const int NumScores() const;
+      |     ^~~~~
+./gamePlay/score.H:70:24: warning: field 'numScores' will be initialized after field 'scoreUpdated' [-Wreorder-ctor]
+   69 | inline Score::Score(): currentScore(0),
+      |                        ~~~~~~~~~~~~~~~
+      |                        scoreUpdated(off)
+   70 |                        numScores(0),
+      |                        ^~~~~~~~~~~~
+      |                        currentScore(0)
+   71 |                        scoreUpdated(off)
+      |                        ~~~~~~~~~~~~~~~~~
+      |                        numScores(0)
+./gamePlay/score.H:103:16: warning: comparison of integers of different signs: 'int' and 'unsigned long' [-Wsign-compare]
+  103 |  {if (numScores<sizeof(score)/sizeof(int))
+      |       ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/score.H:109:27: warning: comparison of integers of different signs: 'int' and 'unsigned long' [-Wsign-compare]
+  109 |      {for (int j=numScores<sizeof(score)/sizeof(int)
+      |                  ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/score.H:147:20: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  147 | inline const char* const Score::CurrentName() const
+      |                    ^~~~~
+./gamePlay/score.H:151:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  151 | inline const int Score::TopTenScore(const int i) const
+      |        ^~~~~
+./gamePlay/score.H:155:20: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  155 | inline const char* const Score::TopTenName(const int i) const
+      |                    ^~~~~
+./gamePlay/score.H:159:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  159 | inline const int Score::NumScores() const
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:17:
+./gamePlay/shipYard.H:21:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   21 |     const int NumShips() const;
+      |     ^~~~~
+./gamePlay/shipYard.H:135:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  135 | inline const int ShipYard::NumShips() const
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:7:
+./gamePlay/../objects/ships/../../utilities/box.H:156:66: warning: field 'height' will be initialized after field 'center' [-Wreorder-ctor]
+  155 | inline Box::Box(const double w, const double h, const Vector2d& c): width(w),
+      |                                                                     ~~~~~~~~
+      |                                                                     center(c)
+  156 |                                                                  height(h),
+      |                                                                  ^~~~~~~~~
+      |                                                                  width(w)
+  157 |                                                                  center(c)
+      |                                                                  ~~~~~~~~~
+      |                                                                  height(h)
+./gamePlay/../objects/ships/../../utilities/box.H:162:47: warning: field 'height' will be initialized after field 'center' [-Wreorder-ctor]
+  161 | inline Box::Box(const Vector2d& c, const double r): width(2*r),
+      |                                                     ~~~~~~~~~~
+      |                                                     center(c)
+  162 |                                               height(2*r),
+      |                                               ^~~~~~~~~~~
+      |                                               width(2*r)
+  163 |                                               center(c)
+      |                                               ~~~~~~~~~
+      |                                               height(2*r)
+./gamePlay/../objects/ships/../../utilities/box.H:298:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  298 |  {return (b1.width<=b2.width   ? b1.northWestCorner.x>=b2.northWestCorner.x&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  299 |                                  b1.northWestCorner.x<=b2.southEastCorner.x||
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:298:76: note: place parentheses around the '&&' expression to silence this warning
+  298 |  {return (b1.width<=b2.width   ? b1.northWestCorner.x>=b2.northWestCorner.x&&
+      |                                                                            ^
+      |                                  (
+  299 |                                  b1.northWestCorner.x<=b2.southEastCorner.x||
+      |                                                                            
+      |                                                                            )
+./gamePlay/../objects/ships/../../utilities/box.H:300:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  299 |                                  b1.northWestCorner.x<=b2.southEastCorner.x||
+      |                                                                            ~~
+  300 |                                  b1.southEastCorner.x>=b2.northWestCorner.x&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  301 |                                  b1.southEastCorner.x<=b2.southEastCorner.x
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:300:76: note: place parentheses around the '&&' expression to silence this warning
+  300 |                                  b1.southEastCorner.x>=b2.northWestCorner.x&&
+      |                                                                            ^
+      |                                  (
+  301 |                                  b1.southEastCorner.x<=b2.southEastCorner.x
+      |                                                                            
+      |                                                                            )
+./gamePlay/../objects/ships/../../utilities/box.H:302:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  302 |                                : b2.northWestCorner.x>=b1.northWestCorner.x&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  303 |                                  b2.northWestCorner.x<=b1.southEastCorner.x||
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:302:76: note: place parentheses around the '&&' expression to silence this warning
+  302 |                                : b2.northWestCorner.x>=b1.northWestCorner.x&&
+      |                                                                            ^
+      |                                  (
+  303 |                                  b2.northWestCorner.x<=b1.southEastCorner.x||
+      |                                                                            
+      |                                                                            )
+./gamePlay/../objects/ships/../../utilities/box.H:304:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  303 |                                  b2.northWestCorner.x<=b1.southEastCorner.x||
+      |                                                                            ~~
+  304 |                                  b2.southEastCorner.x>=b1.northWestCorner.x&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  305 |                                  b2.southEastCorner.x<=b1.southEastCorner.x)&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:304:76: note: place parentheses around the '&&' expression to silence this warning
+  304 |                                  b2.southEastCorner.x>=b1.northWestCorner.x&&
+      |                                                                            ^
+      |                                  (
+  305 |                                  b2.southEastCorner.x<=b1.southEastCorner.x)&&
+      |                                                                            
+      |                                                                            )
+./gamePlay/../objects/ships/../../utilities/box.H:306:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  306 |          (b1.height<=b2.height ? b1.northWestCorner.y>=b2.northWestCorner.y&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  307 |                                  b1.northWestCorner.y<=b2.southEastCorner.y||
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:306:76: note: place parentheses around the '&&' expression to silence this warning
+  306 |          (b1.height<=b2.height ? b1.northWestCorner.y>=b2.northWestCorner.y&&
+      |                                                                            ^
+      |                                  (
+  307 |                                  b1.northWestCorner.y<=b2.southEastCorner.y||
+      |                                                                            
+      |                                                                            )
+./gamePlay/../objects/ships/../../utilities/box.H:308:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  307 |                                  b1.northWestCorner.y<=b2.southEastCorner.y||
+      |                                                                            ~~
+  308 |                                  b1.southEastCorner.y>=b2.northWestCorner.y&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  309 |                                  b1.southEastCorner.y<=b2.southEastCorner.y
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:308:76: note: place parentheses around the '&&' expression to silence this warning
+  308 |                                  b1.southEastCorner.y>=b2.northWestCorner.y&&
+      |                                                                            ^
+      |                                  (
+  309 |                                  b1.southEastCorner.y<=b2.southEastCorner.y
+      |                                                                            
+      |                                                                            )
+./gamePlay/../objects/ships/../../utilities/box.H:310:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  310 |                                : b2.northWestCorner.y>=b1.northWestCorner.y&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  311 |                                  b2.northWestCorner.y<=b1.southEastCorner.y||
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:310:76: note: place parentheses around the '&&' expression to silence this warning
+  310 |                                : b2.northWestCorner.y>=b1.northWestCorner.y&&
+      |                                                                            ^
+      |                                  (
+  311 |                                  b2.northWestCorner.y<=b1.southEastCorner.y||
+      |                                                                            
+      |                                                                            )
+./gamePlay/../objects/ships/../../utilities/box.H:312:76: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  311 |                                  b2.northWestCorner.y<=b1.southEastCorner.y||
+      |                                                                            ~~
+  312 |                                  b2.southEastCorner.y>=b1.northWestCorner.y&&
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+  313 |                                  b2.southEastCorner.y<=b1.southEastCorner.y);
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/box.H:312:76: note: place parentheses around the '&&' expression to silence this warning
+  312 |                                  b2.southEastCorner.y>=b1.northWestCorner.y&&
+      |                                                                            ^
+      |                                  (
+  313 |                                  b2.southEastCorner.y<=b1.southEastCorner.y);
+      |                                                                            
+      |                                                                            )
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:8:
+In file included from ./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:11:
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/../composite/compositePixmap.H:61:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   61 |    const int GetPixWidth() const;
+      |    ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/../composite/compositePixmap.H:62:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   62 |    const int GetPixHeight() const;
+      |    ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/../composite/compositePixmap.H:69:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   69 | inline const int CompositePixmap::GetPixWidth() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/../composite/compositePixmap.H:73:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   73 | inline const int CompositePixmap::GetPixHeight() const
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:8:
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:248:29: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  248 |     virtual const Vector2d* const GetVecs(const double) const;
+      |                             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:249:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  249 |     virtual const int GetNumVecs() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:250:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  250 |     virtual const int GetNumPix() const=0;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:252:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  252 |     const double GetRadius() const;
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:253:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  253 |     const double GetArea() const;
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:254:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  254 |     const int GetPixWidth() const;
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:255:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  255 |     const int GetPixHeight() const;
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:275:29: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  275 |     virtual const Vector2d* const GetVecs(const double) const;
+      |                             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:276:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  276 |     virtual const int GetNumVecs() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:277:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  277 |     virtual const int GetNumPix() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:327:29: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  327 |     virtual const Vector2d* const GetVecs(const double) const;
+      |                             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:328:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  328 |     virtual const int GetNumVecs() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:329:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  329 |     virtual const int GetNumPix() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:378:29: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  378 |     virtual const Vector2d* const GetVecs(const double) const;
+      |                             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:379:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  379 |     virtual const int GetNumVecs() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:380:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  380 |     virtual const int GetNumPix() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:426:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  426 |     virtual const int GetNumPix() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:468:13: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  468 |     virtual const int GetNumPix() const;
+      |             ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:510:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  510 | inline const double RotatorDisplayData::GetRadius() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:514:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  514 | inline const double RotatorDisplayData::GetArea() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:518:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  518 | inline const int RotatorDisplayData::GetPixWidth() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotatorDisplayData.H:522:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  522 | inline const int RotatorDisplayData::GetPixHeight() const
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:9:
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:32:21: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   32 |     const Vector2d* const
+      |                     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:34:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   34 |     const int
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:47:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   47 |     const int
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:49:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   49 |     const int
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:51:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   51 |     const double
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:53:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   53 |     const double
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:55:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   55 |     const double
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:57:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   57 |     const double
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:59:5: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   59 |     const double
+      |     ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:121:24: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  121 | inline const Vector2d* const
+      |                        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:126:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  126 | inline const int
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:148:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  148 | inline const int
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:153:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  153 | inline const int
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:158:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  158 | inline const double
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:163:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  163 | inline const double
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:168:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  168 | inline const double
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:173:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  173 | inline const double
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/pixmaps/rotated/rotator.H:178:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  178 | inline const double
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:10:
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:20:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   20 |    const int PixWidth() const;
+      |    ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:21:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   21 |    const int PixHeight() const;
+      |    ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:22:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   22 |    const int GetNumFrames() const;
+      |    ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:23:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   23 |    const int GetFrameNumber() const;
+      |    ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:24:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   24 |    const int GetFirstFrameNumber() const;
+      |    ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:51:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   51 | inline const int FrameList::PixWidth() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:55:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   55 | inline const int FrameList::PixHeight() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:59:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   59 | inline const int FrameList::GetNumFrames() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:63:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   63 | inline const int FrameList::GetFrameNumber() const
+      |        ^~~~~
+./gamePlay/../objects/ships/../../utilities/frames/frameList.H:67:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   67 | inline const int FrameList::GetFirstFrameNumber() const
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:12:
+In file included from ./gamePlay/../objects/ships/../movableObject.H:3:
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:134:12: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  134 |     inline const double
+      |            ^~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:521:28: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  521 |  {return side1Low>=side2Low&&side1Low<=side2High||
+      |          ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:521:28: note: place parentheses around the '&&' expression to silence this warning
+  521 |  {return side1Low>=side2Low&&side1Low<=side2High||
+      |                            ^                    
+      |          (                                      )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:522:29: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  521 |  {return side1Low>=side2Low&&side1Low<=side2High||
+      |                                                 ~~
+  522 |          side1High>=side2Low&&side1High<=side2High||
+      |          ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:522:29: note: place parentheses around the '&&' expression to silence this warning
+  522 |          side1High>=side2Low&&side1High<=side2High||
+      |                             ^                     
+      |          (                                        )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:523:28: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  522 |          side1High>=side2Low&&side1High<=side2High||
+      |                                                   ~~
+  523 |          side2Low>=side1Low&&side2Low<=side1High;
+      |          ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:523:28: note: place parentheses around the '&&' expression to silence this warning
+  523 |          side2Low>=side1Low&&side2Low<=side1High;
+      |                            ^                    
+      |          (                                      )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:541:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  534 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  535 |                            -movableObj1.ObjectLiner().XAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  536 |                             movableObj1.ObjectLiner().XVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  537 |                            -movableObj2.ObjectLiner().XVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  538 |                             movableObj2.OldBox().WestSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  539 |                            -movableObj1.OldBox().EastSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  540 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  541 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  542 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  543 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  544 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  545 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  546 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  547 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:541:43: note: place parentheses around the '&&' expression to silence this warning
+  534 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          (
+  535 |                            -movableObj1.ObjectLiner().XAcceleration(),
+  536 |                             movableObj1.ObjectLiner().XVelocity()
+  537 |                            -movableObj2.ObjectLiner().XVelocity(),
+  538 |                             movableObj2.OldBox().WestSide()
+  539 |                            -movableObj1.OldBox().EastSide(),
+  540 |                             frameEndTime,
+  541 |                             intersectTime)&&
+      |                                           ^
+  542 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+  543 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+  544 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+  545 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+  546 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+  547 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        
+      |                                                                        )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:555:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  547 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        ~~
+  548 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  549 |                            -movableObj1.ObjectLiner().YAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  550 |                             movableObj1.ObjectLiner().YVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  551 |                            -movableObj2.ObjectLiner().YVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  552 |                             movableObj2.OldBox().NorthSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  553 |                            -movableObj1.OldBox().SouthSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  554 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  555 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  556 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  557 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  558 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  559 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  560 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  561 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:555:43: note: place parentheses around the '&&' expression to silence this warning
+  548 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          (
+  549 |                            -movableObj1.ObjectLiner().YAcceleration(),
+  550 |                             movableObj1.ObjectLiner().YVelocity()
+  551 |                            -movableObj2.ObjectLiner().YVelocity(),
+  552 |                             movableObj2.OldBox().NorthSide()
+  553 |                            -movableObj1.OldBox().SouthSide(),
+  554 |                             frameEndTime,
+  555 |                             intersectTime)&&
+      |                                           ^
+  556 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+  557 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+  558 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+  559 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+  560 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+  561 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                                                                       
+      |                                                                       )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:579:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  572 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  573 |                            -movableObj1.ObjectLiner().XAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  574 |                             movableObj1.ObjectLiner().XVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  575 |                            -movableObj2.ObjectLiner().XVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  576 |                             movableObj2.OldBox().EastSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  577 |                            -movableObj1.OldBox().WestSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  578 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  579 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  580 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  581 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  582 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  583 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  584 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  585 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:579:43: note: place parentheses around the '&&' expression to silence this warning
+  572 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          (
+  573 |                            -movableObj1.ObjectLiner().XAcceleration(),
+  574 |                             movableObj1.ObjectLiner().XVelocity()
+  575 |                            -movableObj2.ObjectLiner().XVelocity(),
+  576 |                             movableObj2.OldBox().EastSide()
+  577 |                            -movableObj1.OldBox().WestSide(),
+  578 |                             frameEndTime,
+  579 |                             intersectTime)&&
+      |                                           ^
+  580 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+  581 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+  582 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+  583 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+  584 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+  585 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        
+      |                                                                        )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:593:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  585 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        ~~
+  586 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  587 |                            -movableObj1.ObjectLiner().YAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  588 |                             movableObj1.ObjectLiner().YVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  589 |                            -movableObj2.ObjectLiner().YVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  590 |                             movableObj2.OldBox().NorthSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  591 |                            -movableObj1.OldBox().SouthSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  592 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  593 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  594 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  595 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  596 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  597 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  598 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  599 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:593:43: note: place parentheses around the '&&' expression to silence this warning
+  586 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          (
+  587 |                            -movableObj1.ObjectLiner().YAcceleration(),
+  588 |                             movableObj1.ObjectLiner().YVelocity()
+  589 |                            -movableObj2.ObjectLiner().YVelocity(),
+  590 |                             movableObj2.OldBox().NorthSide()
+  591 |                            -movableObj1.OldBox().SouthSide(),
+  592 |                             frameEndTime,
+  593 |                             intersectTime)&&
+      |                                           ^
+  594 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+  595 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+  596 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+  597 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+  598 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+  599 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                                                                       
+      |                                                                       )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:617:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  610 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  611 |                            -movableObj1.ObjectLiner().XAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  612 |                             movableObj1.ObjectLiner().XVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  613 |                            -movableObj2.ObjectLiner().XVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  614 |                             movableObj2.OldBox().EastSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  615 |                            -movableObj1.OldBox().WestSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  616 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  617 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  618 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  619 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  620 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  621 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  622 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  623 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:617:43: note: place parentheses around the '&&' expression to silence this warning
+  610 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          (
+  611 |                            -movableObj1.ObjectLiner().XAcceleration(),
+  612 |                             movableObj1.ObjectLiner().XVelocity()
+  613 |                            -movableObj2.ObjectLiner().XVelocity(),
+  614 |                             movableObj2.OldBox().EastSide()
+  615 |                            -movableObj1.OldBox().WestSide(),
+  616 |                             frameEndTime,
+  617 |                             intersectTime)&&
+      |                                           ^
+  618 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+  619 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+  620 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+  621 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+  622 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+  623 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        
+      |                                                                        )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:631:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  623 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        ~~
+  624 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  625 |                            -movableObj1.ObjectLiner().YAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  626 |                             movableObj1.ObjectLiner().YVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  627 |                            -movableObj2.ObjectLiner().YVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  628 |                             movableObj2.OldBox().SouthSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  629 |                            -movableObj1.OldBox().NorthSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  630 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  631 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  632 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  633 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  634 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  635 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  636 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  637 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:631:43: note: place parentheses around the '&&' expression to silence this warning
+  624 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          (
+  625 |                            -movableObj1.ObjectLiner().YAcceleration(),
+  626 |                             movableObj1.ObjectLiner().YVelocity()
+  627 |                            -movableObj2.ObjectLiner().YVelocity(),
+  628 |                             movableObj2.OldBox().SouthSide()
+  629 |                            -movableObj1.OldBox().NorthSide(),
+  630 |                             frameEndTime,
+  631 |                             intersectTime)&&
+      |                                           ^
+  632 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+  633 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+  634 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+  635 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+  636 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+  637 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                                                                       
+      |                                                                       )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:655:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  648 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  649 |                            -movableObj1.ObjectLiner().XAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  650 |                             movableObj1.ObjectLiner().XVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  651 |                            -movableObj2.ObjectLiner().XVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  652 |                             movableObj2.OldBox().WestSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  653 |                            -movableObj1.OldBox().EastSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  654 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  655 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  656 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  657 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  658 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  659 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  660 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  661 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:655:43: note: place parentheses around the '&&' expression to silence this warning
+  648 |   return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+      |          (
+  649 |                            -movableObj1.ObjectLiner().XAcceleration(),
+  650 |                             movableObj1.ObjectLiner().XVelocity()
+  651 |                            -movableObj2.ObjectLiner().XVelocity(),
+  652 |                             movableObj2.OldBox().WestSide()
+  653 |                            -movableObj1.OldBox().EastSide(),
+  654 |                             frameEndTime,
+  655 |                             intersectTime)&&
+      |                                           ^
+  656 |           (deltaDist1=movableObj1.ObjectLiner().DeltaYMove(intersectTime),
+  657 |            deltaDist2=movableObj2.ObjectLiner().DeltaYMove(intersectTime),
+  658 |            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
+  659 |                           movableObj1.OldBox().SouthSide()+deltaDist1,
+  660 |                           movableObj2.OldBox().NorthSide()+deltaDist2,
+  661 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        
+      |                                                                        )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:669:43: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  661 |                           movableObj2.OldBox().SouthSide()+deltaDist2))||
+      |                                                                        ~~
+  662 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  663 |                            -movableObj1.ObjectLiner().YAcceleration(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  664 |                             movableObj1.ObjectLiner().YVelocity()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  665 |                            -movableObj2.ObjectLiner().YVelocity(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  666 |                             movableObj2.OldBox().SouthSide()
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  667 |                            -movableObj1.OldBox().NorthSide(),
+      |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  668 |                             frameEndTime,
+      |                             ~~~~~~~~~~~~~
+  669 |                             intersectTime)&&
+      |                             ~~~~~~~~~~~~~~^~
+  670 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  671 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  672 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  673 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  674 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  675 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:669:43: note: place parentheses around the '&&' expression to silence this warning
+  662 |          SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+      |          (
+  663 |                            -movableObj1.ObjectLiner().YAcceleration(),
+  664 |                             movableObj1.ObjectLiner().YVelocity()
+  665 |                            -movableObj2.ObjectLiner().YVelocity(),
+  666 |                             movableObj2.OldBox().SouthSide()
+  667 |                            -movableObj1.OldBox().NorthSide(),
+  668 |                             frameEndTime,
+  669 |                             intersectTime)&&
+      |                                           ^
+  670 |           (deltaDist1=movableObj1.ObjectLiner().DeltaXMove(intersectTime),
+  671 |            deltaDist2=movableObj2.ObjectLiner().DeltaXMove(intersectTime),
+  672 |            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
+  673 |                           movableObj1.OldBox().EastSide()+deltaDist1,
+  674 |                           movableObj2.OldBox().WestSide()+deltaDist2,
+  675 |                           movableObj2.OldBox().EastSide()+deltaDist2));
+      |                                                                       
+      |                                                                       )
+./gamePlay/../objects/ships/../../utilities/intersection2d.H:974:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+  974 | inline const double
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:62:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:130:
+In file included from ./gamePlay/playingField.H:4:
+In file included from ./gamePlay/../objects/ships/shipGroup.H:316:
+In file included from ./gamePlay/playingField.H:5:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:15:
+In file included from ./gamePlay/../objects/enemies/enemyGroup.H:169:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:114:
+In file included from ./gamePlay/playingField.H:7:
+In file included from ./gamePlay/../objects/rocks/rockGroup.H:11:
+./gamePlay/../objects/rocks/spawner.H:14:12: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   14 |     inline const int GetNumSpawn() const;
+      |            ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:62:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:130:
+In file included from ./gamePlay/playingField.H:4:
+In file included from ./gamePlay/../objects/ships/shipGroup.H:316:
+In file included from ./gamePlay/playingField.H:5:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:15:
+In file included from ./gamePlay/../objects/enemies/enemyGroup.H:169:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:114:
+In file included from ./gamePlay/playingField.H:7:
+In file included from ./gamePlay/../objects/rocks/rockGroup.H:11:
+In file included from ./gamePlay/../objects/rocks/spawner.H:21:
+./gamePlay/../objects/rocks/rockGroup.H:173:9: warning: misleading indentation; statement is not part of the previous 'for' [-Wmisleading-indentation]
+  173 |         content=0;mask=0;w=0;h=0;
+      |         ^
+./gamePlay/../objects/rocks/rockGroup.H:165:8: note: previous statement is here
+  165 |       {for (int i=0;i<3;++i)
+      |        ^
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:62:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:130:
+In file included from ./gamePlay/playingField.H:4:
+In file included from ./gamePlay/../objects/ships/shipGroup.H:316:
+In file included from ./gamePlay/playingField.H:5:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:15:
+In file included from ./gamePlay/../objects/enemies/enemyGroup.H:169:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:114:
+In file included from ./gamePlay/playingField.H:7:
+In file included from ./gamePlay/../objects/rocks/rockGroup.H:11:
+In file included from ./gamePlay/../objects/rocks/spawner.H:21:
+In file included from ./gamePlay/../objects/rocks/rockGroup.H:205:
+./gamePlay/playingField.H:521:38: warning: initializer order does not match the declaration order [-Wreorder-ctor]
+  521 |                                      fontHeight(0),
+      |                                      ^~~~~~~~~~~~~
+      |                                      framesSinceLastBullet(0)
+  522 | #endif
+  523 |                                      framesSinceLastBullet(0),
+      |                                      ~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                      framesSinceEnemy(0)
+  524 |                                      framesThisLevel(0),
+      |                                      ~~~~~~~~~~~~~~~~~~
+      |                                      level(0)
+  525 |                                      nextShipScore(extraShipScore),
+      |                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                      nonPermeableList(28)
+  526 |                                      framesSinceEnemy(0),
+      |                                      ~~~~~~~~~~~~~~~~~~~
+      |                                      selfPermeableList(128)
+  527 |                                      speedAdjust(uSecondsPerFrame/125E3),
+      |                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                      permeableList(28)
+  528 |                                      level(0),
+      |                                      ~~~~~~~~
+      |                                      fontHeight(0)
+  529 |                                      nonPermeableList(28),
+      |                                      ~~~~~~~~~~~~~~~~~~~~
+      |                                      framesThisLevel(0)
+  530 |                                      selfPermeableList(128),
+      |                                      ~~~~~~~~~~~~~~~~~~~~~~
+      |                                      nextShipScore(extraShipScore)
+  531 |                                      permeableList(28),
+      |                                      ~~~~~~~~~~~~~~~~~
+      |                                      speedAdjust(uSecondsPerFrame/125E3)
+./gamePlay/playingField.H:521:38: note: field 'fontHeight' will be initialized after field 'framesSinceLastBullet'
+  521 |                                      fontHeight(0),
+      |                                      ^~~~~~~~~~~~~
+./gamePlay/playingField.H:525:38: note: field 'nextShipScore' will be initialized after field 'framesSinceEnemy'
+  525 |                                      nextShipScore(extraShipScore),
+      |                                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/playingField.H:527:38: note: field 'speedAdjust' will be initialized after field 'level'
+  527 |                                      speedAdjust(uSecondsPerFrame/125E3),
+      |                                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/playingField.H:585:60: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  584 |     if (!shipGroup->ship->dead&&(nonRockItems==1||
+      |                                                 ~~
+  585 |                                shipGroup->thrust->thrusting&&nonRockItems==2)||
+      |                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+./gamePlay/playingField.H:585:60: note: place parentheses around the '&&' expression to silence this warning
+  585 |                                shipGroup->thrust->thrusting&&nonRockItems==2)||
+      |                                                            ^                
+      |                                (                                            )
+./gamePlay/playingField.H:584:31: warning: '&&' within '||' [-Wlogical-op-parentheses]
+  584 |     if (!shipGroup->ship->dead&&(nonRockItems==1||
+      |         ~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
+  585 |                                shipGroup->thrust->thrusting&&nonRockItems==2)||
+      |                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/playingField.H:584:31: note: place parentheses around the '&&' expression to silence this warning
+  584 |     if (!shipGroup->ship->dead&&(nonRockItems==1||
+      |                               ^
+      |         (
+  585 |                                shipGroup->thrust->thrusting&&nonRockItems==2)||
+      |                                                                              
+      |                                                                              )
+./gamePlay/playingField.H:1221:57: warning: add explicit braces to avoid dangling else [-Wdangling-else]
+ 1221 |                                                         else
+      |                                                         ^
+./gamePlay/playingField.H:1236:57: warning: add explicit braces to avoid dangling else [-Wdangling-else]
+ 1236 |                                                         else
+      |                                                         ^
+./gamePlay/playingField.H:1276:19: warning: comparison of integers of different signs: 'unsigned int' and 'int' [-Wsign-compare]
+ 1276 |       if (diffTime<uSecondsPerFrame)
+      |           ~~~~~~~~^~~~~~~~~~~~~~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:62:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:130:
+In file included from ./gamePlay/playingField.H:4:
+In file included from ./gamePlay/../objects/ships/shipGroup.H:316:
+In file included from ./gamePlay/playingField.H:5:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:15:
+In file included from ./gamePlay/../objects/enemies/enemyGroup.H:169:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:114:
+In file included from ./gamePlay/playingField.H:7:
+In file included from ./gamePlay/../objects/rocks/rockGroup.H:11:
+In file included from ./gamePlay/../objects/rocks/spawner.H:21:
+./gamePlay/../objects/rocks/rockGroup.H:635:14: warning: comparison of integers of different signs: 'int' and 'unsigned long' [-Wsign-compare]
+  635 |             j<sizeof(ROcks)*sizeof(ROCK)/(sizeof(ROck)*sizeof(ROCKs));
+      |             ~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/rocks/rockGroup.H:667:12: warning: comparison of integers of different signs: 'int' and 'unsigned long' [-Wsign-compare]
+  667 |           k<sizeof(rocks)*sizeof(ROck)/(sizeof(rock)*sizeof(ROcks));
+      |           ~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:62:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:130:
+In file included from ./gamePlay/playingField.H:4:
+In file included from ./gamePlay/../objects/ships/shipGroup.H:316:
+In file included from ./gamePlay/playingField.H:5:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:15:
+In file included from ./gamePlay/../objects/enemies/enemyGroup.H:169:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:114:
+In file included from ./gamePlay/playingField.H:7:
+In file included from ./gamePlay/../objects/rocks/rockGroup.H:11:
+./gamePlay/../objects/rocks/spawner.H:34:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   34 | inline const int Spawner::GetNumSpawn() const
+      |        ^~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:62:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:130:
+In file included from ./gamePlay/playingField.H:4:
+In file included from ./gamePlay/../objects/ships/shipGroup.H:316:
+In file included from ./gamePlay/playingField.H:5:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:15:
+In file included from ./gamePlay/../objects/enemies/enemyGroup.H:169:
+./gamePlay/../objects/enemies/enemyBulletGroup.H:198:75: warning: operator '<<' has lower precedence than '-'; '-' will be evaluated first [-Wshift-op-parentheses]
+  198 |  {if (enemyBulletGroup->clipsFired<<8*sizeof(enemyBulletGroup->clipsFired)-4)
+      |                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:198:75: note: place parentheses around the '-' expression to silence this warning
+  198 |  {if (enemyBulletGroup->clipsFired<<8*sizeof(enemyBulletGroup->clipsFired)-4)
+      |                                                                           ^ 
+      |                                     (                                       )
+./gamePlay/../objects/enemies/enemyBulletGroup.H:240:46: warning: initializer order does not match the declaration order [-Wreorder-ctor]
+  240 |                                              bullet1(&explosion1),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+      |                                              bullet10(&explosion10)
+  241 |                                              bullet2(&explosion2),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet9(&explosion9)
+  242 |                                              bullet3(&explosion3),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet8(&explosion8)
+  243 |                                              bullet4(&explosion4),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet7(&explosion7)
+  244 |                                              bullet5(&explosion5),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet6(&explosion6)
+  245 |                                              bullet6(&explosion6),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet5(&explosion5)
+  246 |                                              bullet7(&explosion7),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet4(&explosion4)
+  247 |                                              bullet8(&explosion8),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet3(&explosion3)
+  248 |                                              bullet9(&explosion9),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet2(&explosion2)
+  249 |                                              bullet10(&explosion10),
+      |                                              ~~~~~~~~~~~~~~~~~~~~~~
+      |                                              bullet1(&explosion1)
+  250 |                                              explosion1(&bullet1),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              explosion10(&bullet10)
+  251 |                                              explosion2(&bullet2),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              explosion9(&bullet9)
+  252 |                                              explosion3(&bullet3),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              explosion8(&bullet8)
+  253 |                                              explosion4(&bullet4),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              explosion7(&bullet7)
+  254 |                                              explosion5(&bullet5),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              explosion6(&bullet6)
+  255 |                                              explosion6(&bullet6),
+      |                                              ~~~~~~~~~~~~~~~~~~~~
+      |                                              explosion5(&bullet5)
+./gamePlay/../objects/enemies/enemyBulletGroup.H:240:46: note: field 'bullet1' will be initialized after field 'bullet2'
+  240 |                                              bullet1(&explosion1),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:241:46: note: field 'bullet2' will be initialized after field 'bullet3'
+  241 |                                              bullet2(&explosion2),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:242:46: note: field 'bullet3' will be initialized after field 'bullet4'
+  242 |                                              bullet3(&explosion3),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:243:46: note: field 'bullet4' will be initialized after field 'bullet5'
+  243 |                                              bullet4(&explosion4),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:244:46: note: field 'bullet5' will be initialized after field 'bullet6'
+  244 |                                              bullet5(&explosion5),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:245:46: note: field 'bullet6' will be initialized after field 'bullet7'
+  245 |                                              bullet6(&explosion6),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:246:46: note: field 'bullet7' will be initialized after field 'bullet8'
+  246 |                                              bullet7(&explosion7),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:247:46: note: field 'bullet8' will be initialized after field 'bullet9'
+  247 |                                              bullet8(&explosion8),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:248:46: note: field 'bullet9' will be initialized after field 'bullet10'
+  248 |                                              bullet9(&explosion9),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:250:46: note: field 'explosion1' will be initialized after field 'explosion2'
+  250 |                                              explosion1(&bullet1),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:251:46: note: field 'explosion2' will be initialized after field 'explosion3'
+  251 |                                              explosion2(&bullet2),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:252:46: note: field 'explosion3' will be initialized after field 'explosion4'
+  252 |                                              explosion3(&bullet3),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:253:46: note: field 'explosion4' will be initialized after field 'explosion5'
+  253 |                                              explosion4(&bullet4),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:254:46: note: field 'explosion5' will be initialized after field 'explosion6'
+  254 |                                              explosion5(&bullet5),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:255:46: note: field 'explosion6' will be initialized after field 'explosion7'
+  255 |                                              explosion6(&bullet6),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:256:46: note: field 'explosion7' will be initialized after field 'explosion8'
+  256 |                                              explosion7(&bullet7),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:257:46: note: field 'explosion8' will be initialized after field 'explosion9'
+  257 |                                              explosion8(&bullet8),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+./gamePlay/../objects/enemies/enemyBulletGroup.H:258:46: note: field 'explosion9' will be initialized after field 'explosion10'
+  258 |                                              explosion9(&bullet9),
+      |                                              ^~~~~~~~~~~~~~~~~~~~
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:62:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:130:
+In file included from ./gamePlay/playingField.H:4:
+In file included from ./gamePlay/../objects/ships/shipGroup.H:316:
+In file included from ./gamePlay/playingField.H:5:
+In file included from ./gamePlay/../objects/enemies/enemyBulletGroup.H:15:
+./gamePlay/../objects/enemies/enemyGroup.H:438:7: warning: misleading indentation; statement is not part of the previous 'if' [-Wmisleading-indentation]
+  438 |       enemY.CurrentBox().SetBox(Vector2d(PlayingField::playArea.WestSide()-enemY.rotator.Radius(),
+      |       ^
+./gamePlay/../objects/enemies/enemyGroup.H:431:5: note: previous statement is here
+  431 |     if (Vector2d(enemY.ObjectLiner().Velocity()=Vector2d(velMagnitude)).x<0)
+      |     ^
+In file included from XAsteroids.C:20:
+In file included from ./gamePlay/stage.H:85:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+In file included from ./gamePlay/../objects/ships/../bullet.H:1:
+In file included from ./gamePlay/../objects/ships/../explosions/explosion.H:30:
+In file included from ./gamePlay/playingField.H:3:
+In file included from ./gamePlay/../objects/ships/shipBulletGroup.H:14:
+./gamePlay/../objects/ships/../bullet.H:72:53: warning: field 'rotator' will be initialized after field 'frameTimer' [-Wreorder-ctor]
+   72 |                                                     rotator(rot),
+      |                                                     ^~~~~~~~~~~~
+      |                                                     frameTimer(numFrames)
+   73 |                                                     frameTimer(numFrames),
+      |                                                     ~~~~~~~~~~~~~~~~~~~~~
+      |                                                     rotator(rot)
+109 warnings generated.
+ld: warning: search path '/usr/lib/X11' not found
+[lane-macos] running vk (./XAsteroids)
+[lane-macos] vk reached 435 frames — sending SIGTERM
+[lane-macos] GATE GREEN: VK run completed (435 frames)
+[lane-macos] building BACKEND=MTL
+ld: warning: search path '/usr/lib/X11' not found
+[lane-macos] running mtl (./XAsteroids)
+[lane-macos] mtl reached 435 frames — sending SIGTERM
+[lane-macos] GATE GREEN: MTL run completed (435 frames)
+[lane-macos] MTL frames:      436, VK frames:      435
+[lane-macos] GATE GREEN: MTL-vs-VK numeric match: 435/435 frame state hashes identical
+[lane-macos] ALL GATES GREEN — MTL and VK simulation state bit-identical (     436 frames)

@@ -1,0 +1,3 @@
+oracle: qa/metal-evidence/flipfix-20260904T000105Z/post-screen.png 1376x1412px, half=706px
+oracle: darkFraction topHalf=0.4804 bottomHalf=0.8707 (delta bottom-top=+0.3904)
+oracle: VERDICT CORRECT (top of canvas at top of window)

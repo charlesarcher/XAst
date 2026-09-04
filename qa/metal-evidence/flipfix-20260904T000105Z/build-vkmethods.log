@@ -1,0 +1,16 @@
+g++ -I/usr/include/X11 -O3 -Wall -Wextra -Wno-unused-parameter -std=c++17 -DXAST_NO_XTEST -Ivendor/glad/include -Ivendor/stb -Ivendor/dear_imgui -Ivendor/glfw -Ivendor/vulkan/include -Iutilities/rendering test/vk/vkmethods.C obj/VK/stbTruetypeImpl.o obj/VK/compositePixmap.o -L/usr/lib/X11 -L/opt/homebrew/opt/glfw/lib -lglfw -Wl,-rpath,/opt/homebrew/opt/glfw/lib -o obj/VK/vkmethods /opt/homebrew/opt/vulkan-loader/lib/libvulkan.dylib -framework Metal -framework MetalKit -framework Foundation -framework CoreGraphics -framework CoreVideo -framework CoreMedia -framework AVFoundation -framework IOSurface -framework Quartz -Wl,-rpath,/opt/homebrew/opt/vulkan-loader/lib/%
+In file included from test/vk/vkmethods.C:37:
+test/vk/../../utilities/pixmaps/composite/compositePixmap.H:61:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   61 |    const int GetPixWidth() const;
+      |    ^~~~~
+test/vk/../../utilities/pixmaps/composite/compositePixmap.H:62:4: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   62 |    const int GetPixHeight() const;
+      |    ^~~~~
+test/vk/../../utilities/pixmaps/composite/compositePixmap.H:69:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   69 | inline const int CompositePixmap::GetPixWidth() const
+      |        ^~~~~
+test/vk/../../utilities/pixmaps/composite/compositePixmap.H:73:8: warning: 'const' type qualifier on return type has no effect [-Wignored-qualifiers]
+   73 | inline const int CompositePixmap::GetPixHeight() const
+      |        ^~~~~
+4 warnings generated.
+ld: warning: search path '/usr/lib/X11' not found

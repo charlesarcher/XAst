@@ -14,7 +14,10 @@
 //   [[texture(N)]]← texture slots
 //   [[sampler(0)]]← nearest sampler (constexpr, baked into shader)
 //
-// Vulkan NDC is y-down like Metal NDC — NO y-flip in the vertex shader.
+// Orientation (task 15): Metal NDC is y-UP (origin bottom-left, like
+// OpenGL) — unlike Vulkan's y-down NDC. The y-flip therefore lives in the
+// CPU-side MVP uniform (mtlBackend's presentMVP_/windowMVP_ use a negative
+// y-scale); this vertex shader stays FLIP-FREE and just applies uMVP.
 
 #include <metal_stdlib>
 using namespace metal;

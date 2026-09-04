@@ -1,0 +1,5 @@
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+vkBackend: 5 pre-compiled SPIR-V shaders found in /Users/charles/code/XAst/obj/VK/spv
+vkBackend: 5 shader module(s) loaded
+XAsteroids is a Unix version of the original Atari Asteroids video game.  It features color, arbitrarily shaped drawables with interior decor, hidden line elimination, accurate collision detection, and dynamically selectable options including gravitation.  Game initialization requires a minute or two so please be patient.  If XAsteroids abnormally terminates the keyboard may no longer auto-repeat.  Auto-repeat can be reactivated by executing AutoRepeatOn.
+

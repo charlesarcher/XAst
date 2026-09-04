@@ -31,7 +31,14 @@
 // the task-4 stub loop). clear() is a documented no-op (the render pass
 // clears to black in beginFrame via the bridge).
 //
-// Metal NDC = Vulkan NDC (both y-down) — no y-flip needed anywhere.
+// NDC orientation (task 15): Metal NDC is y-UP (origin bottom-left, like
+// OpenGL); only Vulkan is y-down (origin top-left). The game's logical
+// window space is top-left, so the MTL MVP projection carries the y-flip as
+// a NEGATIVE y-scale (presentMVP_/windowMVP_); the vertex shader is
+// flip-free and MTLScissorRect bottom-left conversion happens in ONE place
+// (mtlBridge mtlSetScissor). The earlier "Metal NDC = Vulkan NDC (y-down)"
+// premise was false and mirrored the on-screen render (user-reported
+// 2026-09-03; qa/metal-evidence/flipfix-*).
 // Shader binding convention: [[stage_in]] at buffer slot 0, MVP uniform
 // at [[buffer(1)]].
 //
@@ -1191,28 +1198,38 @@ class MTLBackend final : public RenderingEngine
        return out/6;
       }
 
-    // ---- MVP composition (vkBackend presentMVP_/windowMVP_ verbatim) ----
+// ---- MVP composition ----
+    // x terms and letterbox offsets are the vkBackend presentMVP_ formulas
+    // verbatim (top-left-origin pixel space). The y terms differ by sign:
+    // Metal NDC is y-UP, so the projection's y-scale is NEGATIVE where the
+    // y-down Vulkan leg uses positive — logical top (y=0) maps to NDC +1,
+    // which is the top of a Metal buffer/screen. Flipping P after M mirrors
+    // the final NDC, which the y-up Metal buffer un-mirrors: net pixels
+    // match the VK leg.
     const float* presentMVP_()
       {if (rtActive_)
         {// Rendering INTO a render target: logical (0,0)-top-left maps 1:1
          // onto the target surface (Button face geometry is target-local;
-         // glBackend rtActive_ analog — MTL NDC is y-down like logical space).
+         // glBackend rtActive_ analog — with the Metal y-up flip: the
+         // negative y-scale puts logical top at NDC +1 = texture row 0,
+         // which is the top of the target, so the stored RT content is
+         // top-down, consistent with the top-down texture sampling).
          float a=2.0f/(float)rtWidth_;
-         float b=2.0f/(float)rtHeight_;
+         float b=-2.0f/(float)rtHeight_;
          float cs=cosf(angle_),sn=sinf(angle_);
          float ma=cs,mb=-sn,mc=tx_;
          float md=sn,me=cs,mf=ty_;
          mvp_[0]=a*ma;    mvp_[1]=b*md;    mvp_[2]=0.0f;mvp_[3]=0.0f;
          mvp_[4]=a*mb;    mvp_[5]=b*me;    mvp_[6]=0.0f;mvp_[7]=0.0f;
          mvp_[8]=0.0f;    mvp_[9]=0.0f;    mvp_[10]=1.0f;mvp_[11]=0.0f;
-         mvp_[12]=a*mc-1.0f;mvp_[13]=b*mf-1.0f;mvp_[14]=0.0f;mvp_[15]=1.0f;
+         mvp_[12]=a*mc-1.0f;mvp_[13]=b*mf+1.0f;mvp_[14]=0.0f;mvp_[15]=1.0f;
          return mvp_;
         }float W=(float)fbWidth_;
-       float H=(float)fbHeight_;
-       float a=2.0f*presentScale_/W;
-       float c=2.0f*(float)presentOffX_/W-1.0f;
-       float b=2.0f*presentScale_/H;
-       float d=2.0f*(float)presentOffY_/H-1.0f;
+        float H=(float)fbHeight_;
+        float a=2.0f*presentScale_/W;
+        float c=2.0f*(float)presentOffX_/W-1.0f;
+        float b=-2.0f*presentScale_/H;
+        float d=1.0f-2.0f*(float)presentOffY_/H;
        float cs=cosf(angle_),sn=sinf(angle_);
        float ma=cs,mb=-sn,mc=tx_+canvasOffX_;
        float md=sn,me=cs,mf=ty_+canvasOffY_;
@@ -1224,12 +1241,15 @@ class MTLBackend final : public RenderingEngine
       }
 
     const float* windowMVP_()
-      {float W=(float)fbWidth_;
+      {// Window-space pixel coords (top-left origin) -> NDC. The vkBackend
+      // analog is y-down (2/H, -1); Metal NDC is y-UP, so the y-scale is
+      // -2/H and the translation +1 — window y=0 (top) maps to NDC +1 (top).
+      float W=(float)fbWidth_;
        float H=(float)fbHeight_;
        winMvp_[0]=2.0f/W; winMvp_[1]=0.0f; winMvp_[2]=0.0f; winMvp_[3]=0.0f;
-       winMvp_[4]=0.0f; winMvp_[5]=2.0f/H; winMvp_[6]=0.0f; winMvp_[7]=0.0f;
+       winMvp_[4]=0.0f; winMvp_[5]=-2.0f/H; winMvp_[6]=0.0f; winMvp_[7]=0.0f;
        winMvp_[8]=0.0f; winMvp_[9]=0.0f; winMvp_[10]=1.0f;winMvp_[11]=0.0f;
-       winMvp_[12]=-1.0f;winMvp_[13]=-1.0f;winMvp_[14]=0.0f;winMvp_[15]=1.0f;
+       winMvp_[12]=-1.0f;winMvp_[13]=+1.0f;winMvp_[14]=0.0f;winMvp_[15]=1.0f;
        return winMvp_;
       }
 
@@ -1268,7 +1288,14 @@ class MTLBackend final : public RenderingEngine
        mtlDraw(frameCtx_,primType,count);
       }
 
-    // ---- Scissor (vkBackend applyPresentTransformToScissor_ verbatim) ----
+    // ---- Scissor (vkBackend applyPresentTransformToScissor_ geometry) ----
+    // Convention split (task 15): this method maps the stored LOGICAL rect
+    // into TOP-LEFT-origin window/pixel space (presentOffY_ + rect[1]*scale),
+    // exactly like the VK leg. Metal's MTLScissorRect is BOTTOM-LEFT-origin,
+    // so the single y-conversion (y_mtl = passHeight - y - h) happens in
+    // mtlBridge::mtlSetScissor — the one place that owns the MTL convention
+    // and knows the current pass height. Full-frame (0,0,W,H) converts to
+    // (0,0,W,H) and stays a no-op.
     void applyPresentTransformToScissor_()
       {if (!frameCtx_)
          return;

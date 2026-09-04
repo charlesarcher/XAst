@@ -19,6 +19,11 @@ struct MTLFrameContext {
     id<CAMetalDrawable>       drawable;
     id<MTLCommandBuffer>      commandBuffer;
     id<MTLRenderCommandEncoder> encoder;
+    // Height in pixels of the CURRENT render pass target (drawable texture
+    // for window frames, RT texture for offscreen passes). Set by every
+    // pass-opening/resuming function below; mtlSetScissor uses it to convert
+    // top-left-origin scissor y into Metal's bottom-left-origin convention.
+    double passHeight;
 };
 
 extern "C" {
@@ -83,6 +88,7 @@ MTLFrameContext* mtlBeginFrame(void* layer, void* queue) {
         ctx->drawable = d;
         ctx->commandBuffer = buf;
         ctx->encoder = enc;
+        ctx->passHeight = (double)d.texture.height;
         return ctx;
     }
 }
@@ -315,15 +321,30 @@ void mtlDraw(MTLFrameContext* ctx, int primitiveType, int vertexCount) {
 
 // ---- Scissor / viewport ----
 
+// Scissor convention (task 15 — the SINGLE y-conversion point in the
+// backend): callers pass a TOP-LEFT-origin window/pixel-space rect (the
+// backend's applyPresentTransformToScissor_ maps the logical rect through
+// the letterbox transform, top-left origin, like the VK leg). Metal's
+// MTLScissorRect origin is BOTTOM-LEFT, so convert here:
+//   y_mtl = passHeight - y - h
+// (passHeight = current render-pass target height, tracked in the frame
+// context: drawable texture height for window frames, RT height for
+// offscreen passes). Guards: h<=0 keeps the legacy clamp behavior; the
+// full-frame rect (0,0,W,H) converts to (0,0,W,H) and stays a no-op.
 void mtlSetScissor(MTLFrameContext* ctx, int x, int y, int w, int h) {
     if (!ctx)
         return;
     @autoreleasepool {
+        int wClamped = (w < 0) ? 0 : w;
+        int hClamped = (h < 0) ? 0 : h;
+        int yMtl = y;
+        if (hClamped > 0 && ctx->passHeight > 0.0)
+            yMtl = (int)ctx->passHeight - y - hClamped;
         MTLScissorRect r;
         r.x = (NSUInteger)(x < 0 ? 0 : x);
-        r.y = (NSUInteger)(y < 0 ? 0 : y);
-        r.width = (NSUInteger)(w < 0 ? 0 : w);
-        r.height = (NSUInteger)(h < 0 ? 0 : h);
+        r.y = (NSUInteger)(yMtl < 0 ? 0 : yMtl);
+        r.width = (NSUInteger)wClamped;
+        r.height = (NSUInteger)hClamped;
         [ctx->encoder setScissorRect:r];
     }
 }
@@ -384,6 +405,7 @@ void mtlBeginOffscreenPass(MTLFrameContext* ctx, void* rtTexture, int w, int h) 
         vp.width = (double)w; vp.height = (double)h;
         vp.znear = 0.0; vp.zfar = 1.0;
         [enc setViewport:vp];
+        ctx->passHeight = (double)h;
     }
 }
 
@@ -409,6 +431,7 @@ void mtlEndOffscreenPass(MTLFrameContext* ctx, int windowW, int windowH) {
         vp.width = (double)windowW; vp.height = (double)windowH;
         vp.znear = 0.0; vp.zfar = 1.0;
         [enc setViewport:vp];
+        ctx->passHeight = (double)windowH;
     }
 }
 
@@ -441,6 +464,7 @@ MTLFrameContext* mtlBeginOffscreenFrame(void* device, void* queue,
         ctx->drawable = nil;
         ctx->commandBuffer = buf;
         ctx->encoder = enc;
+        ctx->passHeight = (double)h;
         return ctx;
     }
 }

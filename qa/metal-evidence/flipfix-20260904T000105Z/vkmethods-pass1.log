@@ -1,0 +1,45 @@
+vkBackend: VK_LAYER_KHRONOS_validation not present — continuing WITHOUT validation (clean continue, m15)
+vkmethods: FAIL: C thin-line px got=0 want>=100
+vkmethods: FAIL: C tri-fill px got=0 want>=2000
+vkmethods: FAIL: C outline px got=0 want>=200
+vkmethods: FAIL: C thick5 interior got=0 want>=1
+vkmethods: FAIL: C tex left-half white got=0 want>=1
+vkmethods: FAIL: C masked left colored got=0 want>=1
+vkmethods: FAIL: C NonRot static tex white got=0 want>=1
+vkmethods: FAIL: C 145970 HARD divergent pixels outside every documented mask class
+vkmethods: C   HARD (20,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (21,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (22,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (23,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (24,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (25,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (26,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (27,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (28,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (29,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (30,8) gl=000000 vk=00ffff
+vkmethods: C   HARD (31,8) gl=000000 vk=00ffff
+vkmethods: FAIL: D render-target content wrong (red=0 green=0 gray=0)
+vkmethods: FAIL: 9 assertion(s)
+vkBackend: 5 pre-compiled SPIR-V shaders found in /Users/charles/code/XAst/obj/VK/spv
+vkBackend: 5 shader module(s) loaded
+vkmethods: init ok: shaders=5 pipelines line=ok tri=ok outline=ok tex=ok masked=ok
+vkmethods: A xbm datasets uploaded+deleted: 32/32 (both _CORP_ variants included)
+vkmethods: A explosion frames 66 67 68 69 70 (65x65), masks 71 72 73
+vkmethods: B m13 static-texture transform updates: 0 (rotation path: 1)
+vkmethods: C thin-line px             got=0
+vkmethods: C tri-fill px              got=0
+vkmethods: C outline px               got=0
+vkmethods: C thick5 interior          got=0
+vkmethods: C tex left-half white      got=0
+vkmethods: C tex right-half black     got=1
+vkmethods: C masked left colored      got=0
+vkmethods: C masked right discarded   got=1
+vkmethods: C NonRot static tex white  got=0
+vkmethods: C GL reference 1376x1404, 0 text rects
+vkmethods: C GL-vs-VK non-text byte-compare over 1931904 px:
+vkmethods: C   exact=1749953 (90.5818%) tol1=342 text=0 rot=5730 edge=1214 discard=28695 HARD=145970
+vkmethods: C dumped /tmp/opencode/probe-{gl,vk}.raw
+vkmethods: D rt draw: red=0 green=0 gray=0
+vkmethods: E XTest injection skipped (XAST_NO_XTEST)
+vkmethods: F validation errors (VUID-/UNASSIGNED): 0 (layer absent)

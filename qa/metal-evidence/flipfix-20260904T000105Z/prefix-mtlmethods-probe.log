@@ -1,0 +1,7 @@
+mtlBackend: canonical window 688x702
+mtlBackend: glfwGetRequiredInstanceExtensions NULL (GLFW loader unavailable) — headless fallback
+mtlBackend: self-attached layer (headless fallback; on-screen pool needs the GLFW layer + MoltenVK swapchain)
+mtlBackend: 5 render pipelines created
+mtlBackend: initWindow OK (1376x1404 fb, scale 2.0)
+mtlmethods: FAIL: orientation probe — the dump is not top-down (top-of-canvas content must be in the TOP rows); a vertical flip remains in the MVP or the readback
+mtlmethods: orientation topCyan=0 botMagenta=0 topNotMagenta=0 botNotCyan=0 texTopYellow=0 texBotMagenta=0
