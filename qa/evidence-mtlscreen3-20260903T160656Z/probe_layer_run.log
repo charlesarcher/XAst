@@ -1,0 +1,56 @@
+P1: NO metal layer on the NO_API window's view (class=nil) — GLFW defers it; creating GLFW-style stand-in now (pre-display)
+P1: ds=(0,0) superlayer=nil inWindow=yes
+[t= 0s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 1s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 2s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 3s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 4s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 5s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 6s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 7s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 8s p=1] nonNil: p1=0 p2=0 p3=0
+[t= 9s p=1] nonNil: p1=0 p2=0 p3=0
+[t=10s p=1] nonNil: p1=0 p2=0 p3=0
+[t=11s p=1] nonNil: p1=0 p2=0 p3=0
+[t=12s p=1] nonNil: p1=0 p2=0 p3=0
+[t=13s p=1] nonNil: p1=0 p2=0 p3=0
+[t=14s p=1] nonNil: p1=0 p2=0 p3=0
+P2: set GLFW layer drawableSize=(1376,1404); ds now=(1376,1404)
+[t=15s p=2] nonNil: p1=0 p2=0 p3=0
+[t=16s p=2] nonNil: p1=0 p2=0 p3=0
+[t=17s p=2] nonNil: p1=0 p2=0 p3=0
+[t=18s p=2] nonNil: p1=0 p2=0 p3=0
+[t=19s p=2] nonNil: p1=0 p2=0 p3=0
+[t=20s p=2] nonNil: p1=0 p2=0 p3=0
+[t=21s p=2] nonNil: p1=0 p2=0 p3=0
+[t=22s p=2] nonNil: p1=0 p2=0 p3=0
+[t=23s p=2] nonNil: p1=0 p2=0 p3=0
+[t=24s p=2] nonNil: p1=0 p2=0 p3=0
+[t=25s p=2] nonNil: p1=0 p2=0 p3=0
+[t=26s p=2] nonNil: p1=0 p2=0 p3=0
+[t=27s p=2] nonNil: p1=0 p2=0 p3=0
+[t=28s p=2] nonNil: p1=0 p2=0 p3=0
+[t=29s p=2] nonNil: p1=0 p2=0 p3=0
+P3: swapped in game-style layer (post-maturity); superlayer=SET ds=(1376,1404)
+[t=30s p=3] nonNil: p1=0 p2=0 p3=0
+[t=31s p=3] nonNil: p1=0 p2=0 p3=0
+[t=32s p=3] nonNil: p1=0 p2=0 p3=0
+[t=33s p=3] nonNil: p1=0 p2=0 p3=0
+[t=34s p=3] nonNil: p1=0 p2=0 p3=0
+[t=35s p=3] nonNil: p1=0 p2=0 p3=0
+[t=36s p=3] nonNil: p1=0 p2=0 p3=0
+[t=37s p=3] nonNil: p1=0 p2=0 p3=0
+[t=38s p=3] nonNil: p1=0 p2=0 p3=0
+[t=39s p=3] nonNil: p1=0 p2=0 p3=0
+[t=40s p=3] nonNil: p1=0 p2=0 p3=0
+[t=41s p=3] nonNil: p1=0 p2=0 p3=0
+[t=42s p=3] nonNil: p1=0 p2=0 p3=0
+[t=43s p=3] nonNil: p1=0 p2=0 p3=0
+[t=44s p=3] nonNil: p1=0 p2=0 p3=0
+[t=45s p=3] nonNil: p1=0 p2=0 p3=0
+[t=46s p=3] nonNil: p1=0 p2=0 p3=0
+[t=47s p=3] nonNil: p1=0 p2=0 p3=0
+[t=48s p=3] nonNil: p1=0 p2=0 p3=0
+[t=49s p=3] nonNil: p1=0 p2=0 p3=0
+FINAL: GLFWlayer-ds0=0  GLFWlayer-ds1376=0  swapped-late=0
+FIX PATH C: neither works -> window-server pool binding is not layer/ds dependent; escalate

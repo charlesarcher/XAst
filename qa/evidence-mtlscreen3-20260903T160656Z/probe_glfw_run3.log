@@ -1,0 +1,39 @@
+required instance exts (2): VK_KHR_surface VK_EXT_metal_surface
+loader exposes 19 instance exts: VK_KHR_device_group_creation VK_KHR_external_fence_capabilities VK_KHR_external_memory_capabilities VK_KHR_external_semaphore_capabilities VK_KHR_get_physical_device_properties2 VK_KHR_get_surface_capabilities2 VK_KHR_surface VK_KHR_surface_maintenance1 VK_KHR_surface_protected_capabilities VK_EXT_debug_report VK_EXT_debug_utils VK_EXT_headless_surface VK_EXT_layer_settings VK_EXT_metal_surface VK_EXT_surface_maintenance1 VK_EXT_swapchain_colorspace VK_MVK_macos_surface VK_KHR_portability_enumeration VK_LUNARG_direct_driver_loading
+vkCreateInstance OK
+glfwCreateWindowSurface OK
+view=yes inWindow=yes viewClass=GLFWContentView
+view.layer class=CAMetalLayer superlayer=nil
+GLFW LAYER: pixelFormat=80 ds=(0,0) cs=2.0 dsync=YES maxDrawables=3 pWt=no frame=(0,0,688,702)
+[t=0s] glfw-layer nextDrawable nonNil=0
+[t=1s] glfw-layer nextDrawable nonNil=0
+[t=2s] glfw-layer nextDrawable nonNil=0
+[t=3s] glfw-layer nextDrawable nonNil=0
+[t=4s] glfw-layer nextDrawable nonNil=0
+[t=5s] glfw-layer nextDrawable nonNil=0
+[t=6s] glfw-layer nextDrawable nonNil=0
+[t=7s] glfw-layer nextDrawable nonNil=0
+[t=8s] glfw-layer nextDrawable nonNil=0
+[t=9s] glfw-layer nextDrawable nonNil=0
+[t=10s] glfw-layer nextDrawable nonNil=0
+[t=11s] glfw-layer nextDrawable nonNil=0
+[t=12s] glfw-layer nextDrawable nonNil=0
+[t=13s] glfw-layer nextDrawable nonNil=0
+[t=14s] glfw-layer nextDrawable nonNil=0
+[t=15s] glfw-layer nextDrawable nonNil=0
+[t=16s] glfw-layer nextDrawable nonNil=0
+[t=17s] glfw-layer nextDrawable nonNil=0
+[t=18s] glfw-layer nextDrawable nonNil=0
+[t=19s] glfw-layer nextDrawable nonNil=0
+[t=20s] glfw-layer nextDrawable nonNil=0
+[t=21s] glfw-layer nextDrawable nonNil=0
+[t=22s] glfw-layer nextDrawable nonNil=0
+[t=23s] glfw-layer nextDrawable nonNil=0
+[t=24s] glfw-layer nextDrawable nonNil=0
+[t=25s] glfw-layer nextDrawable nonNil=0
+[t=26s] glfw-layer nextDrawable nonNil=0
+[t=27s] glfw-layer nextDrawable nonNil=0
+[t=28s] glfw-layer nextDrawable nonNil=0
+[t=29s] glfw-layer nextDrawable nonNil=0
+GLFW LAYER 30s: nonNil=0
+CONCLUSION: even GLFW's own layer yields no drawables

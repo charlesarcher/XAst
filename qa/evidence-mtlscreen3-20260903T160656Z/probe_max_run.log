@@ -1,0 +1,9 @@
+A: attached superlayer=nil ds=(1376,1404) maxDrawables=3
+B: attached superlayer=nil ds=(1376,1404) maxDrawables=3
+hammering both windows for 40s...
+[t= 0s] A(gamexact)=0 B(+maxDraw3)=0
+[t=10s] A(gamexact)=0 B(+maxDraw3)=0
+[t=20s] A(gamexact)=0 B(+maxDraw3)=0
+[t=30s] A(gamexact)=0 B(+maxDraw3)=0
+FINAL: A(gamexact)=0 B(gamexact+maxDraw3)=0
+NO FIX: even maximumDrawableCount=3 yields no pool

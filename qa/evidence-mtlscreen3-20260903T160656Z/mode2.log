@@ -1,0 +1,33 @@
+mode=2
+[t= 0s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 1s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 2s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 3s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 4s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 5s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 6s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 7s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 8s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t= 9s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=10s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=11s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=12s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=13s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=14s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=15s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=16s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=17s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=18s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=19s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=20s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=21s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=22s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=23s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=24s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=25s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=26s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=27s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=28s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=29s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+[t=30s] attached=1 view=yes inWindow=yes superlayer=SET frame=(0,0,688,702) ds=(1376,1404) cs=2.0 dsync=YES nonNil=0 presented=0
+FINAL mode=2 attached=1 presented=0 nonNil=0
