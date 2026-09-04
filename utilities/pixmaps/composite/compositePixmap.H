@@ -26,8 +26,8 @@ class CompositePixmap
                                   const int height,
                                   const RotColor&);
    const Pixmap& GetPixmap() const;
-   const int GetPixWidth() const;
-   const int GetPixHeight() const;
+   int GetPixWidth() const;
+   int GetPixHeight() const;
 
  private:
    CompositePixmap(const CompositePixmap&);
@@ -42,11 +42,11 @@ inline const Pixmap& CompositePixmap::GetPixmap() const
  {return pixmap;
  }
 
-inline const int CompositePixmap::GetPixWidth() const
+inline int CompositePixmap::GetPixWidth() const
  {return width;
  }
 
-inline const int CompositePixmap::GetPixHeight() const
+inline int CompositePixmap::GetPixHeight() const
  {return height;
  }
 
@@ -58,19 +58,19 @@ inline const int CompositePixmap::GetPixHeight() const
 class CompositePixmap
  {public:
    ~CompositePixmap();
-   const int GetPixWidth() const;
-   const int GetPixHeight() const;
+   int GetPixWidth() const;
+   int GetPixHeight() const;
 
  private:
    int width,
        height;
  };
 
-inline const int CompositePixmap::GetPixWidth() const
+inline int CompositePixmap::GetPixWidth() const
  {return width;
  }
 
-inline const int CompositePixmap::GetPixHeight() const
+inline int CompositePixmap::GetPixHeight() const
  {return height;
  }
 #endif

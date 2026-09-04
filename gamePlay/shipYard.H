@@ -18,7 +18,7 @@ class ShipYard
     ~ShipYard();
     ShipYard& AddShip();
     ShipYard& RemoveShip();
-    const int NumShips() const;
+    int NumShips() const;
     const TextureId& GetYard() const;
     ShipYard& ClearYard();
     // Task 47: one macro-free body on every leg. The colored stamp rides the
@@ -132,7 +132,7 @@ inline ShipYard& ShipYard::RemoveShip()
   return *this;
  }
 
-inline const int ShipYard::NumShips() const
+inline int ShipYard::NumShips() const
  {return numShips;
  }
 

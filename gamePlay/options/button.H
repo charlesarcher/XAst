@@ -25,8 +25,8 @@ class Button
     // Logical client-area coordinates (GameEvent x/y feed this directly).
     Boolean PointerOnButton(int x,int y) const;
     Boolean ButtonPressed() const;
-    const int ButtonWidth() const;
-    const int ButtonHeight() const;
+    int ButtonWidth() const;
+    int ButtonHeight() const;
 
   private:
     Button(const Button&);
@@ -244,11 +244,11 @@ inline Button::Boolean Button::ButtonPressed() const
  {return buttonPressed;
  }
 
-inline const int Button::ButtonWidth() const
+inline int Button::ButtonWidth() const
  {return buttonWidth;
  }
 
-inline const int Button::ButtonHeight() const
+inline int Button::ButtonHeight() const
  {return buttonHeight;
  }
 

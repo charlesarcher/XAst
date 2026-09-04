@@ -429,12 +429,13 @@ inline void EnemyGroup::NewEnemy(const int level)
        velMagnitude=velMagnitude<0 ? -enemy::minVelocity
 	                           : enemy::minVelocity;
     if (Vector2d(enemY.ObjectLiner().Velocity()=Vector2d(velMagnitude)).x<0)
-      enemY.CurrentBox().SetBox(Vector2d(PlayingField::playArea.EastSide()+enemY.rotator.Radius(),
+      {enemY.CurrentBox().SetBox(Vector2d(PlayingField::playArea.EastSide()+enemY.rotator.Radius(),
                                          (PlayingField::playArea.Height()
                                           -2*enemY.rotator.Radius())*gary_rand::rand_16()/(RAND_MAX_16+1)
-                                         +enemY.rotator.Radius()
-                                         +PlayingField::playArea.NorthSide()),
+                                          +enemY.rotator.Radius()
+                                          +PlayingField::playArea.NorthSide()),
                                 enemY.rotator.Radius());
+      }
       enemY.CurrentBox().SetBox(Vector2d(PlayingField::playArea.WestSide()-enemY.rotator.Radius(),
                                           (PlayingField::playArea.Height()
                                            -2*enemY.rotator.Radius())*gary_rand::rand_16()/(RAND_MAX_16+1)

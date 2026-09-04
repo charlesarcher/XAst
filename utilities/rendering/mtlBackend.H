@@ -88,7 +88,9 @@
 class MTLBackend final : public RenderingEngine
  {public:
     MTLBackend()
-      :window(nullptr),
+      :closeRequested_(false),
+       frameCtx_(nullptr),
+       window(nullptr),
        device_(nullptr),layer_(nullptr),vulkanState_(nullptr),queue_(nullptr),
        metallib_(nullptr),
        linePipeline_(nullptr),triPipeline_(nullptr),
@@ -98,10 +100,9 @@ class MTLBackend final : public RenderingEngine
        canonicalWidth_(0),canonicalHeight_(0),
        fbWidth_(0),fbHeight_(0),
        presentScale_(1.0f),presentOffX_(0),presentOffY_(0),
-       closeRequested_(false),shutdownDone_(false),glfwInitialized_(false),
+       shutdownDone_(false),glfwInitialized_(false),
        tx_(0.0f),ty_(0.0f),angle_(0.0f),
        canvasOffX_(0.0f),canvasOffY_(0.0f),
-       frameCtx_(nullptr),
        nextTextureId_(1),
        atlasTex_(0),
         rtActive_(false),rtWidth_(0),rtHeight_(0),
@@ -393,11 +394,13 @@ class MTLBackend final : public RenderingEngine
         {scissorActive_=false;
          return;
         }
-       scissorRect_[0]=xywh[0];
-       scissorRect_[1]=xywh[1];
-       scissorRect_[2]=xywh[2];
-       scissorRect_[3]=xywh[3];
-       scissorActive_=true;
+        scissorRect_[0]=xywh[0];
+        scissorRect_[1]=xywh[1];
+        scissorRect_[2]=xywh[2];
+        scissorRect_[3]=xywh[3];
+        scissorActive_=true;
+        if (frameCtx_)
+          applyPresentTransformToScissor_();
       }
 
     virtual RenderTargetId createRenderTarget(int w,int h) override
@@ -504,17 +507,21 @@ class MTLBackend final : public RenderingEngine
                              float r,float g,float b,bool fill) override
       {if (!frameCtx_||!verts||count<2)
          return;
-       if (!fill)
-        {// GL_LINE_LOOP emulation: Metal has no loop topology — emit the
-         // closing segment explicitly (n+1 verts).
-         float line[8*261];
-         int n=count<260?count:260;
-         for (int i=0;i<n;++i)
-           makeColorVert(line,i,verts[2*i],verts[2*i+1],r,g,b);
-         makeColorVert(line,n,verts[0],verts[1],r,g,b);
-         drawColorPrims_(outlinePipeline_,MTL_PRIMITIVE_LINE,line,n+1);
-         return;
-        }
+     if (!fill)
+      {// GL_LINE_LOOP emulation via triangle-strip quads (Metal has no loop
+       // topology). Each segment becomes a filled quad — no butt-cap gaps.
+       float quads[8*260*6];
+       int n=count<260?count:260;
+       int qn=0;
+       for (int i=0;i<n;++i)
+         {int j=(i+1)%n;
+          thickLineQuad(quads+qn,verts[2*i],verts[2*i+1],
+                        verts[2*j],verts[2*j+1],0.375f,r,g,b);
+          qn+=48;
+         }
+        drawColorPrims_(triPipeline_,MTL_PRIMITIVE_TRIANGLE,quads,qn/8);
+       return;
+      }
        // Ear-clipped triangles (glBackend port incl. the fan fallback).
        float pairs[2*1536];
        int ntri=earClip(verts,count,pairs);
@@ -1335,12 +1342,11 @@ class MTLBackend final : public RenderingEngine
         {s_instance->fbWidth_=w;
          s_instance->fbHeight_=h;
          s_instance->recomputePresentTransform_();
-         // Update the Metal layer's drawable size to match the new framebuffer.
-         if (s_instance->layer_&&s_instance->window)
-          {double scale=mtlBackingScaleFactor(s_instance->window);
-           if (scale<=0.0) scale=1.0;
-           mtlSetDrawableSize(s_instance->layer_,scale,w,h);
-          }
+          // Update the Metal layer's drawable size to match the new framebuffer.
+          // GLFW reports PHYSICAL pixels here; mtlSetDrawableSize multiplies by
+          // scale internally, so pass 1.0 (init uses logical canonical*scale).
+          if (s_instance->layer_&&s_instance->window)
+            mtlSetDrawableSize(s_instance->layer_,1.0,w,h);
         }
       }
 

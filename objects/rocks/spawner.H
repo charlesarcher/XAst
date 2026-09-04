@@ -11,7 +11,7 @@ class Spawner
     inline Rock* GetSpawnWithInheritance(const Rock& parent,
                                   const double time,
                                   const int spawnNum);
-    inline const int GetNumSpawn() const;
+    inline int GetNumSpawn() const;
 
   private:
     int numSpawn;
@@ -31,7 +31,7 @@ inline Rock*& Spawner::operator[](const int spawnNum) const
  {return spawnList[spawnNum];
  }
 
-inline const int Spawner::GetNumSpawn() const
+inline int Spawner::GetNumSpawn() const
  {return numSpawn;
  }
 

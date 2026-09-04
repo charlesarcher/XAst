@@ -29,9 +29,9 @@ class Rotator
               const double maxLinearVelocity);
     Rotator& SetRotator(const RotatorDisplayData* const rddAddr,
                     const double av);
-    const Vector2d* const
+    const Vector2d*
       GetVecsAtTime(const double time) const;
-    const int
+    int
       GetNumVecs() const;
 #ifdef X11_BACKEND
     // Task 47: the pixmap/mask accessors are consumed only by the guarded
@@ -44,19 +44,19 @@ class Rotator
 #endif
     const Box&
       GetPixBox() const;
-    const int
+    int
       PixWidth() const;
-    const int
+    int
       PixHeight() const;
-    const double
+    double
       Radius() const;
-    const double
+    double
       Area() const;
-    const double
+    double
       Angle() const;
-    const double
+    double
       AngularVelocity() const;
-    const double
+    double
       MaxAngularVelocity() const;
     double&
       Angle();
@@ -118,12 +118,12 @@ inline Rotator& Rotator::SetRotator(const RotatorDisplayData* const rddAddr,
   return *this;
  }
 
-inline const Vector2d* const
+inline const Vector2d*
 Rotator::GetVecsAtTime(const double time) const
  {return rotData->GetVecs(angle+angularVelocity.angularVelocity*time);
  }
 
-inline const int
+inline int
 Rotator::GetNumVecs() const
  {return rotData->GetNumVecs();
  }
@@ -145,37 +145,37 @@ Rotator::GetPixBox() const
 {return rotData->GetBox();
  }
 
-inline const int
+inline int
 Rotator::PixWidth() const
  {return rotData->GetPixWidth();
  }
 
-inline const int
+inline int
 Rotator::PixHeight() const
  {return rotData->GetPixHeight();
  }
 
-inline const double
+inline double
 Rotator::Radius() const
  {return rotData->GetRadius();
  }
 
-inline const double
+inline double
 Rotator::Area() const
  {return rotData->GetArea();
  }
 
-inline const double
+inline double
 Rotator::Angle() const
  {return angle;
  }
 
-inline const double
+inline double
 Rotator::AngularVelocity() const
  {return angularVelocity.angularVelocity;
  }
 
-inline const double
+inline double
 Rotator::MaxAngularVelocity() const
  {return angularVelocity.maxAngularVelocity;
  }

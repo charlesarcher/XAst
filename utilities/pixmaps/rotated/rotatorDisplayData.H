@@ -18,17 +18,17 @@ class RotatorDisplayData
     RotatorDisplayData(RenderingEngine&, const Vector2d* const, const int, const double area);
     RotatorDisplayData(RenderingEngine&, const int);
     virtual ~RotatorDisplayData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
     virtual const Pixmap& GetPixmap(const double) const=0;
-    virtual const int GetNumPix() const=0;
+    virtual int GetNumPix() const=0;
     virtual GC& GetGC(const double) const;
     virtual const Pixmap& GetMaskAtTime(const double) const;
     const Box& GetBox() const;
-    const double GetRadius() const;
-    const double GetArea() const;
-    const int GetPixWidth() const;
-    const int GetPixHeight() const;
+    double GetRadius() const;
+    double GetArea() const;
+    int GetPixWidth() const;
+    int GetPixHeight() const;
 
   protected:
     Display* const display;
@@ -60,10 +60,10 @@ class NonRotVectorData: public RotatorDisplayData
                      const Vector2d* const, const int, const double area,
                      const CompositePixmap&);
     virtual ~NonRotVectorData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
     virtual const Pixmap& GetPixmap(const double) const;
-    virtual const int GetNumPix() const;
+    virtual int GetNumPix() const;
 
   private:
     NonRotVectorData(const NonRotVectorData&);
@@ -107,10 +107,10 @@ class RotVectorData: public RotatorDisplayData
                   const Vector2d* const, const int, const double area,
                   const CompositePixmap&);
     virtual ~RotVectorData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
     virtual const Pixmap& GetPixmap(const double) const;
-    virtual const int GetNumPix() const;
+    virtual int GetNumPix() const;
 
   private:
     RotVectorData(const RotVectorData&);
@@ -156,10 +156,10 @@ class MaskedRotVectorData: public RotatorDisplayData
                   const Vector2d* const, const int, const double area,
                   const CompositePixmap&);
     virtual ~MaskedRotVectorData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
     virtual const Pixmap& GetPixmap(const double) const;
-    virtual const int GetNumPix() const;
+    virtual int GetNumPix() const;
     virtual GC& GetGC(const double) const;
     virtual const Pixmap& GetMaskAtTime(const double) const;
 
@@ -197,7 +197,7 @@ class RotPixmapData: public RotatorDisplayData
     RotPixmapData(RenderingEngine&, const CompositePixmap&);
     virtual ~RotPixmapData();
     virtual const Pixmap& GetPixmap(const double) const;
-    virtual const int GetNumPix() const;
+    virtual int GetNumPix() const;
 
   private:
     RotPixmapData(const RotVectorData&);
@@ -216,7 +216,7 @@ class MaskedRotPixmapData: public RotatorDisplayData
     MaskedRotPixmapData(RenderingEngine&, const CompositePixmap&);
     virtual ~MaskedRotPixmapData();
     virtual const Pixmap& GetPixmap(const double) const;
-    virtual const int GetNumPix() const;
+    virtual int GetNumPix() const;
     virtual GC& GetGC(const double) const;
     const Pixmap& GetMaskAtTime(const double) const;
 
@@ -245,14 +245,14 @@ class RotatorDisplayData
     RotatorDisplayData(RenderingEngine&, const Vector2d* const, const int, const double area);
     RotatorDisplayData(RenderingEngine&, const int);
     virtual ~RotatorDisplayData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
-    virtual const int GetNumPix() const=0;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
+    virtual int GetNumPix() const=0;
     const Box& GetBox() const;
-    const double GetRadius() const;
-    const double GetArea() const;
-    const int GetPixWidth() const;
-    const int GetPixHeight() const;
+    double GetRadius() const;
+    double GetArea() const;
+    int GetPixWidth() const;
+    int GetPixHeight() const;
 
   protected:
     Box box;
@@ -272,9 +272,9 @@ class NonRotVectorData: public RotatorDisplayData
                      const Vector2d* const, const int,
                      const unsigned char* const, const int, const int);
     virtual ~NonRotVectorData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
-    virtual const int GetNumPix() const;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
+    virtual int GetNumPix() const;
 
   private:
     NonRotVectorData(const NonRotVectorData&);
@@ -324,9 +324,9 @@ class RotVectorData: public RotatorDisplayData
                   const Vector2d* const, const int, const double area,
                   const unsigned char* const, const int, const int);
     virtual ~RotVectorData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
-    virtual const int GetNumPix() const;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
+    virtual int GetNumPix() const;
 
   private:
     RotVectorData(const RotVectorData&);
@@ -375,9 +375,9 @@ class MaskedRotVectorData: public RotatorDisplayData
                   const Vector2d* const, const int,
                   const unsigned char* const, const int, const int);
     virtual ~MaskedRotVectorData();
-    virtual const Vector2d* const GetVecs(const double) const;
-    virtual const int GetNumVecs() const;
-    virtual const int GetNumPix() const;
+    virtual const Vector2d* GetVecs(const double) const;
+    virtual int GetNumVecs() const;
+    virtual int GetNumPix() const;
 
   private:
     MaskedRotVectorData(const MaskedRotVectorData&);
@@ -423,7 +423,7 @@ class RotPixmapData: public RotatorDisplayData
     RotPixmapData(RenderingEngine&, const RotColor&,
                   const unsigned char* const, const int, const int);
     virtual ~RotPixmapData();
-    virtual const int GetNumPix() const;
+    virtual int GetNumPix() const;
 
   private:
     RotPixmapData(const RotVectorData&);
@@ -465,7 +465,7 @@ class MaskedRotPixmapData: public RotatorDisplayData
     MaskedRotPixmapData(RenderingEngine&, const RotColor&,
                          const unsigned char* const, const int, const int);
     virtual ~MaskedRotPixmapData();
-    virtual const int GetNumPix() const;
+    virtual int GetNumPix() const;
 
   private:
     MaskedRotPixmapData(const RotVectorData&);
@@ -507,19 +507,19 @@ inline const Box& RotatorDisplayData::GetBox() const
  {return box;
  }
 
-inline const double RotatorDisplayData::GetRadius() const
+inline double RotatorDisplayData::GetRadius() const
  {return radius;
  }
 
-inline const double RotatorDisplayData::GetArea() const
+inline double RotatorDisplayData::GetArea() const
  {return area;
  }
 
-inline const int RotatorDisplayData::GetPixWidth() const
+inline int RotatorDisplayData::GetPixWidth() const
  {return sideSize;
  }
 
-inline const int RotatorDisplayData::GetPixHeight() const
+inline int RotatorDisplayData::GetPixHeight() const
  {return sideSize;
  }
 

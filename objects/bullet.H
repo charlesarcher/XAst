@@ -69,8 +69,8 @@ inline Bullet::Bullet(Rotator* const rot,
          	                                                        Vector2d(),
 								                                                  PlayingField::maxLinearVelocity,
                                                                   Vector2d()),
-                                                    rotator(rot),
-                                                    frameTimer(numFrames),
+                                                     frameTimer(numFrames),
+                                                     rotator(rot),
                                                     inactive(on),
                                                     explosion(exp)
  {

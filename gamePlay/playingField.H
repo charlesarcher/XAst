@@ -514,21 +514,21 @@ inline const Box PlayingField::playArea(640,512,Vector2d(320+2*ROCK::scale,256+2
 inline PlayingField::PlayingField(RenderingEngine& eng): engine(eng),
                                      lastHitFromAlly(off),
                                      lastHitScore(0),
+                                     framesSinceLastBullet(0),
+                                     framesSinceEnemy(0),
+                                     level(0),
+                                     nonPermeableList(28),
+                                     selfPermeableList(128),
+                                     permeableList(28),
 #ifdef X11_BACKEND
                                      fontHeight(static_cast<X11Backend&>(eng).hiScoreFont()->ascent
                                                +static_cast<X11Backend&>(eng).hiScoreFont()->descent+4),
 #else
                                      fontHeight(0),
 #endif
-                                     framesSinceLastBullet(0),
                                      framesThisLevel(0),
                                      nextShipScore(extraShipScore),
-                                     framesSinceEnemy(0),
                                      speedAdjust(uSecondsPerFrame/125E3),
-                                     level(0),
-                                     nonPermeableList(28),
-                                     selfPermeableList(128),
-                                     permeableList(28),
                                       intersector(nonPermeableList,selfPermeableList,permeableList),
                                       leftRotPending(off),
                                       rightRotPending(off),
@@ -581,9 +581,9 @@ inline void PlayingField::NewRocksAndEnemy()
    }
   else
    {int nonRockItems=nonPermeableList.GetNumItems()+permeableList.GetNumItems();
-    if (!shipGroup->ship->dead&&(nonRockItems==1||
-                               shipGroup->thrust->thrusting&&nonRockItems==2)||
-        !nonRockItems)
+     if ((!shipGroup->ship->dead&&(nonRockItems==1||
+                                (shipGroup->thrust->thrusting&&nonRockItems==2)))||
+         !nonRockItems)
       {rockGroup->NewROCKs();
        level++;
        framesThisLevel=0;
@@ -1024,7 +1024,7 @@ inline PlayingField::Boolean PlayingField::RunGame(Options& options)
       xastQaPublishFrame();
       gettimeofday(&endTime,NULL);
       unsigned int diffTime=endTime.tv_usec-startTime.tv_usec+(endTime.tv_sec-startTime.tv_sec)*1000000;
-      if (diffTime<uSecondsPerFrame)
+      if (diffTime<(unsigned int)uSecondsPerFrame)
         usleep(uSecondsPerFrame-diffTime);
      }
    }
@@ -1211,34 +1211,38 @@ inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
           case GameEvent::KeyUp:        if (!shipGroup->hyper.hyperspacing)
                                           switch (event.character)
                                            {case 'e': if (shipGroup->ship->ObjectRotator().AngularVelocity()<0)
-                                                        if (rightRotPending)
-                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
-                                                            shipGroup->ship->angularVelocity;
-                                                          if (shipGroup->thrust->thrusting)
-                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=
-                                                              shipGroup->ship->angularVelocity;
-                                                         }
-                                                        else
-                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
-                                                          if (shipGroup->thrust->thrusting)
-                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
-                                                         }
-                                                      leftRotPending=off;
+                                                        {
+                                                         if (rightRotPending)
+                                                          {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                             shipGroup->ship->angularVelocity;
+                                                           if (shipGroup->thrust->thrusting)
+                                                             shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                               shipGroup->ship->angularVelocity;
+                                                          }
+                                                         else
+                                                          {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                           if (shipGroup->thrust->thrusting)
+                                                             shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
+                                                          }
+                                                        }
+                                                       leftRotPending=off;
                                                       break;
                                               case 'r': if (shipGroup->ship->ObjectRotator().AngularVelocity()>0)
-                                                        if (leftRotPending)
-                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=
-                                                            -shipGroup->ship->angularVelocity;
-                                                          if (shipGroup->thrust->thrusting)
-                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=
-                                                              -shipGroup->ship->angularVelocity;
-                                                         }
-                                                        else
-                                                         {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
-                                                          if (shipGroup->thrust->thrusting)
-                                                            shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
-                                                         }
-                                                      rightRotPending=off;
+                                                        {
+                                                         if (leftRotPending)
+                                                          {shipGroup->ship->ObjectRotator().AngularVelocity()=
+                                                             -shipGroup->ship->angularVelocity;
+                                                           if (shipGroup->thrust->thrusting)
+                                                             shipGroup->thrust->ObjectRotator().AngularVelocity()=
+                                                               -shipGroup->ship->angularVelocity;
+                                                          }
+                                                         else
+                                                          {shipGroup->ship->ObjectRotator().AngularVelocity()=0;
+                                                           if (shipGroup->thrust->thrusting)
+                                                             shipGroup->thrust->ObjectRotator().AngularVelocity()=0;
+                                                          }
+                                                        }
+                                                       rightRotPending=off;
                                                       break;
                                               case 'o': intersector.RemovePermeable(shipGroup->thrust);
                                                         shipGroup->ship->ObjectLiner().Acceleration()=Vector2d();
@@ -1273,7 +1277,7 @@ inline PlayingField::Boolean PlayingField::RunGame(OptionsMenu& menu)
        xastQaPublishFrame();
       gettimeofday(&endTime,NULL);
       unsigned int diffTime=endTime.tv_usec-startTime.tv_usec+(endTime.tv_sec-startTime.tv_sec)*1000000;
-      if (diffTime<uSecondsPerFrame)
+      if (diffTime<(unsigned int)uSecondsPerFrame)
         usleep(uSecondsPerFrame-diffTime);
      }
     }
@@ -1559,7 +1563,7 @@ inline int PlayingField::PlayTheGame(const int l, int argc, char** argv,
     gettimeofday(&endTime,NULL);
     unsigned int diffTime=endTime.tv_usec-startTime.tv_usec
                          +(endTime.tv_sec-startTime.tv_sec)*1000000;
-    if (diffTime<uSecondsPerFrame)
+    if (diffTime<(unsigned int)uSecondsPerFrame)
       usleep(uSecondsPerFrame-diffTime);
    #else
     if (!numEvents)

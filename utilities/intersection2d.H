@@ -131,7 +131,7 @@ class Intersector
     void
       AddPerm(MovableObject* const,
               const double startTime);
-    inline const double
+    inline double
       ObjectCreateTime(const MovableObject* const) const;
     inline Intersector&
       Miss(MovableObject* const);
@@ -518,9 +518,9 @@ SidesIntersect(const double side1Low,
                const double side1High,
                const double side2Low,
                const double side2High)
- {return side1Low>=side2Low&&side1Low<=side2High||
-         side1High>=side2Low&&side1High<=side2High||
-         side2Low>=side1Low&&side2Low<=side1High;
+ {return (side1Low>=side2Low&&side1Low<=side2High)||
+         (side1High>=side2Low&&side1High<=side2High)||
+         (side2Low>=side1Low&&side2Low<=side1High);
  }
 
 Intersector::Boolean
@@ -531,7 +531,7 @@ Quad1BoxIntersect(const MovableObject& movableObj1,
                   double& intersectTime)
  {double deltaDist1,
          deltaDist2;
-  return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+  return (SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
                            -movableObj1.ObjectLiner().XAcceleration(),
                             movableObj1.ObjectLiner().XVelocity()
                            -movableObj2.ObjectLiner().XVelocity(),
@@ -544,8 +544,8 @@ Quad1BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
                           movableObj1.OldBox().SouthSide()+deltaDist1,
                           movableObj2.OldBox().NorthSide()+deltaDist2,
-                          movableObj2.OldBox().SouthSide()+deltaDist2))||
-         SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+                          movableObj2.OldBox().SouthSide()+deltaDist2)))||
+         (SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
                            -movableObj1.ObjectLiner().YAcceleration(),
                             movableObj1.ObjectLiner().YVelocity()
                            -movableObj2.ObjectLiner().YVelocity(),
@@ -558,7 +558,7 @@ Quad1BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
                           movableObj1.OldBox().EastSide()+deltaDist1,
                           movableObj2.OldBox().WestSide()+deltaDist2,
-                          movableObj2.OldBox().EastSide()+deltaDist2));
+                          movableObj2.OldBox().EastSide()+deltaDist2)));
  }
 
 Intersector::Boolean
@@ -569,7 +569,7 @@ Quad2BoxIntersect(const MovableObject& movableObj1,
                   double& intersectTime)
  {double deltaDist1,
          deltaDist2;
-  return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+  return (SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
                            -movableObj1.ObjectLiner().XAcceleration(),
                             movableObj1.ObjectLiner().XVelocity()
                            -movableObj2.ObjectLiner().XVelocity(),
@@ -582,8 +582,8 @@ Quad2BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
                           movableObj1.OldBox().SouthSide()+deltaDist1,
                           movableObj2.OldBox().NorthSide()+deltaDist2,
-                          movableObj2.OldBox().SouthSide()+deltaDist2))||
-         SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+                          movableObj2.OldBox().SouthSide()+deltaDist2)))||
+         (SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
                            -movableObj1.ObjectLiner().YAcceleration(),
                             movableObj1.ObjectLiner().YVelocity()
                            -movableObj2.ObjectLiner().YVelocity(),
@@ -596,7 +596,7 @@ Quad2BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
                           movableObj1.OldBox().EastSide()+deltaDist1,
                           movableObj2.OldBox().WestSide()+deltaDist2,
-                          movableObj2.OldBox().EastSide()+deltaDist2));
+                          movableObj2.OldBox().EastSide()+deltaDist2)));
  }
 
 Intersector::Boolean
@@ -607,7 +607,7 @@ Quad3BoxIntersect(const MovableObject& movableObj1,
                   double& intersectTime)
  {double deltaDist1,
          deltaDist2;
-  return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+  return (SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
                            -movableObj1.ObjectLiner().XAcceleration(),
                             movableObj1.ObjectLiner().XVelocity()
                            -movableObj2.ObjectLiner().XVelocity(),
@@ -620,8 +620,8 @@ Quad3BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
                           movableObj1.OldBox().SouthSide()+deltaDist1,
                           movableObj2.OldBox().NorthSide()+deltaDist2,
-                          movableObj2.OldBox().SouthSide()+deltaDist2))||
-         SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+                          movableObj2.OldBox().SouthSide()+deltaDist2)))||
+         (SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
                            -movableObj1.ObjectLiner().YAcceleration(),
                             movableObj1.ObjectLiner().YVelocity()
                            -movableObj2.ObjectLiner().YVelocity(),
@@ -634,7 +634,7 @@ Quad3BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
                           movableObj1.OldBox().EastSide()+deltaDist1,
                           movableObj2.OldBox().WestSide()+deltaDist2,
-                          movableObj2.OldBox().EastSide()+deltaDist2));
+                          movableObj2.OldBox().EastSide()+deltaDist2)));
  }
 
 Intersector::Boolean
@@ -645,7 +645,7 @@ Quad4BoxIntersect(const MovableObject& movableObj1,
                   double& intersectTime)
  {double deltaDist1,
          deltaDist2;
-  return SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
+  return (SidesPassEachOther(movableObj2.ObjectLiner().XAcceleration()
                            -movableObj1.ObjectLiner().XAcceleration(),
                             movableObj1.ObjectLiner().XVelocity()
                            -movableObj2.ObjectLiner().XVelocity(),
@@ -658,8 +658,8 @@ Quad4BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().NorthSide()+deltaDist1,
                           movableObj1.OldBox().SouthSide()+deltaDist1,
                           movableObj2.OldBox().NorthSide()+deltaDist2,
-                          movableObj2.OldBox().SouthSide()+deltaDist2))||
-         SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
+                          movableObj2.OldBox().SouthSide()+deltaDist2)))||
+         (SidesPassEachOther(movableObj2.ObjectLiner().YAcceleration()
                            -movableObj1.ObjectLiner().YAcceleration(),
                             movableObj1.ObjectLiner().YVelocity()
                            -movableObj2.ObjectLiner().YVelocity(),
@@ -672,7 +672,7 @@ Quad4BoxIntersect(const MovableObject& movableObj1,
            SidesIntersect(movableObj1.OldBox().WestSide()+deltaDist1,
                           movableObj1.OldBox().EastSide()+deltaDist1,
                           movableObj2.OldBox().WestSide()+deltaDist2,
-                          movableObj2.OldBox().EastSide()+deltaDist2));
+                          movableObj2.OldBox().EastSide()+deltaDist2)));
  }
 
 inline Intersector::Boolean
@@ -971,9 +971,9 @@ RemovePermeable(MovableObject* const remObj)
   return *this;
  }
 
-inline const double
-Intersector::
-ObjectCreateTime(const MovableObject* const movObj) const
+ inline double
+ Intersector::
+ ObjectCreateTime(const MovableObject* const movObj) const
  {return movObj->createTime;
  }
 

@@ -21,10 +21,10 @@ class Score
     Score();
     ~Score();
     int& CurrentScore();
-    const char* const CurrentName() const;
-    const int TopTenScore(const int i) const;
-    const char* const TopTenName(const int i) const;
-    const int NumScores() const;
+    const char* CurrentName() const;
+    int TopTenScore(const int i) const;
+    const char* TopTenName(const int i) const;
+    int NumScores() const;
     Score& UpdateTopTen();
     Score& Reset();
 
@@ -66,9 +66,9 @@ inline ofstream& operator<<(ofstream& f, char* const s)
   return f;
  }
 
-inline Score::Score(): currentScore(0),
-                       numScores(0),
-                       scoreUpdated(off)
+inline Score::Score(): scoreUpdated(off),
+                       currentScore(0),
+                       numScores(0)
  {passwd* userData=getpwuid(geteuid());
   const char* login=userData?userData->pw_name:getenv("USER");
   strncpy(currentName,login?login:"unknown",8)[8]='\0';
@@ -100,13 +100,13 @@ inline Score::Score(): currentScore(0),
  }
 
 inline void Score::UpdateScoreArray()
- {if (numScores<sizeof(score)/sizeof(int))
+ {if (numScores<(int)(sizeof(score)/sizeof(int)))
    {name[numScores][0]='\0';
     score[numScores++]=-1;
    }
  for (int i=0;i<numScores;++i)
     if (currentScore>score[i])
-     {for (int j=numScores<sizeof(score)/sizeof(int)
+     {for (int j=numScores<(int)(sizeof(score)/sizeof(int))
                  ? numScores
                  : sizeof(score)/sizeof(int)-1;j>i;--j)
        {strcpy(name[j],name[j-1]);
@@ -144,19 +144,19 @@ inline int& Score::CurrentScore()
  {return currentScore;
  }
 
-inline const char* const Score::CurrentName() const
+inline const char* Score::CurrentName() const
  {return currentName;
  }
 
-inline const int Score::TopTenScore(const int i) const
+inline int Score::TopTenScore(const int i) const
  {return score[i];
  }
 
-inline const char* const Score::TopTenName(const int i) const
+inline const char* Score::TopTenName(const int i) const
  {return name[i];
  }
 
-inline const int Score::NumScores() const
+inline int Score::NumScores() const
  {return numScores;
  }
 

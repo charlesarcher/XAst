@@ -163,13 +163,14 @@ class RockGroup
     inline void GLDecorIds(const unsigned char* bits,
                            TextureId& content,TextureId& mask,int& w,int& h)
       {for (int i=0;i<3;++i)
-        if (bits==ROCKDecor_bits[i])
+        {if (bits==ROCKDecor_bits[i])
           {content=glDecorContent[i];
            mask=glDecorMask[i];
            w=glDecorW[i];
            h=glDecorH[i];
            return;
           }
+        }
         content=0;mask=0;w=0;h=0;
       }
 #endif
@@ -630,16 +631,16 @@ inline void RockGroup::NewROCKs()
     ROCKVelocity*=ROCKVelocityMagnitude/ROCKVelocity.Magnitude();
     double ROckMaxAngularVelocity=2*ROCKAngularVelocity,
            ROckMaxVelocityMagnitude=2*ROCKVelocityMagnitude;
-    for(int j=0,
+     for(int j=0,
             ROckIndex=i*sizeof(ROcks)*sizeof(ROCK)/(sizeof(ROck)*sizeof(ROCKs));
-            j<sizeof(ROcks)*sizeof(ROCK)/(sizeof(ROck)*sizeof(ROCKs));
+            j<(int)(sizeof(ROcks)*sizeof(ROCK)/(sizeof(ROck)*sizeof(ROCKs)));
             ++ROckIndex,++j)
      {double ROckAngularVelocity,
              ROckAVSum=0,
              ROckVelocityMagnitude;
       Vector2d ROckVelocity(gary_rand::rand_16()-RAND_MAX_16/2,gary_rand::rand_16()-RAND_MAX_16/2),
                ROckVMSum;
-      if (j!=sizeof(ROcks)*sizeof(ROCK)/(sizeof(ROck)*sizeof(ROCKs)))
+       if (j!=(int)(sizeof(ROcks)*sizeof(ROCK)/(sizeof(ROck)*sizeof(ROCKs))))
        {ROckAngularVelocity=2*ROckMaxAngularVelocity*gary_rand::rand_16()/RAND_MAX_16
                             -ROckMaxAngularVelocity;
         ROckAVSum+=ROckAngularVelocity;
@@ -662,16 +663,16 @@ inline void RockGroup::NewROCKs()
        }
       double rockMaxAngularVelocity=4*ROckAngularVelocity,
              rockMaxVelocityMagnitude=2*ROckVelocityMagnitude;
-      for(int k=0,
-              rockIndex=ROckIndex*sizeof(rocks)*sizeof(ROck)/(sizeof(rock)*sizeof(ROcks));
-          k<sizeof(rocks)*sizeof(ROck)/(sizeof(rock)*sizeof(ROcks));
-          ++rockIndex,++k)
+       for(int k=0,
+               rockIndex=ROckIndex*sizeof(rocks)*sizeof(ROck)/(sizeof(rock)*sizeof(ROcks));
+           k<(int)(sizeof(rocks)*sizeof(ROck)/(sizeof(rock)*sizeof(ROcks)));
+           ++rockIndex,++k)
        {double rockAngularVelocity,
                rockAVSum=0,
                rockVelocityMagnitude;
         Vector2d rockVelocity(gary_rand::rand_16()-RAND_MAX_16/2,gary_rand::rand_16()-RAND_MAX_16/2),
                  rockVMSum;
-        if (k!=sizeof(rocks)*sizeof(ROck)/(sizeof(rock)*sizeof(ROcks)))
+         if (k!=(int)(sizeof(rocks)*sizeof(ROck)/(sizeof(rock)*sizeof(ROcks))))
          {rockAngularVelocity=2*rockMaxAngularVelocity*gary_rand::rand_16()/RAND_MAX_16
                               -rockMaxAngularVelocity;
           rockAVSum+=rockAngularVelocity;

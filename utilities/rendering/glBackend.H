@@ -539,7 +539,7 @@ class GLBackend : public RenderingEngine
       glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
       glBindTexture(GL_TEXTURE_2D,0);
       TextureId id=nextTextureId_++;
-      textures_[id]=TextureEntry{t,(GLuint)w,(GLuint)h};
+      textures_[id]=TextureEntry{t,(GLuint)w,(GLuint)h,0};
       return id;
      }
 

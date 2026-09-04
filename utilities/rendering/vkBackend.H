@@ -1184,11 +1184,15 @@ class VKBackend : public RenderingEngine
         {scissorActive_=false;
          return;
         }
-       scissorRect_[0]=xywh[0];
-       scissorRect_[1]=xywh[1];
-       scissorRect_[2]=xywh[2];
-       scissorRect_[3]=xywh[3];
-       scissorActive_=true;
+        scissorRect_[0]=xywh[0];
+        scissorRect_[1]=xywh[1];
+        scissorRect_[2]=xywh[2];
+        scissorRect_[3]=xywh[3];
+        scissorActive_=true;
+        if (passOpen_ && activeCb_)
+         {VkRect2D sci=applyPresentTransformToScissor_();
+          vkCmdSetScissor(activeCb_,0,1,&sci);
+         }
       }
 
     virtual RenderTargetId createRenderTarget(int w,int h) override
@@ -1491,14 +1495,18 @@ class VKBackend : public RenderingEngine
       {if (!passOpen_||!verts||count<2)
          return;
        if (!fill)
-        {// GL_LINE_LOOP emulation: VK has no loop topology — emit the
-         // closing segment explicitly (n+1 verts).
-         float line[5*261];
+        {// GL_LINE_LOOP emulation via filled quads: each segment is a
+         // triangle-strip rectangle, eliminating butt-cap gaps at joints.
+         float quads[5*260*6];
          int n=count<260?count:260;
+         int nv=0;
          for (int i=0;i<n;++i)
-           makeVert(line,5*i,verts[2*i],verts[2*i+1],r,g,b);
-         makeVert(line,5*n,verts[0],verts[1],r,g,b);
-         drawColorPrims_(outlinePipeline,line,n+1);
+          {int j=(i+1)%n;
+           thickLineQuad(quads+nv,verts[2*i],verts[2*i+1],
+                         verts[2*j],verts[2*j+1],0.375f,r,g,b);
+           nv+=30;
+          }
+         drawColorPrims_(triPipeline,quads,nv/5);
          return;
         }
        // Ear-clipped triangles (glBackend port incl. the fan fallback).

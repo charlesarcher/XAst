@@ -60,13 +60,13 @@ RotatorDisplayData::~RotatorDisplayData()
  {
  }
 
-const Vector2d* const RotatorDisplayData::GetVecs(const double angle) const
+const Vector2d* RotatorDisplayData::GetVecs(const double angle) const
  {cout<<endl<<"Reference made to nonexistent RotatorDislayData::GetVecs vitual function.  Execution terminated."<<endl;
   abort();
   return NULL;
  }
 
-const int RotatorDisplayData::GetNumVecs() const
+int RotatorDisplayData::GetNumVecs() const
  {return 0;
  }
 
@@ -225,11 +225,11 @@ NonRotVectorData::~NonRotVectorData()
   delete [] vectors;
  }
 
-const Vector2d* const NonRotVectorData::GetVecs(const double angle) const
+const Vector2d* NonRotVectorData::GetVecs(const double angle) const
  {return vectors;
  }
 
-const int NonRotVectorData::GetNumVecs() const
+int NonRotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
@@ -237,7 +237,7 @@ const Pixmap& NonRotVectorData::GetPixmap(const double angle) const
  {return pixmap;
  }
 
-const int NonRotVectorData::GetNumPix() const
+int NonRotVectorData::GetNumPix() const
  {return 1;
  }
 
@@ -415,12 +415,12 @@ RotVectorData::~RotVectorData()
   delete [] rotatedVecs;
  }
 
-const Vector2d* const RotVectorData::GetVecs(const double angle) const
+const Vector2d* RotVectorData::GetVecs(const double angle) const
  {return rotatedVecs[int((fmod(angle,6.28318530717958)+6.28318530717958)
                          /incAngle+.5)%numPix];
  }
 
-const int RotVectorData::GetNumVecs() const
+int RotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
@@ -429,7 +429,7 @@ const Pixmap& RotVectorData::GetPixmap(const double angle) const
                         /incAngle+.5)%numPix];
  }
 
-const int RotVectorData::GetNumPix() const
+int RotVectorData::GetNumPix() const
  {return numPix;
  }
 
@@ -627,12 +627,12 @@ MaskedRotVectorData::~MaskedRotVectorData()
   delete [] rotatedVecs;
  }
 
-const Vector2d* const MaskedRotVectorData::GetVecs(const double angle) const
+const Vector2d* MaskedRotVectorData::GetVecs(const double angle) const
  {return rotatedVecs[int((fmod(angle,6.28318530717958)+6.28318530717958)
                          /incAngle+.5)%numPix];
  }
 
-const int MaskedRotVectorData::GetNumVecs() const
+int MaskedRotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
@@ -641,7 +641,7 @@ const Pixmap& MaskedRotVectorData::GetPixmap(const double angle) const
                         /incAngle+.5)%numPix];
  }
 
-const int MaskedRotVectorData::GetNumPix() const
+int MaskedRotVectorData::GetNumPix() const
  {return numPix;
  }
 
@@ -743,7 +743,7 @@ const Pixmap& RotPixmapData::GetPixmap(const double angle) const
                         /incAngle+.5)%numPix];
  }
 
-const int RotPixmapData::GetNumPix() const
+int RotPixmapData::GetNumPix() const
  {return numPix;
  }
 
@@ -873,7 +873,7 @@ const Pixmap& MaskedRotPixmapData::GetPixmap(const double angle) const
                         /incAngle+.5)%numPix];
  }
 
-const int MaskedRotPixmapData::GetNumPix() const
+int MaskedRotPixmapData::GetNumPix() const
  {return numPix;
  }
 
@@ -953,13 +953,13 @@ RotatorDisplayData::~RotatorDisplayData()
  {
  }
 
-const Vector2d* const RotatorDisplayData::GetVecs(const double angle) const
+const Vector2d* RotatorDisplayData::GetVecs(const double angle) const
  {cout<<endl<<"Reference made to nonexistent RotatorDislayData::GetVecs vitual function.  Execution terminated."<<endl;
   abort();
   return NULL;
  }
 
-const int RotatorDisplayData::GetNumVecs() const
+int RotatorDisplayData::GetNumVecs() const
  {return 0;
  }
 
@@ -997,15 +997,15 @@ NonRotVectorData::~NonRotVectorData()
  {delete [] vectors;
  }
 
-const Vector2d* const NonRotVectorData::GetVecs(const double angle) const
+const Vector2d* NonRotVectorData::GetVecs(const double angle) const
  {return vectors;
  }
 
-const int NonRotVectorData::GetNumVecs() const
+int NonRotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
-const int NonRotVectorData::GetNumPix() const
+int NonRotVectorData::GetNumPix() const
  {return 1;
  }
 
@@ -1081,16 +1081,16 @@ RotVectorData::~RotVectorData()
   delete [] rotatedVecs;
  }
 
-const Vector2d* const RotVectorData::GetVecs(const double angle) const
+const Vector2d* RotVectorData::GetVecs(const double angle) const
  {return rotatedVecs[int((fmod(angle,6.28318530717958)+6.28318530717958)
                          /incAngle+.5)%numPix];
  }
 
-const int RotVectorData::GetNumVecs() const
+int RotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
-const int RotVectorData::GetNumPix() const
+int RotVectorData::GetNumPix() const
  {return numPix;
  }
 
@@ -1138,16 +1138,16 @@ MaskedRotVectorData::~MaskedRotVectorData()
   delete [] rotatedVecs;
  }
 
-const Vector2d* const MaskedRotVectorData::GetVecs(const double angle) const
+const Vector2d* MaskedRotVectorData::GetVecs(const double angle) const
  {return rotatedVecs[int((fmod(angle,6.28318530717958)+6.28318530717958)
                          /incAngle+.5)%numPix];
  }
 
-const int MaskedRotVectorData::GetNumVecs() const
+int MaskedRotVectorData::GetNumVecs() const
  {return numVecs;
  }
 
-const int MaskedRotVectorData::GetNumPix() const
+int MaskedRotVectorData::GetNumPix() const
  {return numPix;
  }
 
@@ -1169,7 +1169,7 @@ RotPixmapData::~RotPixmapData()
  {
  }
 
-const int RotPixmapData::GetNumPix() const
+int RotPixmapData::GetNumPix() const
  {return numPix;
  }
 
@@ -1192,7 +1192,7 @@ MaskedRotPixmapData::~MaskedRotPixmapData()
  {
  }
 
-const int MaskedRotPixmapData::GetNumPix() const
+int MaskedRotPixmapData::GetNumPix() const
  {return numPix;
  }
 #endif

@@ -17,11 +17,11 @@ class FrameList
    // GPU legs use ExplosionGraphic::FrameId instead.
    const Pixmap& GetFrame() const;
 #endif
-   const int PixWidth() const;
-   const int PixHeight() const;
-   const int GetNumFrames() const;
-   const int GetFrameNumber() const;
-   const int GetFirstFrameNumber() const;
+   int PixWidth() const;
+   int PixHeight() const;
+   int GetNumFrames() const;
+   int GetFrameNumber() const;
+   int GetFirstFrameNumber() const;
    FrameList& UpdateFrameNumber();
    FrameList& Reset();
    FrameList& SetFrame(const int frameNum=0);
@@ -48,23 +48,23 @@ inline const Pixmap& FrameList::GetFrame() const
  }
 #endif
 
-inline const int FrameList::PixWidth() const
+inline int FrameList::PixWidth() const
  {return frameData->GetPixWidth();
  }
 
-inline const int FrameList::PixHeight() const
+inline int FrameList::PixHeight() const
  {return frameData->GetPixHeight();
  }
 
-inline const int FrameList::GetNumFrames() const
+inline int FrameList::GetNumFrames() const
  {return numFrames;
  }
 
-inline const int FrameList::GetFrameNumber() const
+inline int FrameList::GetFrameNumber() const
  {return currentFrame;
  }
 
-inline const int FrameList::GetFirstFrameNumber() const
+inline int FrameList::GetFirstFrameNumber() const
  {return firstFrame;
  }
 

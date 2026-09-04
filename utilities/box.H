@@ -152,15 +152,15 @@ inline Box::Box(const Vector2d& v1, const Vector2d& v2)
  {SetBoxFromVector2d(v1, v2);
  }
 
-inline Box::Box(const double w, const double h, const Vector2d& c): width(w),
-                                                                 height(h),
-                                                                 center(c)
+inline Box::Box(const double w, const double h, const Vector2d& c): center(c),
+                                                                width(w),
+                                                                height(h)
  {SetBoxFromWidthHeightCenter();
  }
 
-inline Box::Box(const Vector2d& c, const double r): width(2*r),
-                                              height(2*r),
-                                              center(c)
+inline Box::Box(const Vector2d& c, const double r): center(c),
+                                               width(2*r),
+                                               height(2*r)
  {SetBoxFromWidthHeightCenter();
  }
 
@@ -295,22 +295,22 @@ inline const double& Box::Height() const
  }
 
 inline Box::Boolean Intersect(const Box& b1, const Box& b2)
- {return (b1.width<=b2.width   ? b1.northWestCorner.x>=b2.northWestCorner.x&&
-                                 b1.northWestCorner.x<=b2.southEastCorner.x||
-                                 b1.southEastCorner.x>=b2.northWestCorner.x&&
-                                 b1.southEastCorner.x<=b2.southEastCorner.x
-                               : b2.northWestCorner.x>=b1.northWestCorner.x&&
-                                 b2.northWestCorner.x<=b1.southEastCorner.x||
-                                 b2.southEastCorner.x>=b1.northWestCorner.x&&
-                                 b2.southEastCorner.x<=b1.southEastCorner.x)&&
-         (b1.height<=b2.height ? b1.northWestCorner.y>=b2.northWestCorner.y&&
-                                 b1.northWestCorner.y<=b2.southEastCorner.y||
-                                 b1.southEastCorner.y>=b2.northWestCorner.y&&
-                                 b1.southEastCorner.y<=b2.southEastCorner.y
-                               : b2.northWestCorner.y>=b1.northWestCorner.y&&
-                                 b2.northWestCorner.y<=b1.southEastCorner.y||
-                                 b2.southEastCorner.y>=b1.northWestCorner.y&&
-                                 b2.southEastCorner.y<=b1.southEastCorner.y);
+ {return (b1.width<=b2.width   ? (b1.northWestCorner.x>=b2.northWestCorner.x&&
+                                  b1.northWestCorner.x<=b2.southEastCorner.x)||
+                                 (b1.southEastCorner.x>=b2.northWestCorner.x&&
+                                  b1.southEastCorner.x<=b2.southEastCorner.x)
+                                : (b2.northWestCorner.x>=b1.northWestCorner.x&&
+                                  b2.northWestCorner.x<=b1.southEastCorner.x)||
+                                 (b2.southEastCorner.x>=b1.northWestCorner.x&&
+                                  b2.southEastCorner.x<=b1.southEastCorner.x))&&
+          (b1.height<=b2.height ? (b1.northWestCorner.y>=b2.northWestCorner.y&&
+                                  b1.northWestCorner.y<=b2.southEastCorner.y)||
+                                 (b1.southEastCorner.y>=b2.northWestCorner.y&&
+                                  b1.southEastCorner.y<=b2.southEastCorner.y)
+                                : (b2.northWestCorner.y>=b1.northWestCorner.y&&
+                                  b2.northWestCorner.y<=b1.southEastCorner.y)||
+                                 (b2.southEastCorner.y>=b1.northWestCorner.y&&
+                                  b2.southEastCorner.y<=b1.southEastCorner.y));
  };
 
 
